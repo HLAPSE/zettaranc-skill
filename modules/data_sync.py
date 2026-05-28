@@ -43,6 +43,9 @@ class DataSyncer:
         if not self.token:
             raise ValueError("未设置 TUSHARE_TOKEN")
 
+        if not TUSHARE_API_URL:
+            raise ValueError("未设置 TUSHARE_API_URL，请在 .env 中配置")
+
         # 初始化 Tushare
         ts.set_token(self.token)
         self.pro = ts.pro_api()
