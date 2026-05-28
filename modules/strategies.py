@@ -12,6 +12,32 @@ from datetime import datetime
 # 数据库路径
 DB_PATH = "data/stock_data.db"
 
+# Import 兼容：支持从 indicators 导入砖形图相关函数
+try:
+    from .indicators import DailyData, detect_four_brick_system, calculate_brick_value
+except ImportError:
+    from indicators import DailyData, detect_four_brick_system, calculate_brick_value
+
+
+def _klines_dict_to_daily(klines: List[Dict]) -> List[DailyData]:
+    """将 strategies 模块用的 dict klines 转为 indicators 模块用的 DailyData"""
+    result = []
+    for i, k in enumerate(klines):
+        prev_close = klines[i-1]["close"] if i > 0 else k["close"]
+        result.append(DailyData(
+            ts_code=k["ts_code"],
+            trade_date=k["trade_date"],
+            open=k["open"],
+            high=k["high"],
+            low=k["low"],
+            close=k["close"],
+            vol=k["vol"],
+            amount=k.get("amount", k["close"] * k["vol"]),
+            pct_chg=k.get("pct_chg", 0),
+            prev_close=prev_close,
+        ))
+    return result
+
 
 class StrategyType(Enum):
     """战法类型"""
@@ -46,6 +72,18 @@ class StrategyType(Enum):
     PAIFA = "派发"                # 麒麟会派发阶段
     LUOLUO = "回落"               # 麒麟会回落阶段
 
+    # 砖形图信号
+    BRICK_EXIT = "四块砖翻绿"      # 红砖翻绿 → 止损
+    BRICK_REDUCE = "四块砖减仓"    # 红砖满4块 → 减仓一半
+    BRICK_BOUNCE = "四块砖反弹"    # 绿砖满4块 → 可能止跌，观察B1
+
+
+class Priority(Enum):
+    """信号优先级"""
+    CRITICAL = 3     # 紧急：止损、逃顶
+    OPPORTUNITY = 2  # 机会：买点、战法
+    OBSERVE = 1      # 观察：提示、减仓、阶段判断
+
 
 @dataclass
 class StrategySignal:
@@ -62,6 +100,9 @@ class StrategySignal:
     target_price: Optional[float] = None
     stop_loss: Optional[float] = None
     risk_ratio: Optional[float] = None
+
+    # 信号优先级（由策略检测函数自动填入）
+    priority: Priority = Priority.OBSERVE
 
 
 def get_db_connection():
@@ -125,53 +166,67 @@ def get_kline_data(ts_code: str, days: int = 120) -> List[Dict]:
     return data_list
 
 
+# ---------------------------------------------------------------------------
+# 指标计算委托给 indicators.py，消除重复实现
+# ---------------------------------------------------------------------------
+
+def _dict_to_daily(klines: List[Dict]) -> List[Any]:
+    """将 Dict K 线列表转换为 indicators.DailyData"""
+    try:
+        from modules.indicators import DailyData
+    except ImportError:
+        from indicators import DailyData
+    return [DailyData(
+        ts_code=k['ts_code'],
+        trade_date=k['trade_date'],
+        open=k['open'],
+        high=k['high'],
+        low=k['low'],
+        close=k['close'],
+        vol=k['vol'],
+        amount=k.get('amount', 0),
+        pct_chg=k.get('pct_chg', 0),
+    ) for k in klines]
+
+
+def _calc_kdj(klines: List[Dict]) -> Tuple[float, float, float]:
+    """通过 indicators.py 计算 KDJ"""
+    try:
+        from modules.indicators import calculate_kdj
+    except ImportError:
+        from indicators import calculate_kdj
+    daily = _dict_to_daily(klines)
+    return calculate_kdj(daily)
+
+
+def _calc_bbi(klines: List[Dict]) -> float:
+    """通过 indicators.py 计算 BBI"""
+    try:
+        from modules.indicators import calculate_bbi
+    except ImportError:
+        from indicators import calculate_bbi
+    daily = _dict_to_daily(klines)
+    return calculate_bbi(daily)
+
+
+# 兼容层：保留旧API供测试和外部调用使用
 def calculate_ma(prices: List[float], period: int) -> float:
-    """计算简单移动平均"""
-    if len(prices) < period:
-        return 0
-    return sum(prices[-period:]) / period
+    """已废弃：请使用 indicators.calculate_ma"""
+    try:
+        from modules.indicators import calculate_ma as _calc_ma_ind
+    except ImportError:
+        from indicators import calculate_ma as _calc_ma_ind
+    return _calc_ma_ind(prices, period)
 
 
 def calculate_kdj(klines: List[Dict], period: int = 9) -> Tuple[float, float, float]:
-    """计算 KDJ 指标"""
-    if len(klines) < period:
-        return 50, 50, 50
-
-    rsv_list = []
-    for i in range(period - 1, len(klines)):
-        low_list = [klines[j]['low'] for j in range(i - period + 1, i + 1)]
-        high_list = [klines[j]['high'] for j in range(i - period + 1, i + 1)]
-
-        low_min = min(low_list)
-        high_max = max(high_list)
-
-        if high_max == low_min:
-            rsv = 50
-        else:
-            rsv = (klines[i]['close'] - low_min) / (high_max - low_min) * 100
-
-        rsv_list.append(rsv)
-
-    k = 50.0
-    d = 50.0
-    for rsv in rsv_list:
-        k = (2/3) * k + (1/3) * rsv
-        d = (2/3) * d + (1/3) * k
-
-    j = 3 * k - 2 * d
-    return round(k, 2), round(d, 2), round(j, 2)
+    """已废弃：请使用 indicators.calculate_kdj（接收 DailyData）"""
+    return _calc_kdj(klines)
 
 
 def calculate_bbi(klines: List[Dict]) -> float:
-    """计算 BBI"""
-    if len(klines) < 24:
-        return 0
-    closes = [k['close'] for k in klines]
-    ma3 = calculate_ma(closes, 3)
-    ma6 = calculate_ma(closes, 6)
-    ma12 = calculate_ma(closes, 12)
-    ma24 = calculate_ma(closes, 24)
-    return round((ma3 + ma6 + ma12 + ma24) / 4, 2)
+    """已废弃：请使用 indicators.calculate_bbi（接收 DailyData）"""
+    return _calc_bbi(klines)
 
 
 def detect_b1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -188,7 +243,7 @@ def detect_b1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         return None
 
     today = klines[index]
-    k, d, j = calculate_kdj(klines[:index+1])
+    k, d, j = _calc_kdj(klines[:index+1])
 
     # 核心条件：J < -10
     if j >= -10:
@@ -203,7 +258,7 @@ def detect_b1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
     yin_count = sum(1 for k in recent_4 if k['is_yinxian'])
 
     # B1 买点
-    bbi = calculate_bbi(klines[:index+1])
+    bbi = _calc_bbi(klines[:index+1])
     price = today['close']
 
     # 计算止损位
@@ -226,7 +281,7 @@ def detect_b1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=stop_loss,
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_b2(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -248,7 +303,7 @@ def detect_b2(klines: List[Dict], index: int) -> Optional[StrategySignal]:
     has_b1 = False
     prev_j_list = []
     for i in range(5, min(15, index)):
-        pk, pd, pj = calculate_kdj(klines[:index-i+1])
+        pk, pd, pj = _calc_kdj(klines[:index-i+1])
         prev_j_list.append(pj)
         if pj < -10:
             has_b1 = True
@@ -269,7 +324,7 @@ def detect_b2(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         return None
 
     # 计算J值
-    k, d, j = calculate_kdj(klines[:index+1])
+    k, d, j = _calc_kdj(klines[:index+1])
 
     # B2 确认
     stop_loss = today['low']
@@ -289,7 +344,7 @@ def detect_b2(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=stop_loss,
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_b3(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -339,7 +394,7 @@ def detect_b3(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=today['low'],
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_sb1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -372,7 +427,7 @@ def detect_sb1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
     is_suoliang = today['is_suoliang']
 
     # J值
-    k, d, j = calculate_kdj(klines[:index+1])
+    k, d, j = _calc_kdj(klines[:index+1])
 
     if j >= -5:
         return None
@@ -394,7 +449,7 @@ def detect_sb1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=stop_loss,
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_changan(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -414,12 +469,12 @@ def detect_changan(klines: List[Dict], index: int) -> Optional[StrategySignal]:
     day3 = klines[index]
 
     # 第一天：B1（J<-13）
-    k1, d1, j1 = calculate_kdj(klines[:index-1])
+    k1, d1, j1 = _calc_kdj(klines[:index-1])
     if j1 >= -13:
         return None
 
     # 第二天：放量长阳，J拐头
-    k2, d2, j2 = calculate_kdj(klines[:index])
+    k2, d2, j2 = _calc_kdj(klines[:index])
     if not (day2['pct_chg'] >= 4 and day2['is_beidou'] and j2 > j1):
         return None
 
@@ -446,7 +501,7 @@ def detect_changan(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=day3['low'],
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_sifen_zhiyi_sanyin(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -486,7 +541,7 @@ def detect_sifen_zhiyi_sanyin(klines: List[Dict], index: int) -> Optional[Strate
                 'vol_ratio': vol_ratio,
             },
             action="SELL",
-        )
+        priority=Priority.OPPORTUNITY)
 
     return None
 
@@ -530,7 +585,7 @@ def detect_nana(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         return None
 
     # J值负值
-    k, d, j = calculate_kdj(klines[:index+1])
+    k, d, j = _calc_kdj(klines[:index+1])
     if j >= 0:
         return None
 
@@ -547,7 +602,7 @@ def detect_nana(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=klines[index]['low'],
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_yidong_dilian(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -588,7 +643,7 @@ def detect_yidong_dilian(klines: List[Dict], index: int) -> Optional[StrategySig
         return None
 
     # J值判断
-    k, d, j = calculate_kdj(klines[:index+1])
+    k, d, j = _calc_kdj(klines[:index+1])
 
     return StrategySignal(
         ts_code=today['ts_code'],
@@ -603,7 +658,7 @@ def detect_yidong_dilian(klines: List[Dict], index: int) -> Optional[StrategySig
         },
         action="BUY",
         stop_loss=today['low'],
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_pinghang(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -655,7 +710,7 @@ def detect_pinghang(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         return None
 
     # J 值 < 55
-    k, d, j = calculate_kdj(klines[:y2 + 1])
+    k, d, j = _calc_kdj(klines[:y2 + 1])
     if j >= 55:
         return None
 
@@ -680,7 +735,7 @@ def detect_pinghang(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=klines[y2]['low'],
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_kengqi(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -749,7 +804,7 @@ def detect_kengqi(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="BUY",
         stop_loss=recent_low,
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_duichen_va(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -801,7 +856,7 @@ def detect_duichen_va(klines: List[Dict], index: int) -> Optional[StrategySignal
         return None
 
     # 守恒被破坏的标志：当前已企稳（缩量 + J 低位）
-    k, d, j = calculate_kdj(klines[:index + 1])
+    k, d, j = _calc_kdj(klines[:index + 1])
     is_stable = today['vol'] < klines[index - 1]['vol'] * 0.7 and j < 20
 
     if not is_stable:
@@ -828,7 +883,7 @@ def detect_duichen_va(klines: List[Dict], index: int) -> Optional[StrategySignal
         },
         action="BUY",
         stop_loss=trough_price,
-    )
+        priority=Priority.OPPORTUNITY)
 
 
 def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]:
@@ -848,6 +903,9 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
         return []
 
     signals = []
+
+    # 预计算 MACD DIF（供 S2 使用，避免循环内重复计算）
+    dif_list = _calc_dif(klines)
 
     # 遍历每一天检测战法
     for i in range(10, len(klines)):
@@ -911,10 +969,64 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
         if signal:
             signals.append(signal)
 
-    # 按日期排序，最新的在前面
-    signals.sort(key=lambda x: x.trade_date, reverse=True)
+        # S2 确认逃顶（MACD顶背离）
+        signal = detect_s2(klines, i, dif_list=dif_list)
+        if signal:
+            signals.append(signal)
+
+        # S3 最后逃生
+        signal = detect_s3(klines, i)
+        if signal:
+            signals.append(signal)
+
+        # 砖形图信号
+        signal = detect_brick_signals(klines, i)
+        if signal:
+            signals.append(signal)
+
+    # ===== 信号后处理：去重 + 截断 + 排序 =====
+    signals = _post_process_signals(signals)
 
     return signals
+
+
+def _post_process_signals(signals: List[StrategySignal]) -> List[StrategySignal]:
+    """
+    信号后处理：
+    1. 按日期+策略类型去重（同一天同一类型只保留置信度最高的）
+    2. 按优先级和日期排序
+    3. 截断：最多保留最近30个信号，且每个类型最多保留最近3个
+    """
+    if not signals:
+        return []
+
+    # 1. 去重：同一天同一策略类型，保留置信度最高的
+    key_map: Dict[Tuple[str, str], StrategySignal] = {}
+    for s in signals:
+        key = (s.trade_date, s.strategy.value)
+        if key not in key_map or s.confidence > key_map[key].confidence:
+            key_map[key] = s
+
+    deduped = list(key_map.values())
+
+    # 2. 按优先级降序、日期降序排序
+    deduped.sort(key=lambda x: (x.priority.value, x.confidence, x.trade_date), reverse=True)
+
+    # 3. 截断：每个策略类型最多保留3个最新信号，总体最多30个
+    type_counts: Dict[str, int] = {}
+    filtered = []
+    for s in deduped:
+        type_key = s.strategy.value
+        if type_counts.get(type_key, 0) >= 3:
+            continue
+        if len(filtered) >= 30:
+            break
+        type_counts[type_key] = type_counts.get(type_key, 0) + 1
+        filtered.append(s)
+
+    # 最终按日期降序输出（用户看时间线最自然）
+    filtered.sort(key=lambda x: x.trade_date, reverse=True)
+    return filtered
 
 
 def detect_s1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
@@ -975,7 +1087,7 @@ def detect_s1(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="SELL",
         stop_loss=today['low'],
-    )
+        priority=Priority.CRITICAL)
 
 
 def detect_s2(klines: List[Dict], index: int,
@@ -1031,7 +1143,7 @@ def detect_s2(klines: List[Dict], index: int,
             },
             action="SELL",
             stop_loss=klines[prev_high_idx]['low'],
-        )
+        priority=Priority.CRITICAL)
 
     return None
 
@@ -1076,7 +1188,7 @@ def detect_s3(klines: List[Dict], index: int) -> Optional[StrategySignal]:
     # 找近期 S1 或放量阴线的位置（过去15天内）
     s1_index = None
     for i in range(index - 14, index):
-        if klines[i]['is_fangliang_yinxian'] and klines[i]['close'] < klines[i]['open']:
+        if klines[i].get('is_fangliang_yinxian', False) and klines[i]['close'] < klines[i]['open']:
             s1_index = i
             break
 
@@ -1112,6 +1224,70 @@ def detect_s3(klines: List[Dict], index: int) -> Optional[StrategySignal]:
         },
         action="SELL",
         stop_loss=klines[s1_index]['low'],
+        priority=Priority.CRITICAL)
+
+
+def detect_brick_signals(klines: List[Dict], index: int) -> Optional[StrategySignal]:
+    """
+    检测砖形图信号
+
+    基于四块砖交易体系，检测状态变化点：
+    - 红砖翻绿 → 止损 (BRICK_EXIT)
+    - 红砖满4块 → 减仓 (BRICK_REDUCE)
+    - 绿砖满4块 → 可能止跌观察 (BRICK_BOUNCE)
+
+    只在状态变化当天触发，避免连续多天重复信号。
+    """
+    if index < 15:
+        return None
+
+    today = klines[index]
+
+    # 转换为 DailyData 并检测今天状态
+    daily_list = _klines_dict_to_daily(klines[:index + 1])
+    brick_today = detect_four_brick_system(daily_list)
+
+    # 只关注重要操作状态
+    action_today = brick_today.get('brick_action', '观望')
+    if action_today in ('观望', '持有'):
+        return None
+
+    # 检测昨天状态（用于判断是否为状态变化首日）
+    daily_yesterday = _klines_dict_to_daily(klines[:index])
+    brick_yesterday = detect_four_brick_system(daily_yesterday)
+    action_yesterday = brick_yesterday.get('brick_action', '观望')
+
+    # 如果昨天已经是同样的重要状态，说明不是首日，不重复触发
+    if action_yesterday == action_today:
+        return None
+
+    # 映射到 StrategyType
+    strategy_map = {
+        '止损': (StrategyType.BRICK_EXIT, 'SELL', 0.85, Priority.CRITICAL),
+        '减仓': (StrategyType.BRICK_REDUCE, 'SELL', 0.75, Priority.OBSERVE),
+        '禁止抄底': (StrategyType.BRICK_BOUNCE, 'WATCH', 0.7, Priority.OBSERVE),
+    }
+
+    if action_today not in strategy_map:
+        return None
+
+    strategy_type, action, confidence, priority = strategy_map[action_today]
+
+    return StrategySignal(
+        ts_code=today['ts_code'],
+        trade_date=today['trade_date'],
+        strategy=strategy_type,
+        confidence=confidence,
+        description=brick_today.get('brick_action_desc', action_today),
+        details={
+            'brick_consecutive': brick_today.get('brick_consecutive', 0),
+            'is_brick_flip_green': brick_today.get('is_brick_flip_green', False),
+            'prev_action': action_yesterday,
+            'current_action': action_today,
+        },
+        action=action,
+        stop_loss=today['low'],
+        priority=priority,
     )
 
 

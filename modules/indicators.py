@@ -252,6 +252,177 @@ def get_db_connection():
     return conn
 
 
+
+
+# ---------------------------------------------------------------------------
+# 指标缓存层（内存 + SQLite）
+# ---------------------------------------------------------------------------
+
+_indicator_memory_cache: Dict[Tuple[str, str], IndicatorResult] = {}
+
+
+def _load_indicator_cache(ts_code: str, trade_date: str) -> Optional[IndicatorResult]:
+    """
+    从 indicator_cache 表加载指标结果
+
+    Returns:
+        IndicatorResult 或 None（缓存未命中）
+    """
+    # 1. 先查内存缓存
+    mem_key = (ts_code, trade_date)
+    if mem_key in _indicator_memory_cache:
+        return _indicator_memory_cache[mem_key]
+
+    # 2. 查数据库缓存
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM indicator_cache
+            WHERE ts_code = ? AND trade_date = ?
+        """, (ts_code, trade_date))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        # 映射数据库字段到 IndicatorResult
+        result = IndicatorResult(
+            ts_code=row['ts_code'],
+            trade_date=row['trade_date'],
+            k=row['k'] or 0,
+            d=row['d'] or 0,
+            j=row['j'] or 0,
+            dif=row['dif'] or 0,
+            dea=row['dea'] or 0,
+            macd_hist=row['macd_hist'] or 0,
+            bbi=row['bbi'] or 0,
+            ma5=row['ma5'] or 0,
+            ma10=row['ma10'] or 0,
+            ma20=row['ma20'] or 0,
+            ma60=row['ma60'] or 0,
+            rsi6=row['rsi6'] or 0,
+            rsi12=row['rsi12'] or 0,
+            rsi24=row['rsi24'] or 0,
+            wr5=row['wr5'] or 0,
+            wr10=row['wr10'] or 0,
+            boll_mid=row['boll_mid'] or 0,
+            boll_upper=row['boll_upper'] or 0,
+            boll_lower=row['boll_lower'] or 0,
+            boll_width=row['boll_width'] or 0,
+            boll_position=row['boll_position'] or 0,
+            vol_ratio=row['vol_ratio'] or 0,
+            zg_white=row['zg_white'] or 0,
+            dg_yellow=row['dg_yellow'] or 0,
+            is_gold_cross=bool(row['is_gold_cross']),
+            is_dead_cross=bool(row['is_dead_cross']),
+            rsl_short=row['rsl_short'] or 0,
+            rsl_long=row['rsl_long'] or 0,
+            is_needle_20=bool(row['is_needle_20']),
+            brick_value=row['brick_value'] or 0,
+            brick_trend=row['brick_trend'] or 'NEUTRAL',
+            brick_count=row['brick_count'] or 0,
+            brick_trend_up=bool(row['brick_trend_up']),
+            is_fanbao=bool(row['is_fanbao']),
+            is_beidou=bool(row['is_beidou']),
+            is_suoliang=bool(row['is_suoliang']),
+            is_jiayin_zhenyang=bool(row['is_jiayin_zhenyang']),
+            is_jiayang_zhenyin=bool(row['is_jiayang_zhenyin']),
+            is_fangliang_yinxian=bool(row['is_fangliang_yinxian']),
+            sell_score=row['sell_score'] or 0,
+            prev_high=row['prev_high'] or 0,
+            prev_low=row['prev_low'] or 0,
+            dmi_plus=row['dmi_plus'] or 0,
+            dmi_minus=row['dmi_minus'] or 0,
+            adx=row['adx'] or 0,
+            net_lg_mf=row['net_lg_mf'] or 0,
+            net_elg_mf=row['net_elg_mf'] or 0,
+            last_b1_date=row['last_b1_date'] or '',
+            last_b1_price=row['last_b1_price'] or 0,
+            signal=TradeSignal(row['signal']) if row['signal'] and row['signal'] in [e.value for e in TradeSignal] else TradeSignal.WATCH,
+        )
+
+        # 写入内存缓存
+        _indicator_memory_cache[mem_key] = result
+        return result
+
+    except Exception:
+        return None
+
+
+def _save_indicator_cache(result: IndicatorResult, klines: List[DailyData]) -> bool:
+    """
+    将指标结果写入 indicator_cache 表
+
+    Args:
+        result: 指标计算结果
+        klines: 原始K线数据（用于补充基础行情字段）
+
+    Returns:
+        是否成功
+    """
+    if not klines:
+        return False
+
+    today = klines[-1]
+    yesterday = klines[-2] if len(klines) > 1 else None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO indicator_cache
+            (ts_code, trade_date, close, open, high, low, vol, pct_chg,
+             k, d, j, dif, dea, macd_hist, bbi,
+             ma5, ma10, ma20, ma60,
+             rsi6, rsi12, rsi24, wr5, wr10,
+             boll_mid, boll_upper, boll_lower, boll_width, boll_position,
+             vol_ratio, zg_white, dg_yellow,
+             is_gold_cross, is_dead_cross,
+             rsl_short, rsl_long, is_needle_20,
+             brick_value, brick_trend, brick_count, brick_trend_up, is_fanbao,
+             is_beidou, is_suoliang, is_jiayin_zhenyang, is_jiayang_zhenyin, is_fangliang_yinxian,
+             sell_score, sell_reason, signal, signal_desc,
+             prev_high, prev_low, dmi_plus, dmi_minus, adx,
+             net_lg_mf, net_elg_mf, last_b1_date, last_b1_price,
+             last_yidong_date, market_pct_chg, market_dir, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            result.ts_code, result.trade_date, today.close, today.open, today.high, today.low, today.vol, today.pct_chg,
+            result.k, result.d, result.j, result.dif, result.dea, result.macd_hist, result.bbi,
+            result.ma5, result.ma10, result.ma20, result.ma60,
+            result.rsi6, result.rsi12, result.rsi24, result.wr5, result.wr10,
+            result.boll_mid, result.boll_upper, result.boll_lower, result.boll_width, result.boll_position,
+            result.vol_ratio, result.zg_white, result.dg_yellow,
+            int(result.is_gold_cross), int(result.is_dead_cross),
+            result.rsl_short, result.rsl_long, int(result.is_needle_20),
+            result.brick_value, result.brick_trend, result.brick_count, int(result.brick_trend_up), int(result.is_fanbao),
+            int(result.is_beidou), int(result.is_suoliang), int(result.is_jiayin_zhenyang), int(result.is_jiayang_zhenyin), int(result.is_fangliang_yinxian),
+            result.sell_score, '',
+            result.signal.value if hasattr(result.signal, 'value') else str(result.signal),
+            result.signal.value if hasattr(result.signal, 'value') else str(result.signal),
+            result.prev_high, result.prev_low, result.dmi_plus, result.dmi_minus, result.adx,
+            result.net_lg_mf, result.net_elg_mf, result.last_b1_date, result.last_b1_price,
+            '', 0, 'NEUTRAL', None
+        ))
+
+        conn.commit()
+        conn.close()
+
+        # 写入内存缓存
+        _indicator_memory_cache[(result.ts_code, result.trade_date)] = result
+        return True
+
+    except Exception:
+        return False
+
+
+def clear_indicator_memory_cache():
+    """清空内存缓存（用于测试或数据更新后）"""
+    _indicator_memory_cache.clear()
+
 def get_kline_data(ts_code: str, days: int = 100) -> List[DailyData]:
     """
     获取K线数据
@@ -1389,9 +1560,9 @@ def calculate_brick_history(klines: List[DailyData], lookback: int = 20) -> Tupl
     """
     计算砖型图趋势（连续红砖/绿砖数量）
 
-    通达信逻辑：
-    - 红砖：今日砖值 >= 昨日砖值（动量上涨）
-    - 绿砖：今日砖值 < 昨日砖值（动量下跌）
+    通达信公式逻辑（与官方一致）：
+    - 红砖：今日砖值 >= 昨日砖值（动量上涨）→ COLORRED
+    - 绿砖：今日砖值 < 昨日砖值（动量下跌）→ COLOR00FF00
 
     Args:
         klines: K线数据
@@ -1404,7 +1575,8 @@ def calculate_brick_history(klines: List[DailyData], lookback: int = 20) -> Tupl
         return "NEUTRAL", 0
 
     # 计算历史砖值序列（对比昨日大小判断红绿）
-    brick_colors = []  # 1=红(涨), -1=绿(跌), 0=平
+    # 1=红(涨), -1=绿(跌), 0=平
+    brick_colors = []
     prev_brick = None
 
     for i in range(8, len(klines) + 1):
@@ -1413,9 +1585,9 @@ def calculate_brick_history(klines: List[DailyData], lookback: int = 20) -> Tupl
 
         if prev_brick is not None:
             if brick_val >= prev_brick:
-                brick_colors.append(1)  # 红砖
+                brick_colors.append(1)   # 红砖 = 上涨
             else:
-                brick_colors.append(-1)  # 绿砖
+                brick_colors.append(-1)  # 绿砖 = 下跌
         prev_brick = brick_val
 
     if not brick_colors:
@@ -1933,7 +2105,9 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
     """
     四块砖交易体系检测
 
-    基于A股4天情绪循环，红砖=上涨动量，绿砖=下跌动量。
+    通达信公式逻辑（与官方一致）：
+    - 红砖 = 上涨动量（今日砖值 >= 昨日砖值）→ COLORRED
+    - 绿砖 = 下跌动量（今日砖值 < 昨日砖值）→ COLOR00FF00
 
     规则：
     1. 红砖数满4块 → 减仓至少一半
@@ -1945,7 +2119,7 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
         'brick_consecutive': 0,      # 当前连续砖数
         'brick_action': '观望',      # 操作建议
         'brick_action_desc': '',     # 操作描述
-        'is_brick_flip_green': False,  # 红砖刚翻绿
+        'is_brick_flip_green': False,  # 红砖刚翻绿（上涨转下跌）
     }
 
     if len(klines) < 10:
@@ -1963,13 +2137,14 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
         result['brick_action_desc'] = '数据不足'
         return result
 
-    # 计算红绿砖：当日砖值 >= 昨日砖值 = 红砖
-    colors = []  # 1=红, -1=绿
+    # 计算红绿砖：与官方公式一致
+    # 1=红砖(上涨), -1=绿砖(下跌)
+    colors = []
     for i in range(1, len(brick_history)):
         if brick_history[i] >= brick_history[i - 1]:
-            colors.append(1)
+            colors.append(1)   # 红砖 = 上涨
         else:
-            colors.append(-1)
+            colors.append(-1)  # 绿砖 = 下跌
 
     if not colors:
         result['brick_action_desc'] = '无砖型数据'
@@ -1988,7 +2163,7 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
 
     # === 规则判断 ===
 
-    # 1. 红砖翻绿（止损信号）
+    # 1. 红砖翻绿（止损信号）- 上涨转下跌
     if current_color == -1 and len(colors) >= 2:
         prev_color = colors[-2] if len(colors) >= 2 else 1
         if prev_color == 1:
@@ -1998,7 +2173,7 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
             result['brick_action_desc'] = f'红砖翻绿！立刻止损（连续红砖{count}块后翻绿）'
             return result
 
-    # 2. 红砖数满4块 → 减仓
+    # 2. 红砖数满4块 → 减仓（连续上涨）
     if current_color == 1 and count >= 4:
         result['brick_action'] = '减仓'
         if count == 4:
@@ -2007,7 +2182,7 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
             result['brick_action_desc'] = f'红砖已延续{count}块，趋势延续中，但未减仓需警惕'
         return result
 
-    # 3. 绿砖下跌 → 禁止抄底
+    # 3. 绿砖下跌 → 禁止抄底（连续下跌）
     if current_color == -1:
         result['brick_action'] = '禁止抄底'
         if count >= 4:
@@ -2016,7 +2191,7 @@ def detect_four_brick_system(klines: List[DailyData]) -> Dict:
             result['brick_action_desc'] = f'绿砖下跌中（{count}块），绝不抄底，先数4块'
         return result
 
-    # 4. 红砖不足4块 → 持有/观察
+    # 4. 红砖不足4块 → 持有/观察（上涨中）
     if current_color == 1 and count < 4:
         result['brick_action'] = '持有'
         result['brick_action_desc'] = f'红砖上涨中（{count}块），继续持有'
@@ -2193,6 +2368,11 @@ def analyze_stock(ts_code: str, days: int = 100) -> IndicatorResult:
 
     today = klines[-1]
     yesterday = klines[-2] if len(klines) > 1 else None
+
+    # ===== 缓存查询 =====
+    cached = _load_indicator_cache(ts_code, today.trade_date)
+    if cached:
+        return cached
 
     result = IndicatorResult(
         ts_code=ts_code,

@@ -273,7 +273,7 @@ class DataSyncer:
             # 导入指标计算模块
             try:
                 from .indicators import (
-                    get_kline_data, analyze_stock, calculate_kdj, calculate_macd,
+                    get_kline_data, calculate_kdj, calculate_macd,
                     calculate_bbi, calculate_ma, calculate_rsi_multi, calculate_wr_multi,
                     calculate_bollinger, calculate_vol_ratio, calculate_zg_white,
                     calculate_dg_yellow, detect_double_line_cross, detect_needle_20,
@@ -283,7 +283,7 @@ class DataSyncer:
                 )
             except ImportError:
                 from indicators import (
-                    get_kline_data, analyze_stock, calculate_kdj, calculate_macd,
+                    get_kline_data, calculate_kdj, calculate_macd,
                     calculate_bbi, calculate_ma, calculate_rsi_multi, calculate_wr_multi,
                     calculate_bollinger, calculate_vol_ratio, calculate_zg_white,
                     calculate_dg_yellow, detect_double_line_cross, detect_needle_20,
@@ -296,9 +296,6 @@ class DataSyncer:
             klines = get_kline_data(ts_code, days)
             if not klines:
                 return 0
-
-            # 计算所有指标
-            result = analyze_stock(ts_code, days)
 
             # 准备写入数据
             with get_connection() as conn:
@@ -526,6 +523,10 @@ def main():
                         help="操作: init=初始化数据库, sync=同步数据, status=查看状态")
     parser.add_argument("--ts_code", help="股票代码，如 000001.SZ")
     parser.add_argument("--days", type=int, default=730, help="同步天数")
+    parser.add_argument("--indicators", action="store_true",
+                        help="同步完成后计算并缓存技术指标（indicator_cache 表）")
+    parser.add_argument("--skip-indicators", action="store_true",
+                        help="跳过指标缓存同步（默认单只股票自动同步，批量需指定 --indicators）")
 
     args = parser.parse_args()
 
@@ -545,10 +546,18 @@ def main():
         if args.ts_code:
             # 同步单只股票
             syncer.sync_daily_kline(args.ts_code)
+            # 单只股票默认同步指标缓存（除非显式跳过）
+            if not args.skip_indicators:
+                print(f"正在同步指标缓存: {args.ts_code} ...")
+                syncer.sync_indicator_cache(args.ts_code, days=args.days)
         else:
             # 批量同步所有股票
             syncer.sync_stock_basic()
             syncer.sync_all_daily_kline(days=args.days)
+            # 批量同步指标缓存（需显式指定 --indicators）
+            if args.indicators and not args.skip_indicators:
+                print("正在批量同步指标缓存...")
+                syncer.sync_all_indicators()
 
         print("同步完成")
         print(syncer.get_sync_status())
