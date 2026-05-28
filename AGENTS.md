@@ -15,7 +15,7 @@
 - **数据层**：Python 模块 + SQLite 数据库 + Tushare API（JNB 模式）
 - **语料基础**：约 467 篇直播/付费课整理文章（~200 万字）+ 13 个 ztalk 视频 transcript（~12.7 万字）+ 9 篇交易心理系列（~3.3 万字）+ 15 篇 2026.4-5 月新增文章
 - **许可证**：MIT
-- **版本**：当前 v2.2.0，采用语义化版本（见下方）
+- **版本**：当前 v2.4.0，采用语义化版本（见下方）
 
 ### 双模式架构
 
@@ -28,17 +28,25 @@
 
 ```
 Python 数据层（modules/）              LLM 角色层（SKILL.md）
-├─ tushare_client.py  API 封装          ├─ 角色扮演规则
-├─ database.py        SQLite 管理        ├─ Agentic Protocol
-├─ data_sync.py       数据同步           ├─ 6 个核心心智模型
-├─ indicators.py      60+ 技术指标       ├─ 30 条决策启发式
-├─ screener.py        选股评分体系       ├─ 表达 DNA
-├─ strategies.py      30+ 战法识别       └─ 诚实边界
-├─ trade_parser.py    口语化输入解析
-├─ trade_manager.py   交易记录 CRUD
-├─ trade_reviewer.py  数据准备层（给 LLM 用）
-├─ setup_wizard.py    初始化配置向导
-└─ zettaranc_voice.py 语料库 / LLM 提示词
+├─ tushare_client.py     API 封装         ├─ 角色扮演规则
+├─ database.py           SQLite 管理       ├─ Agentic Protocol
+├─ data_sync.py          数据同步          ├─ 6 个核心心智模型
+├─ indicators/           60+ 技术指标      ├─ 30 条决策启发式
+│   ├─ core.py           基础/数学/核心指标 ├─ 表达 DNA
+│   ├─ price_patterns.py 价格形态识别      └─ 诚实边界
+│   ├─ volume_patterns.py 量价信号
+│   └─ data_layer.py     数据接入/缓存/可视化
+├─ screener.py           选股评分体系
+├─ strategies.py         30+ 战法识别
+├─ backtest.py           策略组合回测
+├─ portfolio_diagnosis.py 持股检查
+├─ watchlist.py          自选股观察池
+├─ cli.py                命令行工具
+├─ trade_parser.py       口语化输入解析
+├─ trade_manager.py      交易记录 CRUD
+├─ trade_reviewer.py     数据准备层（给 LLM 用）
+├─ setup_wizard.py       初始化配置向导
+└─ zettaranc_voice.py    语料库 / LLM 提示词
 ```
 
 **关键设计原则**：Python 层只负责**数据准备**，所有点评、分析话术由 LLM 用 Z哥角色生成，避免"AI味"。
@@ -113,7 +121,11 @@ zettaranc-skill/
 │   ├── __init__.py             # 包导出 + get_data_mode()
 │   ├── database.py             # SQLite 数据库管理：8 张表、事务上下文、CRUD
 │   ├── data_sync.py            # Tushare 数据同步器：增量/全量、限流 120次/分
-│   ├── indicators.py           # 技术指标计算引擎：60+ 指标（KDJ/MACD/BBI/RSI/WR/布林带/双线/砖形图/DMI…）
+│   ├── indicators/             # 技术指标计算引擎：60+ 指标（4 子模块）
+│   │   ├── core.py             # 基础类型 + 数学工具 + 核心指标
+│   │   ├── price_patterns.py   # 价格形态（双线/单针/砖型图/B1/B2/B3/图形识别）
+│   │   ├── volume_patterns.py  # 量价信号（卖出评分/交易信号/量比异动）
+│   │   └── data_layer.py       # 数据接入（get_kline_data/analyze_stock/缓存层/可视化）
 │   ├── screener.py             # 选股与择时：曼城评分、B1评分、趋势/量价/风险评分、每日五步工作流
 │   ├── strategies.py           # 战法识别引擎：B1/B2/B3/SB1、长安战法、四分之三阴量、娜娜图形、异动地量…
 │   ├── setup_wizard.py         # 初始化向导：JNB/websearch 双模式切换、API 连通性测试
@@ -199,7 +211,7 @@ pip install -r requirements.txt
 ### 运行测试
 
 ```bash
-# 全部测试（预期：125 passed, 1 skipped）
+# 全部测试（预期：213 passed, 1 skipped）
 python -m pytest tests/ -v
 
 # 单文件测试
@@ -331,12 +343,15 @@ python scripts/merge_research.py .
 | `test_screener.py` | 评分模型、趋势/量价/风险评分、完美图形 | ~15 |
 | `test_setup_wizard.py` | 环境检测、文件写入、模式切换 | ~8 |
 | `test_exam_rules.py` | B1 规则、砖型图规则、单针规则、评分标准、核心原则 | ~25 |
+| `test_trade_manager.py` | 交易记录 CRUD、持仓计算、盈亏统计 | ~5 |
+| `test_portfolio_diagnosis.py` | 持股检查、状态扫描、防卖飞、出货信号、战法匹配 | ~10 |
+| `test_watchlist.py` | 观察池增删改查、批量扫描、按标签筛选 | ~4 |
 
 ### 运行预期
 
 ```bash
 $ python -m pytest tests/ -v
-# 预期：125 passed, 1 skipped
+# 预期：213 passed, 1 skipped
 ```
 
 ---

@@ -2,6 +2,59 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [v2.4.0] - 2026-05-28
+
+> **「拆分到原子，组合成系统。」**
+
+### 架构重构
+
+- **`modules/indicators.py` → `modules/indicators/` 包（4 子模块）**
+  - `core.py` — 基础类型 + 数学工具 + 核心指标（MA/EMA/KDJ/MACD/BBI/RSI/WR/布林带/量比/DMI）
+  - `price_patterns.py` — 价格形态（双线/单针/砖型图/B1/B2/B3/图形识别）
+  - `volume_patterns.py` — 量价信号（卖出评分/交易信号/量比异动）
+  - `data_layer.py` — 数据接入（get_kline_data/analyze_stock/缓存层/可视化）
+  - `__init__.py` 兼容层保持外部导入不变
+
+### 新增模块
+
+- **`modules/backtest.py`** — 策略组合回测框架：
+  - `backtest_multi_strategy()` 单股票多策略融合，支持 `position_pct` 仓位控制
+  - `backtest_portfolio()` 多股票组合回测，支持 `max_weight` 单股上限
+  - `PortfolioBacktestResult` 含资金曲线、夏普比率、年化收益、最大回撤
+  - `Position` 持仓记录（A股 100 股为 1 手）
+- **`modules/cli.py`** — 命令行工具：
+  - `python -m modules.cli analyze <ts_code>` 股票分析
+  - `python -m modules.cli backtest <ts_code> --strategy b1` 单策略回测
+  - `python -m modules.cli backtest <ts_code> --strategy all` 多策略组合回测
+  - `python -m modules.cli watchlist` 观察池管理
+  - `python -m modules.cli screener` 选股扫描
+
+### 性能优化
+
+- **`modules/strategies.py` `detect_all_strategies()` 26x 加速**
+  - 原 800ms → 31ms（600487.SH 60 日数据）
+  - 预计算指标序列避免 O(n²) 重复计算
+  - 提前返回 + 缓存复用
+
+### 数据层增强
+
+- **指标缓存层打通**：
+  - `data_sync.py` 新增 `sync_indicator_cache()` / `sync_all_indicators()`
+  - `indicator_cache` 表存储 60+ 字段每日快照（KDJ/MACD/BBI/MA/RSI/WR/布林带/双线/砖形图/DMI/量比/信号）
+  - `get_kline_data()` 优先读缓存，未命中回退到 `daily_kline`
+- **`modules/data_sync.py`** — 增量更新优化、跳过已同步股票、2 天同步间隔保护
+- **`modules/tushare_client.py`** — 移除 URL 硬编码，严格从 `.env` 读取
+
+### Bug 修复
+
+- `modules/cli.py` `watchlist` 命令修复：使用函数导入替代不存在的 `Watchlist` 类
+
+### 测试
+
+- **全量回归测试**：213 passed, 1 skipped
+
+---
+
 ## [v2.3.0] - 2026-05-28
 
 > **「框架的完备不是终点，落地执行才是。」**
