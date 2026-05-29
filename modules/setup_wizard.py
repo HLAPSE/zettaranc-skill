@@ -90,10 +90,7 @@ def test_jnb_connection(token: str) -> bool:
     Returns:
         True 表示连接成功
     """
-    try:
-        from .tushare_client import TushareClient
-    except ImportError:
-        from tushare_client import TushareClient
+    from .tushare_client import TushareClient
 
     try:
         client = TushareClient(token=token)

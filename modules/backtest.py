@@ -584,7 +584,7 @@ def backtest_portfolio(
 
     # 为每只股票获取数据和信号
     stock_data = {}
-    all_dates = set()
+    all_dates: set[str] = set()
 
     for config in stock_configs:
         ts_code = config['ts_code']
@@ -594,7 +594,7 @@ def backtest_portfolio(
         if not klines:
             continue
 
-        signal_map = {}
+        signal_map: dict[str, list] = {}
         for sig in signals:
             signal_map.setdefault(sig.trade_date, []).append(sig)
 
@@ -800,7 +800,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.command == 'single':
-        result = backtest_strategy(
+        result: BacktestResult | PortfolioBacktestResult = backtest_strategy(
             args.ts_code,
             days=args.days,
             stop_loss_pct=args.stop_loss,

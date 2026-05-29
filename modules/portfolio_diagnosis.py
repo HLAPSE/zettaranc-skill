@@ -161,10 +161,7 @@ def diagnose_stock(ts_code: str, days: int = 100) -> DiagnosisReport:
 
 def get_stock_info_db(ts_code: str) -> Optional[Dict[str, Any]]:
     """获取股票基本信息（兼容直接运行）"""
-    try:
-        from .database import get_connection
-    except ImportError:
-        from database import get_connection
+    from .database import get_connection
 
     try:
         with get_connection() as conn:

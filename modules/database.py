@@ -422,7 +422,7 @@ def add_watchlist_item(ts_code: str, name: str = "", tags: str = "", notes: str 
             INSERT OR REPLACE INTO watchlist (ts_code, name, tags, notes)
             VALUES (?, ?, ?, ?)
         """, (ts_code, name, tags, notes))
-        return cursor.lastrowid
+        return cursor.lastrowid if cursor.lastrowid is not None else 0
 
 
 def remove_watchlist_item(ts_code: str) -> bool:
@@ -433,12 +433,12 @@ def remove_watchlist_item(ts_code: str) -> bool:
         return cursor.rowcount > 0
 
 
-def get_watchlist(tags: str = None) -> List[Dict]:
+def get_watchlist(tags: Optional[str] = None) -> List[Dict]:
     """获取自选股列表"""
     with get_connection() as conn:
         cursor = conn.cursor()
         sql = "SELECT * FROM watchlist ORDER BY added_date DESC"
-        params = ()
+        params: tuple[str, ...] = ()
         if tags:
             sql = "SELECT * FROM watchlist WHERE tags LIKE ? ORDER BY added_date DESC"
             params = (f"%{tags}%",)
@@ -489,21 +489,21 @@ def save_trade_record(record: Dict[str, Any]) -> int:
             record.get("tags", ""),
             record.get("notes", "")
         ))
-        return cursor.lastrowid
+        return cursor.lastrowid if cursor.lastrowid is not None else 0
 
 
 def get_trade_records(
-    ts_code: str = None,
-    start_date: str = None,
-    end_date: str = None,
-    action: str = None,
+    ts_code: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    action: Optional[str] = None,
     limit: int = 100
 ) -> List[Dict]:
     """查询交易记录"""
     with get_connection() as conn:
         cursor = conn.cursor()
         sql = "SELECT * FROM trade_records WHERE 1=1"
-        params = []
+        params: list[Any] = []
 
         if ts_code:
             sql += " AND ts_code = ?"
@@ -564,12 +564,12 @@ def delete_trade_record(trade_id: int) -> bool:
         return cursor.rowcount > 0
 
 
-def get_trade_summary(ts_code: str = None, start_date: str = None, end_date: str = None) -> Dict:
+def get_trade_summary(ts_code: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict:
     """获取交易汇总统计"""
     with get_connection() as conn:
         cursor = conn.cursor()
         sql = "SELECT action, COUNT(*) as count, SUM(amount) as total_amount FROM trade_records WHERE 1=1"
-        params = []
+        params: list[Any] = []
 
         if ts_code:
             sql += " AND ts_code = ?"
@@ -584,7 +584,7 @@ def get_trade_summary(ts_code: str = None, start_date: str = None, end_date: str
         sql += " GROUP BY action"
         cursor.execute(sql, params)
 
-        result = {"BUY": {}, "SELL": {}}
+        result: dict[str, dict[str, Any]] = {"BUY": {}, "SELL": {}}
         for row in cursor.fetchall():
             result[row["action"]] = {
                 "count": row["count"],

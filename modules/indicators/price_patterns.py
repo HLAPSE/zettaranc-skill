@@ -4,20 +4,12 @@
 
 from typing import List, Dict, Any, Optional, Tuple
 
-try:
-    from .core import (
-        DailyData, TradeSignal, IndicatorResult,
-        calculate_ma, calculate_ema, calculate_sma_td, calculate_sma_series, calculate_slope,
-        calculate_kdj, calculate_bbi, calculate_rsi_multi, calculate_wr_multi,
-        calculate_bollinger, calculate_vol_ratio,
-    )
-except ImportError:
-    from core import (
-        DailyData, TradeSignal, IndicatorResult,
-        calculate_ma, calculate_ema, calculate_sma_td, calculate_sma_series, calculate_slope,
-        calculate_kdj, calculate_bbi, calculate_rsi_multi, calculate_wr_multi,
-        calculate_bollinger, calculate_vol_ratio,
-    )
+from .core import (
+    DailyData, TradeSignal, IndicatorResult,
+    calculate_ma, calculate_ema, calculate_sma_td, calculate_sma_series, calculate_slope,
+    calculate_kdj, calculate_bbi, calculate_rsi_multi, calculate_wr_multi,
+    calculate_bollinger, calculate_vol_ratio,
+)
 
 def detect_divergence(klines: List[DailyData], dif_list: List[float]) -> Dict:
     """
@@ -306,10 +298,10 @@ def detect_double_gun(klines: List[DailyData]) -> Dict:
     - 中间夹缩量小阴小阳（3-10天）
     - 第二枪前一日应有B1痕迹（J<13）
     """
-    result = {
+    result: dict[str, Any] = {
         'is_double_gun': False,
-        'double_gun_vol1': 0,
-        'double_gun_vol2': 0,
+        'double_gun_vol1': 0.0,
+        'double_gun_vol2': 0.0,
         'double_gun_gap_days': 0,
     }
     if len(klines) < 15:
@@ -366,8 +358,8 @@ def detect_double_gun(klines: List[DailyData]) -> Dict:
     # 计算两枪的量比
     g1_prev = klines[gun1_idx - 1] if gun1_idx > 0 else None
     g2_prev = klines[gun2_idx - 1] if gun2_idx > 0 else None
-    vol1 = klines[gun1_idx].vol / g1_prev.vol if g1_prev and g1_prev.vol > 0 else 0
-    vol2 = klines[gun2_idx].vol / g2_prev.vol if g2_prev and g2_prev.vol > 0 else 0
+    vol1: float = klines[gun1_idx].vol / g1_prev.vol if g1_prev and g1_prev.vol > 0 else 0.0
+    vol2: float = klines[gun2_idx].vol / g2_prev.vol if g2_prev and g2_prev.vol > 0 else 0.0
 
     if is_shrink_mid and has_b1_before and 3 <= gap_days <= 10:
         result['is_double_gun'] = True
@@ -551,12 +543,12 @@ def calculate_brick_value(klines: List[DailyData]) -> float:
     closes = [k.close for k in klines]
 
     # 构建 VAR3A 序列（需要至少 6 个值来算 SMA(VAR3A,6,1)）
-    var3a_list = []
+    var3a_list: list[float] = []
     for i in range(3, len(klines)):  # HHV/LLV 需要 4 天，所以从索引 3 开始
         hhv4 = max(highs[max(0, i-3):i+1])
         llv4 = min(lows[max(0, i-3):i+1])
         if hhv4 == llv4:
-            v3 = 50
+            v3 = 50.0
         else:
             v3 = (closes[i] - llv4) / (hhv4 - llv4) * 100
         var3a_list.append(v3)
@@ -580,9 +572,9 @@ def calculate_brick_value(klines: List[DailyData]) -> float:
         hhv4 = max(highs[max(0, i-3):i+1])
         llv4 = min(lows[max(0, i-3):i+1])
         if hhv4 == llv4:
-            v1 = -90
+            v1: float = -90.0
         else:
-            v1 = (hhv4 - closes[i]) / (hhv4 - llv4) * 100 - 90
+            v1 = (hhv4 - closes[i]) / (hhv4 - llv4) * 100 - 90.0
         var1a_list.append(v1)
 
     if len(var1a_list) < 4:
@@ -860,13 +852,13 @@ def detect_b1_today(klines: List[DailyData]) -> Dict:
     B1建仓波检测（只检查最新这天）
     标准：J<13, 振幅<4%, 涨幅-2%~+1.8%, 缩量
     """
-    result = {
+    result: dict[str, Any] = {
         'is_b1': False,
-        'b1_j_value': 0,
-        'b1_amplitude': 0,
-        'b1_pct_chg': 0,
+        'b1_j_value': 0.0,
+        'b1_amplitude': 0.0,
+        'b1_pct_chg': 0.0,
         'b1_volume_shrink': False,
-        'b1_score': 0,
+        'b1_score': 0.0,
     }
     if len(klines) < 2:
         return result
@@ -894,13 +886,13 @@ def detect_b2_today(klines: List[DailyData]) -> Dict:
     B2突破检测（只检查最新这天）
     标准：B1后5天内, 涨幅>=4%, 放量20%+, J<55
     """
-    result = {
+    result: dict[str, Any] = {
         'is_b2': False,
         'b2_follows_b1': False,
-        'b2_pct_chg': 0,
-        'b2_j_value': 0,
+        'b2_pct_chg': 0.0,
+        'b2_j_value': 0.0,
         'b2_volume_up': False,
-        'b2_score': 0,
+        'b2_score': 0.0,
     }
     if len(klines) < 10:
         return result
@@ -1049,9 +1041,9 @@ def check_two_30_rule(klines: List[DailyData]) -> Dict:
     1. B1涨幅约30%
     2. 累计换手率不超过30%
     """
-    result = {
-        'b1_rally_pct': 0,
-        'b1_turnover': 0,
+    result: dict[str, Any] = {
+        'b1_rally_pct': 0.0,
+        'b1_turnover': 0.0,
         'b1_pass_30': False,
     }
     if len(klines) < 10:
@@ -1112,7 +1104,7 @@ def detect_golden_bowl(klines: List[DailyData]) -> Dict:
     黄金碗检测：价格在白线( zg_white )和黄线( dg_yellow )之间
     条件：白线>黄线(多头排列) + 价格落入碗内
     """
-    result = {'is_in_bowl': False, 'bowl_upper': 0, 'bowl_lower': 0}
+    result: dict[str, Any] = {'is_in_bowl': False, 'bowl_upper': 0.0, 'bowl_lower': 0.0}
     if len(klines) < 120:
         return result
     white = calculate_zg_white(klines)
@@ -1503,7 +1495,7 @@ def detect_key_candle(klines: List[DailyData]) -> Dict:
     is_yang = today.close > today.open
     is_yin = today.close < today.open
 
-    result = {'is_key': True, 'body_ratio': round(body_ratio, 2)}
+    result: dict[str, Any] = {'is_key': True, 'body_ratio': round(body_ratio, 2)}
 
     if is_yang and is_break_high:
         result['direction'] = '向上突破'

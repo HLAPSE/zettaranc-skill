@@ -7,14 +7,9 @@
 
 from typing import List, Dict, Tuple
 
-try:
-    from .core import DailyData
-    from .price_patterns import calculate_zg_white, calculate_dg_yellow
-    from .volume_patterns import detect_chuhuo_wushi
-except ImportError:
-    from core import DailyData
-    from price_patterns import calculate_zg_white, calculate_dg_yellow
-    from volume_patterns import detect_chuhuo_wushi
+from .core import DailyData
+from .price_patterns import calculate_zg_white, calculate_dg_yellow
+from .volume_patterns import detect_chuhuo_wushi
 
 
 def _calculate_ma(values: List[float], period: int) -> float:
@@ -378,7 +373,7 @@ def detect_kirin_stage(klines: List[DailyData]) -> Dict:
         'luoluo': ('回落', '不抄底'),
     }
 
-    max_stage = max(scores, key=scores.get)
+    max_stage = max(scores, key=lambda k: scores[k])
     result['stage'] = stage_map[max_stage][0]
     result['confidence'] = round(min(max_score / 100, 1.0), 2)
     result['operation'] = stage_map[max_stage][1]

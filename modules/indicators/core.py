@@ -147,7 +147,7 @@ class IndicatorResult:
 
     # 卖出评分
     sell_score: int = 0         # 0-5分
-    sell_items: Dict[str, bool] = None  # 5项明细 {项目名: 是否通过}
+    sell_items: Optional[Dict[str, bool]] = None  # 5项明细 {项目名: 是否通过}
 
     # 交易信号
     signal: TradeSignal = TradeSignal.WATCH
@@ -195,7 +195,7 @@ class IndicatorResult:
     is_sb1_detailed: bool = False  # 超级B1（独立检测）
 
     # 关键K检测
-    key_k_list: List[Dict] = None    # 关键K列表，每根含日期/类型/实体%/量比
+    key_k_list: Optional[List[Dict]] = None    # 关键K列表，每根含日期/类型/实体%/量比
 
     # 暴力K检测
     is_violence_k: bool = False  # 最新这天是否暴力K
@@ -373,7 +373,7 @@ def calculate_kdj(klines: List[DailyData], period: int = 9,
         return 50, 50, 50  # 默认值
 
     # 计算 RSV
-    rsv_list = []
+    rsv_list: list[float] = []
     for i in range(period - 1, len(klines)):
         low_list = [klines[j].low for j in range(i - period + 1, i + 1)]
         high_list = [klines[j].high for j in range(i - period + 1, i + 1)]
@@ -382,14 +382,14 @@ def calculate_kdj(klines: List[DailyData], period: int = 9,
         high_max = max(high_list)
 
         if high_max == low_min:
-            rsv = 50
+            rsv = 50.0
         else:
             rsv = (klines[i].close - low_min) / (high_max - low_min) * 100
 
         rsv_list.append(rsv)
 
     if not rsv_list:
-        return 50, 50, 50
+        return 50.0, 50.0, 50.0
 
     # 计算 K、D、J
     k = 50.0
@@ -410,22 +410,22 @@ def precompute_kdj_sequence(klines: List[DailyData], period: int = 9) -> List[Tu
     """
     n = len(klines)
     if n < period:
-        return [(50, 50, 50)] * n
+        return [(50.0, 50.0, 50.0)] * n
 
-    result = []
+    result: list[tuple[float, float, float]] = []
     k = 50.0
     d = 50.0
 
     for i in range(n):
         if i < period - 1:
-            result.append((50, 50, 50))
+            result.append((50.0, 50.0, 50.0))
             continue
 
         low_min = min(klines[j].low for j in range(i - period + 1, i + 1))
         high_max = max(klines[j].high for j in range(i - period + 1, i + 1))
 
         if high_max == low_min:
-            rsv = 50
+            rsv = 50.0
         else:
             rsv = (klines[i].close - low_min) / (high_max - low_min) * 100
 

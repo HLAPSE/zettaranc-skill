@@ -156,9 +156,9 @@ class TradeParser:
 
     def _parse_natural(self, text: str) -> ParseResult:
         """解析口语化描述（最高优先级）"""
-        data = {}
-        missing = []
-        errors = []
+        data: dict[str, Any] = {}
+        missing: list[str] = []
+        errors: list[str] = []
 
         # 日期提取
         date_patterns = [

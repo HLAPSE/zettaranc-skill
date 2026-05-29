@@ -4,18 +4,11 @@
 
 from typing import List, Dict, Any, Optional, Tuple
 
-try:
-    from .core import (
-        DailyData, TradeSignal, IndicatorResult,
-        calculate_ma, calculate_bbi, calculate_kdj, calculate_macd,
-    )
-    from .price_patterns import detect_volume_pattern, detect_macd_signals
-except ImportError:
-    from core import (
-        DailyData, TradeSignal, IndicatorResult,
-        calculate_ma, calculate_bbi, calculate_kdj, calculate_macd,
-    )
-    from price_patterns import detect_volume_pattern, detect_macd_signals
+from .core import (
+    DailyData, TradeSignal, IndicatorResult,
+    calculate_ma, calculate_bbi, calculate_kdj, calculate_macd,
+)
+from .price_patterns import detect_volume_pattern, detect_macd_signals
 
 def detect_volume_anomaly(klines: List[DailyData]) -> Dict:
     """
@@ -246,7 +239,7 @@ def detect_chuhuo_wushi(klines: List[DailyData]) -> Dict:
     if today.close < recent_high * 0.85:
         return {'total_score': 0, 'patterns': []}
 
-    patterns = []
+    patterns: list[dict[str, Any]] = []
     vols = [k.vol for k in recent_20]
     avg_vol_5 = sum(vols[-5:]) / 5 if len(vols) >= 5 else sum(vols) / len(vols)
     max_vol_20 = max(vols)
@@ -325,8 +318,8 @@ def detect_chuhuo_wushi(klines: List[DailyData]) -> Dict:
 
     # ===== 方式五：顶部绿肥红瘦 =====
     # 近10天阴量 > 阳量 × 1.5
-    yin_vol_total = 0
-    yang_vol_total = 0
+    yin_vol_total: float = 0.0
+    yang_vol_total: float = 0.0
     for k in recent_10:
         if k.close < k.open:
             yin_vol_total += k.vol
@@ -340,7 +333,7 @@ def detect_chuhuo_wushi(klines: List[DailyData]) -> Dict:
         })
 
     # 总分 = 最高置信度 + 0.1 × (模式数 - 1)
-    total_score = max((p['confidence'] for p in patterns), default=0)
+    total_score = max([p['confidence'] for p in patterns], default=0.0)
     total_score += 0.1 * max(0, len(patterns) - 1)
     total_score = min(total_score, 1.0)
 

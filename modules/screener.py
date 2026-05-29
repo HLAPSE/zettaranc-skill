@@ -400,7 +400,7 @@ def score_risk(klines: List[Dict]) -> Tuple[float, List[str]]:
     return max(0, min(100, score)), warnings
 
 
-def analyze_stock(ts_code: str, klines: List[Dict] = None) -> StockScore:
+def analyze_stock(ts_code: str, klines: Optional[List[Dict]] = None) -> StockScore:
     """
     综合评分单只股票
     """
@@ -430,7 +430,7 @@ def analyze_stock(ts_code: str, klines: List[Dict] = None) -> StockScore:
     wave_stage = "未知"
     kirin_stage = "未知"
     try:
-        from modules.indicators import DailyData, detect_three_waves, detect_kirin_stage
+        from .indicators import DailyData, detect_three_waves, detect_kirin_stage
         daily_klines = []
         for i, k in enumerate(klines):
             prev_close = klines[i-1]['close'] if i > 0 else k['close']
@@ -538,40 +538,28 @@ def _filter_stock(result: Tuple[str, List[Dict], StockScore], criteria: str) -> 
 
     # 高级选股策略（基于战法检测）
     elif criteria == "super_b1":
-        try:
-            from modules.strategies import detect_sb1
-        except ImportError:
-            from strategies import detect_sb1
+        from .strategies import detect_sb1
         for i in range(max(10, len(klines) - 5), len(klines)):
             sig = detect_sb1(klines, i)
             if sig:
                 score.warnings.append(f"超级B1 J={sig.details.get('j', 0):.1f}")
                 return True
     elif criteria == "changan":
-        try:
-            from modules.strategies import detect_changan
-        except ImportError:
-            from strategies import detect_changan
+        from .strategies import detect_changan
         for i in range(max(3, len(klines) - 5), len(klines)):
             sig = detect_changan(klines, i)
             if sig:
                 score.reasons.append(f"长安战法 胜率75%")
                 return True
     elif criteria == "b2_breakout":
-        try:
-            from modules.strategies import detect_b2
-        except ImportError:
-            from strategies import detect_b2
+        from .strategies import detect_b2
         for i in range(max(15, len(klines) - 5), len(klines)):
             sig = detect_b2(klines, i)
             if sig:
                 score.reasons.append(f"B2突破 涨{sig.details.get('pct_chg', 0):.1f}%")
                 return True
     elif criteria == "b3_consensus":
-        try:
-            from modules.strategies import detect_b3
-        except ImportError:
-            from strategies import detect_b3
+        from .strategies import detect_b3
         for i in range(max(20, len(klines) - 5), len(klines)):
             sig = detect_b3(klines, i)
             if sig:
@@ -580,10 +568,7 @@ def _filter_stock(result: Tuple[str, List[Dict], StockScore], criteria: str) -> 
 
     # P2 指标选股策略
     elif criteria in ("build_wave", "xishou", "safe"):
-        try:
-            from modules.indicators import DailyData, detect_three_waves, detect_kirin_stage
-        except ImportError:
-            from indicators import DailyData, detect_three_waves, detect_kirin_stage
+        from .indicators import DailyData, detect_three_waves, detect_kirin_stage
         daily_klines = []
         for i, k in enumerate(klines):
             prev_close = klines[i-1]['close'] if i > 0 else k['close']

@@ -46,7 +46,7 @@ class DataSyncer:
 
         # 限流控制：120次/分钟
         self.min_interval = 60 / 120
-        self.last_request_time = {}
+        self.last_request_time: dict[str, float] = {}
 
     def _rate_limit(self, api_name: str):
         """限流控制"""
@@ -269,26 +269,15 @@ class DataSyncer:
         """
         try:
             # 导入指标计算模块
-            try:
-                from .indicators import (
-                    get_kline_data, precompute_kdj_sequence, precompute_macd_sequence,
-                    calculate_bbi, calculate_ma, calculate_rsi_multi, calculate_wr_multi,
-                    calculate_bollinger, calculate_vol_ratio, calculate_zg_white,
-                    calculate_dg_yellow, detect_double_line_cross, detect_needle_20,
-                    calculate_brick_value, calculate_brick_history, detect_brick_trend,
-                    detect_fanbao, detect_volume_pattern, calculate_sell_score,
-                    detect_trade_signal, calculate_dmi
-                )
-            except ImportError:
-                from indicators import (
-                    get_kline_data, precompute_kdj_sequence, precompute_macd_sequence,
-                    calculate_bbi, calculate_ma, calculate_rsi_multi, calculate_wr_multi,
-                    calculate_bollinger, calculate_vol_ratio, calculate_zg_white,
-                    calculate_dg_yellow, detect_double_line_cross, detect_needle_20,
-                    calculate_brick_value, calculate_brick_history, detect_brick_trend,
-                    detect_fanbao, detect_volume_pattern, calculate_sell_score,
-                    detect_trade_signal, calculate_dmi
-                )
+            from .indicators import (
+                get_kline_data, precompute_kdj_sequence, precompute_macd_sequence,
+                calculate_bbi, calculate_ma, calculate_rsi_multi, calculate_wr_multi,
+                calculate_bollinger, calculate_vol_ratio, calculate_zg_white,
+                calculate_dg_yellow, detect_double_line_cross, detect_needle_20,
+                calculate_brick_value, calculate_brick_history, detect_brick_trend,
+                detect_fanbao, detect_volume_pattern, calculate_sell_score,
+                detect_trade_signal, calculate_dmi
+            )
 
             # 获取K线数据
             klines = get_kline_data(ts_code, days)
@@ -315,12 +304,12 @@ class DataSyncer:
                     else:
                         k, d, j = 50, 50, 50
 
-                    if macd_dif_seq:
+                    if macd_dif_seq is not None and macd_dea_seq is not None and macd_hist_seq is not None:
                         dif = macd_dif_seq[i]
                         dea = macd_dea_seq[i]
                         macd_hist = macd_hist_seq[i]
                     else:
-                        dif, dea, macd_hist = 0, 0, 0
+                        dif, dea, macd_hist = 0.0, 0.0, 0.0
 
                     bbi = calculate_bbi(sub_klines) if len(sub_klines) >= 24 else 0
 

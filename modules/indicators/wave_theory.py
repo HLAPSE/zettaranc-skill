@@ -7,10 +7,7 @@
 
 from typing import List, Dict, Tuple, Optional
 
-try:
-    from .core import DailyData
-except ImportError:
-    from core import DailyData
+from .core import DailyData
 
 
 def _find_recent_low(klines: List[DailyData], window: int = 5) -> Tuple[int, float]:

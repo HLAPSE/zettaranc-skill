@@ -12,11 +12,7 @@ from datetime import datetime
 # 数据库路径
 DB_PATH = "data/stock_data.db"
 
-# Import 兼容：支持从 indicators 导入砖形图相关函数
-try:
-    from .indicators import DailyData, detect_four_brick_system, calculate_brick_value
-except ImportError:
-    from indicators import DailyData, detect_four_brick_system, calculate_brick_value
+from .indicators import DailyData, detect_four_brick_system, calculate_brick_value
 
 
 def _klines_dict_to_daily(klines: List[Dict]) -> List[DailyData]:
@@ -112,6 +108,10 @@ class StrategySignal:
     stop_loss: Optional[float] = None
     risk_ratio: Optional[float] = None
 
+    # 扩展字段（部分策略使用）
+    price: Optional[float] = None    # 信号产生时的价格
+    reason: Optional[str] = None    # 信号原因说明
+
     # 信号优先级（由策略检测函数自动填入）
     priority: Priority = Priority.OBSERVE
 
@@ -183,10 +183,7 @@ def get_kline_data(ts_code: str, days: int = 120) -> List[Dict]:
 
 def _dict_to_daily(klines: List[Dict]) -> List[Any]:
     """将 Dict K 线列表转换为 indicators.DailyData"""
-    try:
-        from modules.indicators import DailyData
-    except ImportError:
-        from indicators import DailyData
+    from .indicators import DailyData
     return [DailyData(
         ts_code=k['ts_code'],
         trade_date=k['trade_date'],
@@ -202,20 +199,14 @@ def _dict_to_daily(klines: List[Dict]) -> List[Any]:
 
 def _calc_kdj(klines: List[Dict]) -> Tuple[float, float, float]:
     """通过 indicators.py 计算 KDJ"""
-    try:
-        from modules.indicators import calculate_kdj
-    except ImportError:
-        from indicators import calculate_kdj
+    from .indicators import calculate_kdj
     daily = _dict_to_daily(klines)
     return calculate_kdj(daily)
 
 
 def _calc_bbi(klines: List[Dict]) -> float:
     """通过 indicators.py 计算 BBI"""
-    try:
-        from modules.indicators import calculate_bbi
-    except ImportError:
-        from indicators import calculate_bbi
+    from .indicators import calculate_bbi
     daily = _dict_to_daily(klines)
     return calculate_bbi(daily)
 
@@ -223,10 +214,7 @@ def _calc_bbi(klines: List[Dict]) -> float:
 # 兼容层：保留旧API供测试和外部调用使用
 def calculate_ma(prices: List[float], period: int) -> float:
     """已废弃：请使用 indicators.calculate_ma"""
-    try:
-        from modules.indicators import calculate_ma as _calc_ma_ind
-    except ImportError:
-        from indicators import calculate_ma as _calc_ma_ind
+    from .indicators import calculate_ma as _calc_ma_ind
     return _calc_ma_ind(prices, period)
 
 
@@ -918,20 +906,12 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
     # ===== 预计算指标序列（避免 daily loop 内重复计算）=====
     daily_klines = _dict_to_daily(klines)
 
-    try:
-        from modules.indicators import (
-            precompute_kdj_sequence, precompute_bbi_sequence,
-            detect_didi, detect_macd_trap,
-            detect_chuhuo_wushi, detect_zaihou_chongjian,
-            detect_yueyueyushi, detect_key_candle
-        )
-    except ImportError:
-        from indicators import (
-            precompute_kdj_sequence, precompute_bbi_sequence,
-            detect_didi, detect_macd_trap,
-            detect_chuhuo_wushi, detect_zaihou_chongjian,
-            detect_yueyueyushi, detect_key_candle
-        )
+    from .indicators import (
+        precompute_kdj_sequence, precompute_bbi_sequence,
+        detect_didi, detect_macd_trap,
+        detect_chuhuo_wushi, detect_zaihou_chongjian,
+        detect_yueyueyushi, detect_key_candle
+    )
 
     kdj_sequence = precompute_kdj_sequence(daily_klines)
     bbi_sequence = precompute_bbi_sequence(daily_klines)
@@ -1038,39 +1018,43 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
             didi_result = detect_didi(daily_klines)
             if didi_result.get('is_didi'):
                 signals.append(StrategySignal(
+                    ts_code=ts_code,
                     trade_date=klines[-1]['trade_date'],
                     strategy=StrategyType.S1,
-                    action=Action.SELL,
+                    action=Action.SELL.value,
                     confidence=0.95,
+                    description=f"滴滴战法：高位连续两根阴线下台阶，第二根收盘{didi_result['second_close']} < 第一根最低{didi_result['first_low']}，量未缩{didi_result['volume_ratio']}倍",
                     price=klines[-1]['close'],
-                    reason=f"滴滴战法：高位连续两根阴线下台阶，"
-                           f"第二根收盘({didi_result['second_close']}) < 第一根最低({didi_result['first_low']})，"
-                           f"量未缩({didi_result['volume_ratio']}倍)"
+                    reason=f"滴滴战法：高位连续两根阴线下台阶，第二根收盘({didi_result['second_close']}) < 第一根最低({didi_result['first_low']})，量未缩({didi_result['volume_ratio']}倍)"
                 ))
 
             # MACD 金叉空 / 死叉多
             try:
-                from modules.indicators import calculate_macd
+                from .indicators import calculate_macd
             except ImportError:
-                from indicators import calculate_macd
+                from .indicators import calculate_macd
             dif_list_all, dea_list_all, _ = calculate_macd(daily_klines)
             if dif_list_all and dea_list_all:
                 trap = detect_macd_trap(dif_list_all, dea_list_all)
                 if trap.get('is_gold_trap'):
                     signals.append(StrategySignal(
+                        ts_code=ts_code,
                         trade_date=klines[-1]['trade_date'],
                         strategy=StrategyType.S1,
-                        action=Action.SELL,
+                        action=Action.SELL.value,
                         confidence=0.85,
+                        description="MACD 金叉空：眼看金叉未成，白线拐头向下，诱多陷阱",
                         price=klines[-1]['close'],
                         reason="MACD 金叉空：眼看金叉未成，白线拐头向下，诱多陷阱"
                     ))
                 if trap.get('is_dead_trap'):
                     signals.append(StrategySignal(
+                        ts_code=ts_code,
                         trade_date=klines[-1]['trade_date'],
                         strategy=StrategyType.B1,
-                        action=Action.BUY,
+                        action=Action.BUY.value,
                         confidence=0.85,
+                        description="MACD 死叉多：眼看死叉未成，白线拐头向上，空中加油",
                         price=klines[-1]['close'],
                         reason="MACD 死叉多：眼看死叉未成，白线拐头向上，空中加油"
                     ))
@@ -1080,10 +1064,12 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
             if chuhuo.get('is_selling') and chuhuo.get('patterns'):
                 top = chuhuo['patterns'][0]
                 signals.append(StrategySignal(
+                    ts_code=ts_code,
                     trade_date=klines[-1]['trade_date'],
                     strategy=StrategyType.S1,
-                    action=Action.SELL,
+                    action=Action.SELL.value,
                     confidence=top['confidence'],
+                    description=f"出货五式：{top['type']} - {top['desc']}",
                     price=klines[-1]['close'],
                     reason=f"出货五式：{top['type']} - {top['desc']}"
                 ))
@@ -1092,10 +1078,12 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
             rebuild = detect_zaihou_chongjian(daily_klines)
             if rebuild.get('is_rebuild'):
                 signals.append(StrategySignal(
+                    ts_code=ts_code,
                     trade_date=klines[-1]['trade_date'],
                     strategy=StrategyType.B1,
-                    action=Action.BUY,
+                    action=Action.BUY.value,
                     confidence=rebuild['confidence'],
+                    description=rebuild['desc'],
                     price=klines[-1]['close'],
                     reason=rebuild['desc']
                 ))
@@ -1104,10 +1092,12 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
             ready = detect_yueyueyushi(daily_klines)
             if ready.get('is_ready'):
                 signals.append(StrategySignal(
+                    ts_code=ts_code,
                     trade_date=klines[-1]['trade_date'],
                     strategy=StrategyType.B2,
-                    action=Action.BUY,
+                    action=Action.BUY.value,
                     confidence=ready['confidence'],
+                    description=ready['desc'],
                     price=klines[-1]['close'],
                     reason=ready['desc']
                 ))
@@ -1117,19 +1107,21 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
             if key_k.get('is_key'):
                 sig_type = StrategyType.S1 if '阴破位' in key_k.get('type', '') else StrategyType.B1
                 signals.append(StrategySignal(
+                    ts_code=ts_code,
                     trade_date=klines[-1]['trade_date'],
                     strategy=sig_type,
-                    action=Action.SELL if sig_type == StrategyType.S1 else Action.BUY,
+                    action=Action.SELL.value if sig_type == StrategyType.S1 else Action.BUY.value,
                     confidence=key_k['confidence'],
+                    description=f"关键K：{key_k['type']} - {key_k['direction']}",
                     price=klines[-1]['close'],
                     reason=f"关键K：{key_k['type']} - {key_k['direction']}"
                 ))
 
             # ========== P2 指标：三波理论 ==========
             try:
-                from modules.indicators import detect_three_waves
+                from .indicators import detect_three_waves
             except ImportError:
-                from indicators import detect_three_waves
+                from .indicators import detect_three_waves
             wave = detect_three_waves(daily_klines)
             if wave['wave'] != '未知' and wave['confidence'] >= 0.5:
                 wave_map = {
@@ -1152,9 +1144,9 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> List[StrategySignal]
 
             # ========== P2 指标：麒麟会四阶段 ==========
             try:
-                from modules.indicators import detect_kirin_stage
+                from .indicators import detect_kirin_stage
             except ImportError:
-                from indicators import detect_kirin_stage
+                from .indicators import detect_kirin_stage
             kirin = detect_kirin_stage(daily_klines)
             if kirin['stage'] != '未知' and kirin['confidence'] >= 0.4:
                 kirin_map = {
@@ -1211,7 +1203,7 @@ def _post_process_signals(signals: List[StrategySignal]) -> List[StrategySignal]
 
     # 3. 截断：每个策略类型最多保留3个最新信号，总体最多30个
     type_counts: Dict[str, int] = {}
-    filtered = []
+    filtered: list[StrategySignal] = []
     for s in deduped:
         type_key = s.strategy.value
         if type_counts.get(type_key, 0) >= 3:
@@ -1615,7 +1607,7 @@ def analyze_with_strategies(ts_code: str, days: int = 120) -> Dict[str, Any]:
     signals = detect_all_strategies(ts_code, days)
 
     # 按战法类型分组统计
-    strategy_stats = {}
+    strategy_stats: Dict[str, Dict[str, Any]] = {}
     for s in signals:
         name = s.strategy.value
         if name not in strategy_stats:

@@ -41,7 +41,7 @@ class ReviewContext:
     # 元数据
     is_complete_trade: bool = False  # 是否是完整交易（有买有卖）
     signal_type: Optional[str] = None  # 卤煮/止损/卖飞/建仓
-    tags: List[str] = None
+    tags: Optional[List[str]] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -131,7 +131,7 @@ class TradeReviewer:
         result = self.parser.parse(text)
         return result, result.data
 
-    def prepare_review_context(self, data: Dict, action_type: str = None, extra_info: Dict = None) -> ReviewContext:
+    def prepare_review_context(self, data: Dict, action_type: Optional[str] = None, extra_info: Optional[Dict] = None) -> ReviewContext:
         """
         准备点评上下文
 
