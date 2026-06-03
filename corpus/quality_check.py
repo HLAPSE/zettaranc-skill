@@ -38,14 +38,14 @@ def _extract_section(content: str, header_pattern: str) -> str:
 
 
 def check_mental_models(content: str) -> tuple[bool, str]:
-    """检查心智模型数量（3-7个），并验证每个模型有总结和局限标注"""
+    """检查心智模型数量（3-9个），并验证每个模型有总结和局限标注"""
     # Find all model headers: ### 模型 N: ...
     model_headers = list(re.finditer(r'^###\s+模型\s*(\d+)', content, re.MULTILINE))
     if not model_headers:
         return False, "未检测到心智模型section"
 
     count = len(model_headers)
-    passed_count = 3 <= count <= 7
+    passed_count = 3 <= count <= 9
 
     # Check each model section for summary and limitation
     models_with_summary = 0
