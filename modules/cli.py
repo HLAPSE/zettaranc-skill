@@ -50,15 +50,16 @@ STRATEGY_ALIAS = {
 STRATEGY_CHOICES = list(STRATEGY_ALIAS.keys())
 
 
-def cmd_analyze(args):
-    """分析单只股票"""
+def _analyze_core(ts_code: str, days: int = 120) -> dict:
+    """
+    核心分析逻辑，返回所有分析结果的字典。
+    cmd_analyze 和 cmd_score 共用此函数，避免重复计算。
+    """
     from modules.indicators import analyze_stock
     from modules.indicators.data_layer import get_kline_data, DailyData
     from modules.strategies import detect_all_strategies
     from modules.portfolio_diagnosis import diagnose_stock
-
-    ts_code = args.ts_code
-    days = args.days
+    from modules.screener import analyze_stock as screener_analyze
 
     # 1. 指标分析
     result = analyze_stock(ts_code, days=days)
@@ -98,6 +99,33 @@ def cmd_analyze(args):
 
     # 4. 诊断
     diagnosis = diagnose_stock(ts_code, days=days)
+
+    # 5. screener 评分（复用已有数据，不再重复拉取）
+    score = screener_analyze(ts_code)
+
+    return {
+        "ts_code": ts_code,
+        "days": days,
+        "result": result,
+        "wave_data": wave_data,
+        "kirin_data": kirin_data,
+        "signals": signals,
+        "diagnosis": diagnosis,
+        "score": score,
+    }
+
+
+def cmd_analyze(args):
+    """分析单只股票（指标 + 主力 + 战法 + 诊断 + 评分）"""
+    core = _analyze_core(args.ts_code, args.days)
+
+    ts_code = core["ts_code"]
+    result = core["result"]
+    wave_data = core["wave_data"]
+    kirin_data = core["kirin_data"]
+    signals = core["signals"]
+    diagnosis = core["diagnosis"]
+    score = core["score"]
 
     # ── JSON 输出 ──
     if args.json:
@@ -147,6 +175,16 @@ def cmd_analyze(args):
                 "is_centipede": getattr(diagnosis, "is_centipede", False),
                 "risk_level": getattr(diagnosis, "risk_level", ""),
                 "recommendation": getattr(diagnosis, "recommendation", ""),
+            },
+            "score": {
+                "total": score.score,
+                "b1_score": score.b1_score,
+                "trend_score": score.trend_score,
+                "volume_score": score.volume_score,
+                "risk_score": score.risk_score,
+                "rating": score.rating,
+                "reasons": score.reasons,
+                "warnings": score.warnings,
             },
         }
         _json_output(json_result)
@@ -206,6 +244,14 @@ def cmd_analyze(args):
             for s in observe[:3]:
                 print(f"     {s.trade_date} {s.strategy.value}: {s.description}")
 
+    print("\n【综合评分】")
+    print(f"  总分: {score.score:.1f}  {score.rating}")
+    print(f"  B1评分: {score.b1_score:.1f}  趋势: {score.trend_score:.1f}  量价: {score.volume_score:.1f}  风险: {score.risk_score:.1f}")
+    if score.reasons:
+        print(f"  理由: {', '.join(score.reasons[:5])}")
+    if score.warnings:
+        print(f"  警告: {', '.join(score.warnings[:3])}")
+
     print("\n【持仓诊断】")
     from modules.portfolio_diagnosis import format_report
 
@@ -264,13 +310,15 @@ def cmd_screen(args):
 
 
 def cmd_score(args):
-    """单只股票综合评分（来自 screener.py score action）"""
-    from modules.screener import analyze_stock, format_stock_score
+    """单只股票综合评分（复用 _analyze_core，不重复计算）"""
+    from modules.screener import format_stock_score
 
     if not args.ts_code:
         print("请指定股票代码: zt score <ts_code>")
         sys.exit(1)
-    score = analyze_stock(args.ts_code)
+
+    core = _analyze_core(args.ts_code, days=60)
+    score = core["score"]
 
     # ── JSON 输出 ──
     if args.json:
@@ -289,7 +337,7 @@ def cmd_score(args):
         _json_output(json_result)
         return
 
-    # ── 人类可读输出（保持原样） ──
+    # ── 人类可读输出 ──
     print(format_stock_score(score))
 
 
