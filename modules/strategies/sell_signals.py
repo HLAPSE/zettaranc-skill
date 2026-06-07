@@ -284,3 +284,164 @@ def detect_brick_signals(klines: list[dict], index: int) -> StrategySignal | Non
         stop_loss=today["low"],
         priority=priority,
     )
+
+
+def detect_buy_exhaustion(klines: list[dict], index: int) -> StrategySignal | None:
+    """
+    检测买盘枯竭信号（上涨动能耗尽预警）
+
+    来源：knowledge/key-candles.md
+
+    触发条件（在上涨趋势中）：
+    1. 上涨趋势：index-10 到 index-3 期间有明显上涨（>5%）
+    2. 连续3天出现缩量小阳线
+       - 小阳线：实体 (close-open)/open < 1%
+       - 缩量：每天成交量 < 前一天
+    """
+    if index < 13:
+        return None
+
+    today = klines[index]
+
+    # 1. 检查上涨趋势：index-10 到 index-3 期间涨幅 > 5%
+    try:
+        trend_low = min(k["low"] for k in klines[index - 10 : index - 2])
+        trend_high = max(k["high"] for k in klines[index - 10 : index - 2])
+        if trend_low <= 0:
+            return None
+        up_pct = (trend_high - trend_low) / trend_low
+        if up_pct < 0.05:
+            return None
+    except (ValueError, IndexError):
+        return None
+
+    # 2. 检查最近3天是否为缩量小阳线
+    for i in range(index - 2, index + 1):
+        k = klines[i]
+        # 小阳线：close >= open 且实体比例 < 1%
+        if k["close"] < k["open"]:
+            return None
+        if k["open"] <= 0:
+            return None
+        body_pct = (k["close"] - k["open"]) / k["open"]
+        if body_pct >= 0.01:
+            return None
+
+        # 缩量：每天成交量 < 前一天
+        if i > 0 and k["vol"] >= klines[i - 1]["vol"]:
+            return None
+
+    return StrategySignal(
+        ts_code=today["ts_code"],
+        trade_date=today["trade_date"],
+        strategy=StrategyType.WATCH,
+        confidence=0.65,
+        description="买盘枯竭：连续3天缩量小阳线，上涨动能不足",
+        details={
+            "trend_up_pct": round(up_pct * 100, 2),
+            "last_3_days_vol": [klines[i]["vol"] for i in range(index - 2, index + 1)],
+        },
+        action="WATCH",
+        priority=Priority.OBSERVE,
+    )
+
+
+def detect_green_fat_red_thin(klines: list[dict], index: int) -> StrategySignal | None:
+    """
+    检测绿肥红瘦出货信号（主力出货）
+
+    来源：knowledge/exit-strategies.md、knowledge/market-macro.md
+
+    触发条件：
+    近5天内阴线平均成交量 > 阳线平均成交量的1.5倍
+    - 阴线：close < open
+    - 阳线：close >= open
+    - 至少有2根阴线和2根阳线才有意义
+    """
+    if index < 4:
+        return None
+
+    today = klines[index]
+    recent = klines[index - 4 : index + 1]
+
+    yin_vols = []
+    yang_vols = []
+    for k in recent:
+        if k["close"] < k["open"]:
+            yin_vols.append(k["vol"])
+        else:
+            yang_vols.append(k["vol"])
+
+    # 至少2根阴线和2根阳线
+    if len(yin_vols) < 2 or len(yang_vols) < 2:
+        return None
+
+    avg_yin = sum(yin_vols) / len(yin_vols)
+    avg_yang = sum(yang_vols) / len(yang_vols)
+
+    if avg_yang <= 0:
+        return None
+
+    ratio = avg_yin / avg_yang
+    if ratio < 1.5:
+        return None
+
+    return StrategySignal(
+        ts_code=today["ts_code"],
+        trade_date=today["trade_date"],
+        strategy=StrategyType.S1,
+        confidence=0.80,
+        description="绿肥红瘦：阴线量能远超阳线，主力出货",
+        details={
+            "yin_count": len(yin_vols),
+            "yang_count": len(yang_vols),
+            "avg_yin_vol": round(avg_yin, 0),
+            "avg_yang_vol": round(avg_yang, 0),
+            "ratio": round(ratio, 2),
+        },
+        action="SELL",
+        priority=Priority.CRITICAL,
+    )
+
+
+def detect_staircase_distribution(klines: list[dict], index: int) -> StrategySignal | None:
+    """
+    检测阶梯放量下跌信号（阶梯式出货）
+
+    来源：knowledge/exit-strategies.md
+
+    触发条件：
+    连续3+天每天量增价跌
+    - 量增：vol[i] > vol[i-1]
+    - 价跌：close[i] < close[i-1]
+    """
+    if index < 2:
+        return None
+
+    today = klines[index]
+
+    # 从 index 往前数连续量增价跌天数
+    consecutive = 1
+    for i in range(index, 0, -1):
+        if klines[i]["vol"] > klines[i - 1]["vol"] and klines[i]["close"] < klines[i - 1]["close"]:
+            consecutive += 1
+        else:
+            break
+
+    if consecutive < 3:
+        return None
+
+    return StrategySignal(
+        ts_code=today["ts_code"],
+        trade_date=today["trade_date"],
+        strategy=StrategyType.S1,
+        confidence=0.85,
+        description=f"阶梯放量下跌：连续{consecutive}天量增价跌，主力出货",
+        details={
+            "consecutive_days": consecutive,
+            "vol_sequence": [klines[i]["vol"] for i in range(max(0, index - consecutive + 1), index + 1)],
+            "close_sequence": [klines[i]["close"] for i in range(max(0, index - consecutive + 1), index + 1)],
+        },
+        action="SELL",
+        priority=Priority.CRITICAL,
+    )

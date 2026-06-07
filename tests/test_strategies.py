@@ -5,6 +5,7 @@ strategies.py 战法识别测试
 import pytest
 from modules.strategies import (
     StrategyType,
+    Priority,
     calculate_ma,
     calculate_kdj,
     calculate_bbi,
@@ -26,7 +27,11 @@ from modules.strategies import (
     detect_all_strategies,
     get_latest_signal,
     detect_brick_signals,
+    detect_buy_exhaustion,
+    detect_green_fat_red_thin,
+    detect_staircase_distribution,
 )
+from modules.indicators import detect_volume_attack, DailyData
 from datetime import datetime, timedelta
 from tests.conftest import make_kline_row, generate_uptrend_klines
 from tests.conftest import generate_downtrend_klines, generate_b1_scenario
@@ -531,3 +536,403 @@ class TestDetectBrickSignalsPositive:
                 assert signal.action == "WATCH"
                 return
         pytest.skip("BRICK_BOUNCE 未在当前场景触发")
+
+
+# ==================== 新增卖出/攻击信号测试 ====================
+
+
+class TestDetectBuyExhaustion:
+    """买盘枯竭信号测试"""
+
+    def test_insufficient_data(self):
+        """数据不足时返回 None"""
+        klines = generate_uptrend_klines(n=5)
+        assert detect_buy_exhaustion(klines, 4) is None
+
+    def test_no_uptrend(self):
+        """无上涨趋势时不触发"""
+        klines = generate_downtrend_klines(n=20, start_price=100.0, daily_pct=-0.5)
+        assert detect_buy_exhaustion(klines, 18) is None
+
+    def test_buy_exhaustion_triggers(self):
+        """上涨趋势后连续3天缩量小阳线应触发"""
+        # 先生成上涨趋势（vol_base 要小，让后续缩量容易满足）
+        klines = generate_uptrend_klines(n=15, start_price=100.0, daily_pct=1.0, vol_base=5000)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+
+        # 连续3天缩量小阳线，vol 从低于 uptrend 最后一天开始递减
+        vol = 4000.0  # uptrend 最后一天 vol ≈ 5700，需低于它
+        for i in range(3):
+            date_str = dt.strftime("%Y%m%d")
+            open_p = price
+            close_p = price * 1.003  # 小阳线，实体 < 1%
+            k = make_kline_row(base_price=close_p, base_vol=vol, base_date=date_str)
+            k["open"] = open_p
+            k["close"] = close_p
+            k["high"] = close_p * 1.002
+            k["low"] = open_p * 0.998
+            k["pct_chg"] = 0.3
+            k["is_rise"] = True
+            klines.append(k)
+            price = close_p
+            vol *= 0.8  # 每天缩量
+            dt += timedelta(days=1)
+
+        signal = detect_buy_exhaustion(klines, len(klines) - 1)
+        assert signal is not None
+        assert signal.strategy == StrategyType.WATCH
+        assert "买盘枯竭" in signal.description
+        assert signal.action == "WATCH"
+
+    def test_not_small_yang(self):
+        """非小阳线（实体>=1%）不触发"""
+        klines = generate_uptrend_klines(n=15, start_price=100.0, daily_pct=1.0)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+
+        vol = 20000.0
+        for i in range(3):
+            date_str = dt.strftime("%Y%m%d")
+            open_p = price
+            close_p = price * 1.02  # 大阳线，实体 >= 1%
+            k = make_kline_row(base_price=close_p, base_vol=vol, base_date=date_str)
+            k["open"] = open_p
+            k["close"] = close_p
+            k["high"] = close_p * 1.005
+            k["low"] = open_p * 0.995
+            k["pct_chg"] = 2.0
+            k["is_rise"] = True
+            klines.append(k)
+            price = close_p
+            vol *= 0.8
+            dt += timedelta(days=1)
+
+        signal = detect_buy_exhaustion(klines, len(klines) - 1)
+        assert signal is None
+
+    def test_not_shrinking_vol(self):
+        """成交量未缩减不触发"""
+        klines = generate_uptrend_klines(n=15, start_price=100.0, daily_pct=1.0)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+
+        vol = 20000.0
+        for i in range(3):
+            date_str = dt.strftime("%Y%m%d")
+            open_p = price
+            close_p = price * 1.003
+            k = make_kline_row(base_price=close_p, base_vol=vol, base_date=date_str)
+            k["open"] = open_p
+            k["close"] = close_p
+            k["high"] = close_p * 1.002
+            k["low"] = open_p * 0.998
+            k["pct_chg"] = 0.3
+            k["is_rise"] = True
+            klines.append(k)
+            price = close_p
+            vol *= 1.1  # 放量而非缩量
+            dt += timedelta(days=1)
+
+        signal = detect_buy_exhaustion(klines, len(klines) - 1)
+        assert signal is None
+
+
+class TestDetectGreenFatRedThin:
+    """绿肥红瘦出货信号测试"""
+
+    def test_insufficient_data(self):
+        """数据不足时返回 None"""
+        klines = generate_uptrend_klines(n=3)
+        assert detect_green_fat_red_thin(klines, 2) is None
+
+    def test_green_fat_red_thin_triggers(self):
+        """阴线平均量 > 阳线平均量 1.5 倍应触发"""
+        klines = generate_uptrend_klines(n=10, start_price=100.0, daily_pct=0.5)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+
+        # 构造5天：2根阳线（低量）+ 3根阴线（高量）
+        # 阳线1
+        k = make_kline_row(base_price=price * 1.01, base_vol=10000.0, base_date=dt.strftime("%Y%m%d"))
+        k["open"] = price
+        k["close"] = price * 1.01
+        k["is_rise"] = True
+        klines.append(k)
+        dt += timedelta(days=1)
+        # 阴线1（高量）
+        k = make_kline_row(base_price=price * 0.99, base_vol=20000.0, base_date=dt.strftime("%Y%m%d"))
+        k["open"] = price * 1.01
+        k["close"] = price * 0.99
+        k["is_rise"] = False
+        k["is_yinxian"] = True
+        klines.append(k)
+        dt += timedelta(days=1)
+        # 阳线2（低量）
+        k = make_kline_row(base_price=price * 1.005, base_vol=10000.0, base_date=dt.strftime("%Y%m%d"))
+        k["open"] = price * 0.99
+        k["close"] = price * 1.005
+        k["is_rise"] = True
+        klines.append(k)
+        dt += timedelta(days=1)
+        # 阴线2（高量）
+        k = make_kline_row(base_price=price * 0.98, base_vol=20000.0, base_date=dt.strftime("%Y%m%d"))
+        k["open"] = price * 1.005
+        k["close"] = price * 0.98
+        k["is_rise"] = False
+        k["is_yinxian"] = True
+        klines.append(k)
+        dt += timedelta(days=1)
+        # 阴线3（高量）
+        k = make_kline_row(base_price=price * 0.97, base_vol=20000.0, base_date=dt.strftime("%Y%m%d"))
+        k["open"] = price * 0.98
+        k["close"] = price * 0.97
+        k["is_rise"] = False
+        k["is_yinxian"] = True
+        klines.append(k)
+
+        signal = detect_green_fat_red_thin(klines, len(klines) - 1)
+        assert signal is not None
+        assert signal.strategy == StrategyType.S1
+        assert signal.action == "SELL"
+        assert signal.priority == Priority.CRITICAL
+        assert "绿肥红瘦" in signal.description
+
+    def test_no_signal_when_balanced(self):
+        """阴阳量均衡时不触发"""
+        klines = generate_uptrend_klines(n=10, start_price=100.0, daily_pct=0.5)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+
+        # 5天：3阳2阴，量相当
+        for i in range(5):
+            k = make_kline_row(base_price=price, base_vol=10000.0, base_date=dt.strftime("%Y%m%d"))
+            if i % 2 == 0:
+                k["open"] = price * 0.99
+                k["close"] = price * 1.01
+                k["is_rise"] = True
+            else:
+                k["open"] = price * 1.01
+                k["close"] = price * 0.99
+                k["is_rise"] = False
+            klines.append(k)
+            dt += timedelta(days=1)
+
+        signal = detect_green_fat_red_thin(klines, len(klines) - 1)
+        assert signal is None
+
+
+class TestDetectStaircaseDistribution:
+    """阶梯放量下跌信号测试"""
+
+    def test_insufficient_data(self):
+        """数据不足时返回 None"""
+        klines = generate_uptrend_klines(n=3)
+        assert detect_staircase_distribution(klines, 2) is None
+
+    def test_staircase_triggers(self):
+        """连续3天量增价跌应触发"""
+        klines = generate_uptrend_klines(n=10, start_price=100.0, daily_pct=0.5)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+        vol = 10000.0
+
+        # 连续4天量增价跌
+        for i in range(4):
+            date_str = dt.strftime("%Y%m%d")
+            new_price = price * (1 - 0.02 * (i + 1))
+            new_vol = vol * (1 + 0.3 * (i + 1))
+            k = make_kline_row(base_price=new_price, base_vol=new_vol, base_date=date_str)
+            k["open"] = price
+            k["close"] = new_price
+            k["high"] = price * 1.005
+            k["low"] = new_price * 0.995
+            k["pct_chg"] = -2.0 * (i + 1)
+            k["is_rise"] = False
+            klines.append(k)
+            price = new_price
+            vol = new_vol
+            dt += timedelta(days=1)
+
+        signal = detect_staircase_distribution(klines, len(klines) - 1)
+        assert signal is not None
+        assert signal.strategy == StrategyType.S1
+        assert signal.action == "SELL"
+        assert signal.priority == Priority.CRITICAL
+        assert "阶梯放量下跌" in signal.description
+        assert signal.details["consecutive_days"] >= 3
+
+    def test_no_signal_two_days(self):
+        """仅2天量增价跌不触发（前面的天数不满足量增价跌条件）"""
+        klines = []
+        dt = datetime(2026, 1, 1)
+        price = 100.0
+
+        # 10天平稳行情，恒量（不产生量增价跌条件）
+        for i in range(10):
+            k = make_kline_row(base_price=price, base_vol=10000.0, base_date=dt.strftime("%Y%m%d"))
+            k["open"] = price * 0.995
+            k["close"] = price
+            k["pct_chg"] = 0.5
+            k["is_rise"] = True
+            klines.append(k)
+            dt += timedelta(days=1)
+
+        price = klines[-1]["close"]
+
+        # 仅2天量增价跌（起始量低于基准量，确保前面不连上）
+        for i in range(2):
+            new_price = price * 0.98
+            new_vol = 8000.0 + (i + 1) * 500  # 8500, 9000（均 < 10000）
+            k = make_kline_row(base_price=new_price, base_vol=new_vol, base_date=dt.strftime("%Y%m%d"))
+            k["open"] = price
+            k["close"] = new_price
+            k["pct_chg"] = -2.0
+            k["is_rise"] = False
+            klines.append(k)
+            price = new_price
+            dt += timedelta(days=1)
+
+        signal = detect_staircase_distribution(klines, len(klines) - 1)
+        assert signal is None
+
+    def test_no_signal_volume_decreasing(self):
+        """价跌但量缩不触发"""
+        klines = generate_uptrend_klines(n=10, start_price=100.0, daily_pct=0.5)
+        dt = datetime.strptime(klines[-1]["trade_date"], "%Y%m%d") + timedelta(days=1)
+        price = klines[-1]["close"]
+        vol = 20000.0
+
+        # 3天价跌但缩量
+        for i in range(3):
+            date_str = dt.strftime("%Y%m%d")
+            new_price = price * 0.98
+            new_vol = vol * 0.8
+            k = make_kline_row(base_price=new_price, base_vol=new_vol, base_date=date_str)
+            k["open"] = price
+            k["close"] = new_price
+            k["pct_chg"] = -2.0
+            k["is_rise"] = False
+            klines.append(k)
+            price = new_price
+            vol = new_vol
+            dt += timedelta(days=1)
+
+        signal = detect_staircase_distribution(klines, len(klines) - 1)
+        assert signal is None
+
+
+class TestDetectVolumeAttack:
+    """量比攻击信号测试"""
+
+    def _make_daily_list(self, n=10, start_price=100.0, daily_pct=0.5, vol_base=10000.0):
+        """生成 DailyData 列表"""
+        from datetime import datetime, timedelta
+
+        rows = []
+        dt = datetime(2026, 1, 1)
+        price = start_price
+        for i in range(n):
+            prev_price = price
+            price *= 1 + daily_pct / 100
+            vol = vol_base
+            rows.append(
+                DailyData(
+                    ts_code="600519.SH",
+                    trade_date=dt.strftime("%Y%m%d"),
+                    open=prev_price,
+                    high=price * 1.01,
+                    low=prev_price * 0.99,
+                    close=price,
+                    vol=vol,
+                    amount=price * vol,
+                    pct_chg=daily_pct,
+                    prev_close=prev_price if i > 0 else price * 0.995,
+                )
+            )
+            dt += timedelta(days=1)
+        return rows
+
+    def test_insufficient_data(self):
+        """数据不足时返回默认值"""
+        klines = self._make_daily_list(n=3)
+        result = detect_volume_attack(klines)
+        assert result["is_attack"] is False
+
+    def test_volume_attack_triggers(self):
+        """量比>3且涨幅>2%应触发"""
+        klines = self._make_daily_list(n=8, start_price=100.0, daily_pct=0.5, vol_base=10000.0)
+        # 最后一天放量大涨
+        last = klines[-1]
+        # 用新的 DailyData 替换最后一天
+        from datetime import datetime, timedelta
+
+        dt = datetime.strptime(last.trade_date, "%Y%m%d") + timedelta(days=1)
+        attack_day = DailyData(
+            ts_code="600519.SH",
+            trade_date=dt.strftime("%Y%m%d"),
+            open=last.close,
+            high=last.close * 1.04,
+            low=last.close * 0.998,
+            close=last.close * 1.03,
+            vol=40000.0,  # 量比 = 40000/10000 = 4.0
+            amount=last.close * 1.03 * 40000.0,
+            pct_chg=3.0,
+            prev_close=last.close,
+        )
+        klines.append(attack_day)
+
+        result = detect_volume_attack(klines)
+        assert result["is_attack"] is True
+        assert result["vol_ratio"] > 3
+        assert result["pct_chg"] > 2
+        assert result["confidence"] > 0
+        assert "量比攻击" in result["desc"]
+
+    def test_no_signal_low_vol_ratio(self):
+        """量比<=3不触发"""
+        klines = self._make_daily_list(n=8, start_price=100.0, daily_pct=0.5, vol_base=10000.0)
+        last = klines[-1]
+        from datetime import datetime, timedelta
+
+        dt = datetime.strptime(last.trade_date, "%Y%m%d") + timedelta(days=1)
+        normal_day = DailyData(
+            ts_code="600519.SH",
+            trade_date=dt.strftime("%Y%m%d"),
+            open=last.close,
+            high=last.close * 1.03,
+            low=last.close * 0.998,
+            close=last.close * 1.03,
+            vol=20000.0,  # 量比 = 20000/10000 = 2.0
+            amount=last.close * 1.03 * 20000.0,
+            pct_chg=3.0,
+            prev_close=last.close,
+        )
+        klines.append(normal_day)
+
+        result = detect_volume_attack(klines)
+        assert result["is_attack"] is False
+
+    def test_no_signal_low_pct_chg(self):
+        """涨幅<=2%不触发"""
+        klines = self._make_daily_list(n=8, start_price=100.0, daily_pct=0.5, vol_base=10000.0)
+        last = klines[-1]
+        from datetime import datetime, timedelta
+
+        dt = datetime.strptime(last.trade_date, "%Y%m%d") + timedelta(days=1)
+        low_gain_day = DailyData(
+            ts_code="600519.SH",
+            trade_date=dt.strftime("%Y%m%d"),
+            open=last.close,
+            high=last.close * 1.015,
+            low=last.close * 0.998,
+            close=last.close * 1.01,
+            vol=40000.0,  # 量比 = 4.0
+            amount=last.close * 1.01 * 40000.0,
+            pct_chg=1.0,
+            prev_close=last.close,
+        )
+        klines.append(low_gain_day)
+
+        result = detect_volume_attack(klines)
+        assert result["is_attack"] is False

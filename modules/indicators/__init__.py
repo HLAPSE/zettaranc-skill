@@ -75,6 +75,7 @@ from .volume_patterns import (
     calculate_sell_score,
     detect_trade_signal,
     detect_volume_ratio_strategy,
+    detect_volume_attack,
 )
 
 from .wave_theory import detect_three_waves, classify_wave_for_b1
@@ -170,6 +171,7 @@ __all__ = [
     "calculate_sell_score",
     "detect_trade_signal",
     "detect_volume_ratio_strategy",
+    "detect_volume_attack",
     # data layer
     "clear_indicator_memory_cache",
     "get_kline_data",

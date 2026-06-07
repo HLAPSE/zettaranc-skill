@@ -505,3 +505,56 @@ def detect_volume_ratio_strategy(klines: list[DailyData]) -> dict:
         "confidence": 0.50,
         "note": f"量比{vol_ratio:.1f}，涨幅{pct_chg:.2f}%，信号不明确，建议观望",
     }
+
+
+def detect_volume_attack(klines: list[DailyData]) -> dict:
+    """
+    量比攻击信号检测（单日强势信号）
+
+    来源：knowledge/three-best-principles.md
+
+    触发条件：
+    - 量比 > 3（当日成交量 / 5日平均成交量）
+    - 涨幅 > 2%
+
+    Returns:
+        {
+            "is_attack": bool,       # 是否触发攻击信号
+            "vol_ratio": float,      # 量比值
+            "pct_chg": float,        # 涨幅百分比
+            "confidence": float,     # 置信度
+            "desc": str,             # 描述
+        }
+    """
+    result = {
+        "is_attack": False,
+        "vol_ratio": 0.0,
+        "pct_chg": 0.0,
+        "confidence": 0.0,
+        "desc": "",
+    }
+
+    if len(klines) < 6:
+        return result
+
+    today = klines[-1]
+
+    # 计算量比：当日成交量 / 5日平均成交量
+    avg_vol_5 = sum(k.vol for k in klines[-6:-1]) / 5
+    if avg_vol_5 <= 0:
+        return result
+
+    vol_ratio = today.vol / avg_vol_5
+    pct_chg = today.pct_chg
+
+    if vol_ratio > 3 and pct_chg > 2:
+        confidence = min(0.70 + (vol_ratio - 3) * 0.05 + (pct_chg - 2) * 0.03, 0.95)
+        result = {
+            "is_attack": True,
+            "vol_ratio": round(vol_ratio, 2),
+            "pct_chg": round(pct_chg, 2),
+            "confidence": round(confidence, 2),
+            "desc": f"量比攻击：量比{vol_ratio:.2f}涨幅{pct_chg:.1f}%，强势信号",
+        }
+
+    return result

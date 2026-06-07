@@ -23,7 +23,16 @@ from .compound_strategies import (
     detect_kengqi,
     detect_duichen_va,
 )
-from .sell_signals import detect_s1, detect_s2, detect_s3, detect_brick_signals, _calc_dif
+from .sell_signals import (
+    detect_s1,
+    detect_s2,
+    detect_s3,
+    detect_brick_signals,
+    detect_buy_exhaustion,
+    detect_green_fat_red_thin,
+    detect_staircase_distribution,
+    _calc_dif,
+)
 from .kirin import analyze_kirin_phase  # noqa: F401  re-export
 
 
@@ -114,6 +123,7 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
         detect_zaihou_chongjian,
         detect_yueyueyushi,
         detect_key_candle,
+        detect_volume_attack,
     )
 
     kdj_sequence = precompute_kdj_sequence(daily_klines)
@@ -227,6 +237,21 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
             if signal:
                 signals.append(signal)
 
+            # 买盘枯竭
+            signal = detect_buy_exhaustion(klines, i)
+            if signal:
+                signals.append(signal)
+
+            # 绿肥红瘦出货
+            signal = detect_green_fat_red_thin(klines, i)
+            if signal:
+                signals.append(signal)
+
+            # 阶梯放量下跌
+            signal = detect_staircase_distribution(klines, i)
+            if signal:
+                signals.append(signal)
+
         # ===== P1 指标全局检测（只针对最新一天）======
         if daily_klines:
             # 滴滴战法
@@ -294,6 +319,23 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
                         description=f"出货五式：{top['type']} - {top['desc']}",
                         price=klines[-1]["close"],
                         reason=f"出货五式：{top['type']} - {top['desc']}",
+                    )
+                )
+
+            # 量比攻击信号
+            vol_attack = detect_volume_attack(daily_klines)
+            if vol_attack.get("is_attack"):
+                signals.append(
+                    StrategySignal(
+                        ts_code=ts_code,
+                        trade_date=klines[-1]["trade_date"],
+                        strategy=StrategyType.WATCH,
+                        action=Action.WATCH.value,
+                        confidence=vol_attack["confidence"],
+                        description=vol_attack["desc"],
+                        price=klines[-1]["close"],
+                        reason=vol_attack["desc"],
+                        priority=Priority.OPPORTUNITY,
                     )
                 )
 
