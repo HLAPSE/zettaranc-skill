@@ -496,6 +496,45 @@ def cmd_sync(args):
                 print(f"  {s['data_type']}: {s.get('last_date', 'N/A')} ({s.get('status', 'N/A')})")
 
 
+def cmd_self_optimize(args) -> int:
+    """self-optimize 子命令."""
+    from modules.self_optimizer import SelfOptimizer
+
+    opt = SelfOptimizer(
+        target=args.target,
+        rounds=args.rounds,
+        mode="dry_run",
+    )
+    if args.action == "run":
+        result = opt.run()
+        print(f"✓ Phase 3 done. {result['rounds']} rounds.")
+        print(f"  keep={result['keep']} revert={result['revert']} break={result['break']}")
+        print(f"  results.tsv: {result['results_tsv']}")
+        print(f"  drafts: {result['drafts_dir']}")
+        print("⚠️  请人工 review optimization_drafts/ 后决定合入")
+        return 0
+    if args.action == "status":
+        print(f"target={opt.target} rounds={opt.rounds} mode={opt.mode}")
+        return 0
+    if args.action == "reset":
+        state = Path("logs/self_optimizer_state.json")
+        if state.exists():
+            state.unlink()
+            print("✓ state.json 已删除")
+        return 0
+    print(f"Unknown action: {args.action}")
+    return 1
+
+
+def add_self_optimize_parser(subparsers) -> None:
+    """注册 self-optimize 子命令."""
+    p = subparsers.add_parser("self-optimize", help="darwin self-optimizer")
+    p.add_argument("action", choices=["run", "status", "reset"])
+    p.add_argument("--target", choices=["trading", "skill"], default="trading")
+    p.add_argument("--rounds", type=int, default=3)
+    p.set_defaults(func=cmd_self_optimize)
+
+
 def cmd_track(args):
     """跟踪池管理（add / remove / list / info / status / stats）"""
     from modules.tracking_manager import TrackingManager
@@ -680,6 +719,9 @@ def main():
     p_track.add_argument("--status", choices=["active", "paused", "removed"], default="active", help="状态筛选")
     p_track.add_argument("--json", action="store_true", help="JSON输出")
 
+    # ── self-optimize (darwin self-optimizer) ──
+    add_self_optimize_parser(subparsers)
+
     args = parser.parse_args()
 
     # ── backtest（shaofu / multi / portfolio）──
@@ -727,6 +769,7 @@ def main():
         "trade": cmd_trade,
         "daily": cmd_daily,
         "track": cmd_track,
+        "self-optimize": cmd_self_optimize,
     }
     handlers[args.command](args)
 

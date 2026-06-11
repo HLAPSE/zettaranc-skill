@@ -264,6 +264,27 @@ def write_stock_basic(db_conn, ts_code="600519.SH", name="贵州茅台", industr
 
 
 @pytest.fixture
+def state_with_interrupted_run(tmp_path):
+    """上次 run 到 round 2 中断, 验证下次 run 询问恢复."""
+    import json
+
+    state_file = tmp_path / "self_optimizer_state.json"
+    state = {
+        "run_id": "2026-06-10-abcd",
+        "started_at": "2026-06-10T07:30:00",
+        "target": "trading",
+        "mode": "dry_run",
+        "current_round": 2,
+        "baseline_score": 80.0,
+        "rounds": [
+            {"round": 1, "old": 80.0, "new": 82.5, "delta": 2.5, "status": "keep"},
+        ],
+    }
+    state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    yield state_file
+
+
+@pytest.fixture
 def mock_monthly_reviews_with_poor_strategy():
     """mock 3 个月复盘数据, 一只策略 stock_count=1 胜率 -30%."""
     from datetime import datetime, timedelta
