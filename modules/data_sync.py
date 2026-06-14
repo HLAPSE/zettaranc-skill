@@ -121,6 +121,7 @@ class DataSyncer:
         # 向后兼容：保留 instance-level attrs（外部可能引用）
         # 但实际限流走模块级 _GLOBAL_LIMITER
         # （v2.11.0 计划移除，改用 @property + DeprecationWarning）
+        self.last_request_time = {}
 
     def _rate_limit(self, api_name: str):
         """线程安全的限流控制（v2.10.0 P1-4 改为调模块级 _GLOBAL_LIMITER）"""

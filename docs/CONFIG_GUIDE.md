@@ -44,14 +44,14 @@ TUSHARE_VERIFY_TOKEN_URL=
 ```ini
 LLM_API_KEY=你的API密钥
 LLM_BASE_URL=https://api.minimaxi.com/v1/chat/completions
-LLM_MODEL=MiniMax-M2.7
+LLM_MODEL=MiniMax-M3
 ```
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
 | `LLM_API_KEY` | **否** | 未配置时，系统只做意图识别+知识库检索，不生成回答 |
 | `LLM_BASE_URL` | 否（有 Key 时填） | OpenAI 兼容格式的 API 地址 |
-| `LLM_MODEL` | 否（有 Key 时填） | 模型名称，默认 `MiniMax-M2.7` |
+| `LLM_MODEL` | 否（有 Key 时填） | 模型名称，默认 `MiniMax-M3` |
 
 **支持的 LLM 提供商**：目前支持 OpenAI 兼容格式的 API（MiniMax、OpenRouter、通义千问等）。
 
@@ -120,7 +120,7 @@ TUSHARE_TOKEN=ba0930...fa15
 TUSHARE_API_URL=https://tt.xiaodefa.cn
 LLM_API_KEY=sk-cp-...ULLC
 LLM_BASE_URL=https://api.minimaxi.com/v1/chat/completions
-LLM_MODEL=MiniMax-M2.7
+LLM_MODEL=MiniMax-M3
 KB_ENABLED=true
 KB_API_URL=http://localhost:8000
 ```

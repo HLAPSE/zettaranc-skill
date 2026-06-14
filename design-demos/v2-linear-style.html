@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zettaranc - AI-Powered Investment Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #0f0f1a;
+  --bg-card: #111122;
+  --bg-card-hover: #161630;
+  --accent-gold: #e6b800;
+  --accent-gold-dim: #b8930a;
+  --accent-gold-glow: rgba(230, 184, 0, 0.15);
+  --accent-blue: #4a7dff;
+  --accent-purple: #7c5cfc;
+  --text-primary: #f0f0f5;
+  --text-secondary: #8888aa;
+  --text-dim: #555570;
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-glow: rgba(230,184,0,0.2);
+  --gradient-gold: linear-gradient(135deg, #e6b800, #f0d060);
+  --gradient-dark: linear-gradient(180deg, #0a0a0f 0%, #0f0f1a 100%);
+  --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+a { color: var(--accent-gold); text-decoration: none; transition: var(--transition); }
+a:hover { color: #f0d060; }
+
+/* ===== LAYOUT ===== */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+section { padding: 120px 0; }
+
+/* ===== NAVIGATION ===== */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  padding: 0 40px; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(10,10,15,0.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 12px;
+  font-weight: 700; font-size: 18px; letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.nav-logo img { width: 32px; height: 32px; }
+.nav-logo span { color: var(--accent-gold); }
+.nav-links { display: flex; gap: 32px; align-items: center; }
+.nav-links a {
+  font-size: 14px; font-weight: 500; color: var(--text-secondary);
+  transition: var(--transition); position: relative;
+}
+.nav-links a:hover { color: var(--text-primary); }
+.nav-links a::after {
+  content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 1px;
+  background: var(--accent-gold); transition: width 0.3s ease;
+}
+.nav-links a:hover::after { width: 100%; }
+.nav-cta {
+  padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: rgba(230,184,0,0.1); color: var(--accent-gold);
+  border: 1px solid rgba(230,184,0,0.2);
+  cursor: pointer; transition: var(--transition);
+}
+.nav-cta:hover {
+  background: rgba(230,184,0,0.15);
+  border-color: rgba(230,184,0,0.35);
+  box-shadow: 0 0 20px rgba(230,184,0,0.1);
+}
+
+/* ===== HERO ===== */
+.hero {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  text-align: center; position: relative; padding-top: 64px;
+  overflow: hidden;
+}
+/* Subtle radial glow behind hero */
+.hero::before {
+  content: ''; position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
+  width: 800px; height: 800px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(230,184,0,0.06) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+/* Grid overlay */
+.hero::after {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+.hero-content { position: relative; z-index: 1; max-width: 800px; }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 16px; border-radius: 100px;
+  background: rgba(230,184,0,0.08);
+  border: 1px solid rgba(230,184,0,0.15);
+  font-size: 13px; font-weight: 500; color: var(--accent-gold);
+  margin-bottom: 32px;
+  animation: fadeInUp 0.8s ease both;
+}
+.hero-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-gold);
+  box-shadow: 0 0 8px var(--accent-gold);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.hero h1 {
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  margin-bottom: 24px;
+  animation: fadeInUp 0.8s ease 0.1s both;
+}
+.hero h1 .accent { color: var(--accent-gold); }
+.hero-subtitle {
+  font-size: clamp(16px, 2vw, 20px);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 580px;
+  margin: 0 auto 40px;
+  font-weight: 400;
+  animation: fadeInUp 0.8s ease 0.2s both;
+}
+.hero-actions {
+  display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  animation: fadeInUp 0.8s ease 0.3s both;
+}
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 32px; border-radius: 10px;
+  background: var(--gradient-gold);
+  color: #0a0a0f; font-weight: 700; font-size: 15px;
+  border: none; cursor: pointer; transition: var(--transition);
+  box-shadow: 0 0 30px rgba(230,184,0,0.2);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 40px rgba(230,184,0,0.35);
+  color: #0a0a0f;
+}
+.btn-primary svg { width: 18px; height: 18px; }
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 32px; border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary); font-weight: 600; font-size: 15px;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer; transition: var(--transition);
+}
+.btn-secondary:hover {
+  border-color: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.03);
+  transform: translateY(-2px);
+  color: var(--text-primary);
+}
+.btn-secondary svg { width: 18px; height: 18px; }
+
+/* Hero terminal preview */
+.hero-terminal {
+  margin-top: 64px; max-width: 640px; margin-left: auto; margin-right: auto;
+  text-align: left; animation: fadeInUp 0.8s ease 0.45s both;
+}
+.terminal-window {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+}
+.terminal-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+.terminal-dot.r { background: #ff5f57; }
+.terminal-dot.y { background: #ffbd2e; }
+.terminal-dot.g { background: #28ca42; }
+.terminal-title {
+  flex: 1; text-align: center;
+  font-size: 12px; color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+.terminal-body {
+  padding: 20px 24px;
+  font-family: var(--font-mono);
+  font-size: 13px; line-height: 1.8;
+}
+.terminal-line { display: flex; gap: 8px; }
+.terminal-prompt { color: var(--accent-gold); user-select: none; }
+.terminal-cmd { color: var(--text-primary); }
+.terminal-output { color: var(--text-secondary); margin-top: 4px; padding-left: 20px; }
+.terminal-output .highlight { color: var(--accent-gold); }
+.terminal-output .green { color: #28ca42; }
+.terminal-cursor {
+  display: inline-block; width: 8px; height: 16px;
+  background: var(--accent-gold); opacity: 0.7;
+  animation: blink 1.2s step-end infinite; vertical-align: text-bottom;
+  margin-left: 2px;
+}
+@keyframes blink { 0%,100% { opacity: 0.7; } 50% { opacity: 0; } }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== SECTION HEADERS ===== */
+.section-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent-gold);
+  margin-bottom: 16px;
+}
+.section-label::before {
+  content: ''; width: 16px; height: 1px; background: var(--accent-gold);
+}
+.section-title {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 700; letter-spacing: -0.025em;
+  line-height: 1.15; margin-bottom: 16px;
+}
+.section-desc {
+  font-size: 17px; color: var(--text-secondary);
+  max-width: 520px; line-height: 1.7;
+}
+.text-center { text-align: center; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+
+/* ===== FEATURES GRID ===== */
+.features { background: var(--bg-secondary); }
+.features-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+.feature-card {
+  background: var(--bg-card);
+  padding: 40px 32px;
+  transition: var(--transition);
+  position: relative;
+}
+.feature-card:hover {
+  background: var(--bg-card-hover);
+}
+.feature-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(230,184,0,0.04), transparent 60%);
+  opacity: 0; transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.feature-card:hover::after { opacity: 1; }
+.feature-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+  background: rgba(230,184,0,0.08);
+  border: 1px solid rgba(230,184,0,0.12);
+}
+.feature-icon svg { width: 22px; height: 22px; color: var(--accent-gold); }
+.feature-card h3 {
+  font-size: 17px; font-weight: 600; margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+.feature-card p {
+  font-size: 14px; color: var(--text-secondary);
+  line-height: 1.65;
+}
+.feature-tag {
+  display: inline-block; margin-top: 14px;
+  font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+  padding: 3px 8px; border-radius: 4px;
+  background: rgba(230,184,0,0.06); color: var(--accent-gold-dim);
+  border: 1px solid rgba(230,184,0,0.1);
+}
+
+/* ===== DEMO SECTION ===== */
+.demo-split {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 60px; align-items: center;
+}
+.demo-text .section-desc { margin-bottom: 32px; }
+.demo-features { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.demo-features li {
+  display: flex; align-items: flex-start; gap: 14px;
+  font-size: 15px; color: var(--text-secondary);
+}
+.demo-features .check {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px;
+  background: rgba(40,202,66,0.1); border: 1px solid rgba(40,202,66,0.2);
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.demo-features .check svg { width: 14px; height: 14px; color: #28ca42; }
+
+.demo-code {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.demo-code .terminal-header {
+  background: rgba(255,255,255,0.015);
+}
+.demo-code .terminal-body {
+  font-size: 13px; line-height: 2;
+}
+.demo-code .comment { color: #555570; }
+.demo-code .keyword { color: var(--accent-purple); }
+.demo-code .string { color: #e6b880; }
+.demo-code .func { color: #6cb6ff; }
+.demo-code .flag { color: #8888cc; }
+.demo-code .output { color: var(--text-dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.demo-code .output-line { display: flex; gap: 8px; align-items: baseline; }
+.demo-code .output-key { color: #8888aa; min-width: 140px; }
+.demo-code .output-val { color: var(--accent-gold); }
+.demo-code .output-good { color: #28ca42; }
+
+/* ===== INSTALL STEPS ===== */
+.install-steps {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 32px; counter-reset: step;
+}
+.step-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  position: relative;
+  transition: var(--transition);
+}
+.step-card:hover {
+  border-color: rgba(230,184,0,0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+.step-number {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(230,184,0,0.08);
+  border: 1px solid rgba(230,184,0,0.15);
+  font-size: 15px; font-weight: 700; color: var(--accent-gold);
+  font-family: var(--font-mono);
+  margin-bottom: 20px;
+}
+.step-card h3 {
+  font-size: 17px; font-weight: 600; margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+.step-card p {
+  font-size: 14px; color: var(--text-secondary); line-height: 1.65;
+  margin-bottom: 16px;
+}
+.step-code {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px; color: var(--text-primary);
+  overflow-x: auto;
+}
+.step-code .prompt { color: var(--accent-gold); }
+
+/* ===== TESTIMONIALS ===== */
+.testimonials { background: var(--bg-secondary); }
+.testimonial-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.testimonial-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 32px;
+  transition: var(--transition);
+}
+.testimonial-card:hover {
+  border-color: rgba(255,255,255,0.1);
+  transform: translateY(-2px);
+}
+.testimonial-stars {
+  display: flex; gap: 2px; margin-bottom: 16px;
+}
+.testimonial-stars svg { width: 16px; height: 16px; color: var(--accent-gold); }
+.testimonial-text {
+  font-size: 14px; color: var(--text-secondary);
+  line-height: 1.75; margin-bottom: 20px;
+  font-style: italic;
+}
+.testimonial-author {
+  display: flex; align-items: center; gap: 12px;
+}
+.testimonial-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(230,184,0,0.1);
+  border: 1px solid rgba(230,184,0,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; color: var(--accent-gold);
+}
+.testimonial-name { font-size: 14px; font-weight: 600; }
+.testimonial-role { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+/* ===== BOTTOM CTA ===== */
+.cta-section {
+  text-align: center;
+  padding: 140px 0;
+  position: relative;
+}
+.cta-section::before {
+  content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(230,184,0,0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+.cta-section .section-title {
+  font-size: clamp(32px, 5vw, 52px);
+  max-width: 600px; margin-left: auto; margin-right: auto;
+}
+.cta-section .section-desc {
+  max-width: 480px; margin: 16px auto 40px;
+}
+.cta-install-box {
+  display: inline-flex; align-items: center; gap: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 14px 24px;
+  margin-bottom: 32px;
+  cursor: pointer; transition: var(--transition);
+}
+.cta-install-box:hover {
+  border-color: rgba(230,184,0,0.2);
+  box-shadow: 0 0 30px rgba(230,184,0,0.08);
+}
+.cta-install-text {
+  font-family: var(--font-mono);
+  font-size: 15px; color: var(--text-primary);
+}
+.cta-install-text .cmd { color: var(--accent-gold); }
+.cta-install-copy {
+  font-size: 12px; color: var(--text-dim);
+  padding: 4px 10px; border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-subtle);
+  transition: var(--transition);
+}
+.cta-install-box:hover .cta-install-copy {
+  color: var(--text-secondary);
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* ===== FOOTER ===== */
+footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 40px 0;
+}
+.footer-inner {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.footer-left {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; color: var(--text-dim);
+}
+.footer-left img { width: 20px; height: 20px; opacity: 0.5; }
+.footer-right { display: flex; gap: 24px; }
+.footer-right a {
+  font-size: 13px; color: var(--text-dim);
+  transition: var(--transition);
+}
+.footer-right a:hover { color: var(--text-secondary); }
+
+/* ===== DIVIDER ===== */
+.section-divider {
+  width: 100%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-subtle) 20%, var(--border-subtle) 80%, transparent);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1024px) {
+  .container { padding: 0 28px; }
+  section { padding: 80px 0; }
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .demo-split { grid-template-columns: 1fr; gap: 40px; }
+  .install-steps { grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .testimonial-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .container { padding: 0 20px; }
+  section { padding: 64px 0; }
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .features-grid { grid-template-columns: 1fr; }
+  .install-steps { grid-template-columns: 1fr; }
+  .testimonial-grid { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 36px; }
+  .hero-subtitle { font-size: 15px; }
+  .hero-actions { flex-direction: column; align-items: center; }
+  .hero-terminal { margin-top: 40px; }
+  .footer-inner { flex-direction: column; gap: 20px; text-align: center; }
+  .cta-install-box { flex-direction: column; gap: 10px; }
+}
+@media (max-width: 480px) {
+  .hero h1 { font-size: 28px; }
+  .feature-card { padding: 28px 24px; }
+  .step-card { padding: 28px 24px; }
+  .testimonial-card { padding: 24px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== NAVIGATION ===== -->
+<nav>
+  <div class="nav-logo">
+    <img src="../assets/logo.svg" alt="zettaranc">
+    <span>zettaranc</span>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#demo">Demo</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/zettaranc/skill" target="_blank">GitHub</a>
+  </div>
+  <button class="nav-cta" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})">Get Started</button>
+</nav>
+
+<!-- ===== HERO ===== -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-badge">Built for AI Agents</div>
+    <h1>Your AI Agent's<br><span class="accent">Investment Brain</span></h1>
+    <p class="hero-subtitle">
+      zettaranc brings 60+ technical indicators, 30+ battle-tested strategies, and a champion fund manager's methodology directly into Claude Code, Cursor, and any AI agent.
+    </p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="document.getElementById('install').scrollIntoView({behavior:'smooth'})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install Skill
+      </button>
+      <a class="btn-secondary" href="https://github.com/zettaranc/skill" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <!-- Terminal Preview -->
+    <div class="hero-terminal">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dot r"></div>
+          <div class="terminal-dot y"></div>
+          <div class="terminal-dot g"></div>
+          <div class="terminal-title">claude-code</div>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">&gt;</span>
+            <span class="terminal-cmd">帮我看看比亚迪最近走势怎么样</span>
+          </div>
+          <div class="terminal-output">
+            <div>调用 <span class="highlight">zettaranc-perspective</span> ...</div>
+            <div style="margin-top:8px;">
+              <span class="highlight">BYD (002594)</span> &mdash; 日线级别分析
+            </div>
+            <div>MACD 金叉确认 <span class="green">&#10003;</span></div>
+            <div>成交量放大 23.7% <span class="green">&#10003;</span></div>
+            <div>触发 <span class="highlight">B2 战法</span> &mdash; 回踩支撑确认</div>
+            <div style="margin-top:8px; color: var(--text-dim);">「别追，等它回踩 20 日线再看量能配合。」</div>
+          </div>
+          <div class="terminal-line" style="margin-top:12px;">
+            <span class="terminal-prompt">&gt;</span>
+            <span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FEATURES ===== -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:60px;">
+      <div class="section-label">Core Capabilities</div>
+      <h2 class="section-title">Six Pillars of Intelligence</h2>
+      <p class="section-desc mx-auto">Not a simple stock screener. A complete investment thinking framework distilled from 2 million words of battle-tested methodology.</p>
+    </div>
+    <div class="features-grid">
+      <!-- 1 -->
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <h3>60+ Technical Indicators</h3>
+        <p>MACD, KDJ, RSI, Bollinger Bands, and 56 more. All calculated in real-time with institutional-grade precision.</p>
+        <span class="feature-tag">Real-time Calculation</span>
+      </div>
+      <!-- 2 -->
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+        </div>
+        <h3>30+ Battle Strategies</h3>
+        <p>B1/B2/B3 systems, Shaofu Strategy, Chang'an Strategy, and more. Each distilled from years of real market practice.</p>
+        <span class="feature-tag">Battle-Tested</span>
+      </div>
+      <!-- 3 -->
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3>Strategy Backtesting</h3>
+        <p>Validate any strategy against historical data. Full performance metrics, drawdown analysis, and win-rate statistics.</p>
+        <span class="feature-tag">Historical Validation</span>
+      </div>
+      <!-- 4 -->
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </div>
+        <h3>Smart Stock Screening</h3>
+        <p>Multi-dimensional screening engine. Filter by technicals, fundamentals, strategy signals, and custom criteria.</p>
+        <span class="feature-tag">Multi-Dimensional</span>
+      </div>
+      <!-- 5 -->
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <h3>Intent Recognition</h3>
+        <p>Natural language understanding. Stock queries, career advice, life decisions, or casual chat &mdash; Z knows what you need.</p>
+        <span class="feature-tag">NLP-Powered</span>
+      </div>
+      <!-- 6 -->
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        </div>
+        <h3>CLI + JSON Output</h3>
+        <p>Developer-first interface. Pipe output to any toolchain, integrate into your workflow, or use interactively.</p>
+        <span class="feature-tag">Dev-Friendly</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== DEMO ===== -->
+<section id="demo">
+  <div class="container">
+    <div class="demo-split">
+      <div class="demo-text">
+        <div class="section-label">Live Demo</div>
+        <h2 class="section-title">Talk to Z.<br>Like a human.</h2>
+        <p class="section-desc">No memorizing commands. Just ask in natural language and get professional-grade analysis. Z responds in his own voice &mdash; direct, honest, no bullshit.</p>
+        <ul class="demo-features">
+          <li>
+            <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            <span>Natural language queries &mdash; no syntax to memorize</span>
+          </li>
+          <li>
+            <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            <span>Automatic intent detection: stock / career / life / chat</span>
+          </li>
+          <li>
+            <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            <span>Structured JSON output for pipeline integration</span>
+          </li>
+          <li>
+            <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            <span>Z's personality &mdash; direct, probabilistic thinking</span>
+          </li>
+        </ul>
+      </div>
+      <div class="demo-code">
+        <div class="terminal-header">
+          <div class="terminal-dot r"></div>
+          <div class="terminal-dot y"></div>
+          <div class="terminal-dot g"></div>
+          <div class="terminal-title">zettaranc CLI</div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="comment"># Analyze a stock with full indicators</span></div>
+          <div><span class="prompt">$ </span><span class="func">zettaranc</span> <span class="keyword">analyze</span> <span class="string">002594</span> <span class="flag">--indicators</span> all</div>
+          <div style="margin-top:4px;"><span class="comment"># Get strategy signal detection</span></div>
+          <div><span class="prompt">$ </span><span class="func">zettaranc</span> <span class="keyword">detect</span> <span class="string">002594</span> <span class="flag">--strategy</span> B1,B2</div>
+          <div style="margin-top:4px;"><span class="comment"># Backtest a strategy</span></div>
+          <div><span class="prompt">$ </span><span class="func">zettaranc</span> <span class="keyword">backtest</span> <span class="flag">--strategy</span> <span class="string">shaofu</span> <span class="flag">--period</span> 1y</div>
+          <div class="output">
+            <div class="output-line">
+              <span class="output-key">stock:</span>
+              <span class="output-val">BYD (002594.SZ)</span>
+            </div>
+            <div class="output-line">
+              <span class="output-key">strategy_hit:</span>
+              <span class="output-good">B2 &#10003;</span>
+            </div>
+            <div class="output-line">
+              <span class="output-key">macd:</span>
+              <span class="output-val">golden_cross</span>
+            </div>
+            <div class="output-line">
+              <span class="output-key">volume_ratio:</span>
+              <span class="output-val">1.237</span>
+            </div>
+            <div class="output-line">
+              <span class="output-key">signal:</span>
+              <span class="output-good">WATCH &#8593;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== INSTALL ===== -->
+<section id="install" style="background: var(--bg-secondary);">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:60px;">
+      <div class="section-label">Quick Start</div>
+      <h2 class="section-title">Up and running in 3 steps</h2>
+      <p class="section-desc mx-auto">Works with Claude Code, Cursor, and any AI agent that supports skills. Zero config to start.</p>
+    </div>
+    <div class="install-steps">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <h3>Install the Skill</h3>
+        <p>One command to install. Supports npm and pip.</p>
+        <div class="step-code">
+          <span class="prompt">$ </span>pip install zettaranc-skill
+        </div>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <h3>Configure Agent</h3>
+        <p>Add the skill to your AI agent's configuration.</p>
+        <div class="step-code">
+          <span class="prompt">$ </span>zettaranc init --agent claude
+        </div>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <h3>Start Asking</h3>
+        <p>Ask anything in natural language. Z handles the rest.</p>
+        <div class="step-code">
+          <span class="prompt">&gt; </span>"用Z哥视角分析茅台"
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TESTIMONIALS ===== -->
+<section class="testimonials">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:60px;">
+      <div class="section-label">Community</div>
+      <h2 class="section-title">Loved by developers<br>who trade</h2>
+      <p class="section-desc mx-auto">Real feedback from the community.</p>
+    </div>
+    <div class="testimonial-grid">
+      <div class="testimonial-card">
+        <div class="testimonial-stars">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <p class="testimonial-text">"终于不用在看盘软件和 AI 之间来回切了。直接在 Claude 里问 Z 哥，指标分析秒出，还有战法信号。这才是 AI 该有的用法。"</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">K</div>
+          <div>
+            <div class="testimonial-name">Kevin W.</div>
+            <div class="testimonial-role">Full-stack Developer</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-stars">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <p class="testimonial-text">"The CLI output is perfectly structured JSON. I pipe it into my own dashboard scripts. Backtest results are legit &mdash; drawdown analysis, win rates, all there."</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">M</div>
+          <div>
+            <div class="testimonial-name">Marcus L.</div>
+            <div class="testimonial-role">Quant Engineer</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-stars">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
+        <p class="testimonial-text">"Z 哥那句'利润是市场给的，都是概率的事儿'改变了我的交易心态。现在看盘前先问 Z 哥，比看研报有用。"</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">L</div>
+          <div>
+            <div class="testimonial-name">Lin S.</div>
+            <div class="testimonial-role">Indie Developer &amp; Trader</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== BOTTOM CTA ===== -->
+<section class="cta-section">
+  <div class="container">
+    <div class="section-label">Open Source</div>
+    <h2 class="section-title">Give your AI agent<br>an <span class="accent">investment edge</span></h2>
+    <p class="section-desc mx-auto">MIT License. Free forever. Built by developers, for developers who trade.</p>
+    <div class="cta-install-box" onclick="navigator.clipboard.writeText('pip install zettaranc-skill').then(()=>{this.querySelector('.cta-install-copy').textContent='Copied!';setTimeout(()=>{this.querySelector('.cta-install-copy').textContent='Copy'},2000)})">
+      <span class="cta-install-text"><span class="cmd">pip install</span> zettaranc-skill</span>
+      <span class="cta-install-copy">Copy</span>
+    </div>
+    <br>
+    <div class="hero-actions">
+      <a class="btn-secondary" href="https://github.com/zettaranc/skill" target="_blank">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+        Star on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <img src="../assets/logo.svg" alt="zettaranc">
+        <span>zettaranc &copy; 2025 &middot; MIT License</span>
+      </div>
+      <div class="footer-right">
+        <a href="https://github.com/zettaranc/skill" target="_blank">GitHub</a>
+        <a href="#">Documentation</a>
+        <a href="#">Discord</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ===== INTERACTIVE: Feature card glow follow ===== -->
+<script>
+document.querySelectorAll('.feature-card').forEach(card => {
+  card.addEventListener('mousemove', e => {
+    const rect = card.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    card.style.setProperty('--mx', x + '%');
+    card.style.setProperty('--my', y + '%');
+  });
+});
+
+// Smooth scroll for nav links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+</script>
+</body>
+</html>

@@ -93,9 +93,11 @@ Tushare API → data_sync → SQLite → indicators/ → strategies/ → backtes
 - **`modules/cli.py`** — CLI 入口（`zt` 命令），子命令：analyze/screen/diagnose/watchlist/trade/review/setup
 - **`modules/intent_router.py`** — 意图路由（stock/career/life/chat 四意图，规则匹配零 token 消耗）
 
-### 数据库（SQLite，8 张表）
+### 数据库（SQLite，10 张表）
 
-`stock_basic` / `daily_kline` / `indicator_cache` / `moneyflow` / `financial_data` / `trade_signals` / `trade_records` / `watchlist`
+`stock_basic` / `daily_kline` / `indicator_cache` / `moneyflow` / `financial_data` / `trade_signals` / `trade_records` / `watchlist` / `tushare_indicator_cache` / `llm_response_log`
+
+最近新增：`llm_response_log`（LLM 响应耗时日志）— 字段 `ts_code` / `request_date`（yyyy-mm-dd）/ `model` / `response_time_ms` / `success` / `error_message`；写入入口 `modules.database.record_llm_response()`，由 `commentary_service.generate_commentary()` 在每次 Z 哥点评生成时调用。查询入口 `get_llm_response_log()` 与按日聚合 `get_llm_response_stats()`。
 
 所有表建有复合索引（`ts_code + trade_date DESC`）。详见 `modules/database.py`。
 

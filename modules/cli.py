@@ -23,6 +23,7 @@ import argparse
 import json
 import sys
 import os
+from pathlib import Path
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
 

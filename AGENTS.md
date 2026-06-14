@@ -256,6 +256,7 @@ SQLite 数据库包含 8 张核心表（`modules/database.py` 中定义）：
 | `sync_log` | 数据同步日志 | data_type/last_date/status |
 | `watchlist` | 自选股观察池 | ts_code/name/tags/add_date |
 | `tushare_indicator_cache` | Tushare 官方指标（diff 验证） | macd_dif/rsi_6/kdj_k/boll_mid 等 |
+| `llm_response_log` | LLM 响应耗时日志 | ts_code/request_date/model/response_time_ms/success |
 
 每张表均建立合适的复合索引（ts_code + trade_date DESC）。
 

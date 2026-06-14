@@ -195,6 +195,31 @@ def calculate_dg_yellow(klines: list[DailyData]) -> float:
     return round((ma14 + ma28 + ma57 + ma114) / 4, 2)
 
 
+def precompute_white_yellow_sequence(klines: list[DailyData]) -> tuple[list[float | None], list[float | None]]:
+    """
+    预计算白线和黄线时间序列（用于 K 线图叠加展示）
+
+    Returns:
+        (white_values, yellow_values)
+        - white_values: 白线序列 (EMA(EMA(C,10),10))
+        - yellow_values: 黄线序列 ((MA14+MA28+MA57+MA114)/4)
+    """
+    n = len(klines)
+    white_values: list[float | None] = [None] * n
+    yellow_values: list[float | None] = [None] * n
+
+    for i in range(n):
+        sub = klines[: i + 1]
+        # 白线需要至少 19 天数据
+        if len(sub) >= 19:
+            white_values[i] = calculate_zg_white(sub)
+        # 黄线需要至少 114 天数据
+        if len(sub) >= 114:
+            yellow_values[i] = calculate_dg_yellow(sub)
+
+    return white_values, yellow_values
+
+
 def detect_double_line_cross(klines: list[DailyData]) -> tuple[bool, bool]:
     """
     检测双线战法金叉死叉
@@ -670,6 +695,36 @@ def calculate_brick_history(klines: list[DailyData], lookback: int = 20) -> tupl
 
     trend = "RED" if current_color > 0 else "GREEN"
     return trend, count
+
+
+def precompute_brick_sequence(klines: list[DailyData]) -> tuple[list[float | None], list[int | None]]:
+    """
+    预计算砖型图时间序列（用于 K 线图子图展示）
+
+    Returns:
+        (brick_values, brick_colors)
+        - brick_values: 每天的砖值（None 表示数据不足）
+        - brick_colors: 1=红砖(上涨), -1=绿砖(下跌), None=无数据
+    """
+    n = len(klines)
+    values: list[float | None] = [None] * n
+    colors: list[int | None] = [None] * n
+
+    prev_brick: float | None = None
+
+    for i in range(n):
+        sub = klines[: i + 1]
+        brick_val = calculate_brick_value(sub)
+        values[i] = round(brick_val, 2)
+
+        if prev_brick is not None:
+            if brick_val >= prev_brick:
+                colors[i] = 1  # 红砖
+            else:
+                colors[i] = -1  # 绿砖
+        prev_brick = brick_val
+
+    return values, colors
 
 
 def detect_brick_trend(klines: list[DailyData]) -> bool:

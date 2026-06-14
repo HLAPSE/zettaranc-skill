@@ -415,6 +415,34 @@ def init_database() -> None:
             ON tushare_indicator_cache(ts_code, trade_date DESC)
         """)
 
+        # 11. LLM 响应耗时日志表
+        # 记录每次 LLM 调用的响应时间、股票代码、日期、模型、是否成功
+        # 用于监控 LLM 服务的性能与可用性
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS llm_response_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_code TEXT NOT NULL,           -- 股票代码（如 600519.SH）
+                request_date TEXT NOT NULL,      -- 请求日期 yyyy-mm-dd
+                model TEXT NOT NULL,             -- 调用的 LLM 模型名
+                response_time_ms REAL NOT NULL,  -- 响应耗时（毫秒）
+                success INTEGER DEFAULT 1,       -- 1=成功，0=失败
+                error_message TEXT,              -- 失败时的错误信息
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_llm_log_code_date
+            ON llm_response_log(ts_code, request_date DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_llm_log_date
+            ON llm_response_log(request_date DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_llm_log_model
+            ON llm_response_log(model, request_date DESC)
+        """)
+
         print(f"数据库初始化完成: {get_db_path()}")
 
         # 删除旧的indicators表（如果存在）
@@ -611,6 +639,143 @@ def drop_all_tables() -> None:
         for table in tables:
             cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
         print("所有表已删除")
+
+
+# ============== LLM 响应耗时日志 ==============
+
+
+def record_llm_response(
+    ts_code: str,
+    model: str,
+    response_time_ms: float,
+    success: bool = True,
+    error_message: str = "",
+    request_date: str | None = None,
+) -> int:
+    """记录 LLM 调用响应时间。
+
+    Args:
+        ts_code: 股票代码（如 600519.SH）
+        model: 调用的 LLM 模型名
+        response_time_ms: 响应耗时（毫秒）
+        success: 是否调用成功
+        error_message: 失败时的错误信息（成功时可为空）
+        request_date: 请求日期 yyyy-mm-dd；默认使用当天日期
+
+    Returns:
+        插入的记录 ID
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if request_date is None:
+            cursor.execute("SELECT date('now', 'localtime')")
+            request_date = cursor.fetchone()[0]
+        cursor.execute(
+            """
+            INSERT INTO llm_response_log (
+                ts_code, request_date, model,
+                response_time_ms, success, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ts_code,
+                request_date,
+                model,
+                float(response_time_ms),
+                1 if success else 0,
+                error_message or "",
+            ),
+        )
+        return cursor.lastrowid if cursor.lastrowid is not None else 0
+
+
+def get_llm_response_log(
+    ts_code: str | None = None,
+    request_date: str | None = None,
+    model: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """查询 LLM 响应日志。
+
+    Args:
+        ts_code: 按股票代码过滤
+        request_date: 按请求日期过滤
+        model: 按模型过滤
+        limit: 返回记录数上限
+
+    Returns:
+        日志记录列表，按 created_at 倒序
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        sql = "SELECT * FROM llm_response_log WHERE 1=1"
+        params: list[Any] = []
+
+        if ts_code:
+            sql += " AND ts_code = ?"
+            params.append(ts_code)
+        if request_date:
+            sql += " AND request_date = ?"
+            params.append(request_date)
+        if model:
+            sql += " AND model = ?"
+            params.append(model)
+
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(sql, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_llm_response_stats(request_date: str | None = None) -> dict:
+    """按日聚合 LLM 响应统计：调用次数、成功率、平均/最大耗时。
+
+    Args:
+        request_date: 按请求日期过滤（默认当天）
+
+    Returns:
+        {
+          "request_date": "...",
+          "total_calls": N,
+          "success_calls": N,
+          "failed_calls": N,
+          "avg_ms": ...,
+          "max_ms": ...,
+          "min_ms": ...,
+        }
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if request_date is None:
+            cursor.execute("SELECT date('now', 'localtime')")
+            request_date = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS total_calls,
+                COALESCE(SUM(success), 0) AS success_calls,
+                COALESCE(AVG(response_time_ms), 0) AS avg_ms,
+                COALESCE(MAX(response_time_ms), 0) AS max_ms,
+                COALESCE(MIN(response_time_ms), 0) AS min_ms
+            FROM llm_response_log
+            WHERE request_date = ?
+            """,
+            (request_date,),
+        )
+        row = cursor.fetchone()
+        total = int(row["total_calls"] or 0)
+        success = int(row["success_calls"] or 0)
+        return {
+            "request_date": request_date,
+            "total_calls": total,
+            "success_calls": success,
+            "failed_calls": total - success,
+            "avg_ms": float(row["avg_ms"] or 0),
+            "max_ms": float(row["max_ms"] or 0),
+            "min_ms": float(row["min_ms"] or 0),
+        }
 
 
 if __name__ == "__main__":
