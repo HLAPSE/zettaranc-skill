@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import os
 
-# 数据库路径
-DB_PATH = "data/stock_data.db"
+from .database import get_connection, get_db_path
+from .indicators.core import calculate_ma
 
 # 并行化阈值：小于此数量不启用多进程（启动开销不值得）
 _PARALLEL_THRESHOLD = 50
@@ -57,8 +57,9 @@ class MarketStatus:
 
 
 def get_db_connection() -> sqlite3.Connection:
-    """获取数据库连接"""
-    conn = sqlite3.connect(DB_PATH)
+    """获取数据库连接（使用统一的 get_db_path）"""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -117,18 +118,12 @@ def get_recent_klines(ts_code: str, days: int = 60) -> list[dict]:
     return data_list
 
 
-def calculate_ma(prices: list[float], period: int) -> float:
-    """计算均线"""
-    if len(prices) < period:
-        return 0
-    return sum(prices[-period:]) / period
+# calculate_ma 已从 indicators.core 导入
 
 
 def calculate_vol_ma(vols: list[float], period: int) -> float:
-    """计算量能均线"""
-    if len(vols) < period:
-        return 0
-    return sum(vols[-period:]) / period
+    """计算量能均线（复用 calculate_ma 逻辑）"""
+    return calculate_ma(vols, period)
 
 
 def calculate_kdj(klines: list[dict], period: int = 9) -> tuple[float, float, float]:

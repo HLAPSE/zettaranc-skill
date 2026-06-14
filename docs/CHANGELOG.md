@@ -2,7 +2,30 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [v3.1.0] - 2026-06-14
+
+> **「v3.1.0 正式版：P3 指标补完 + 工程架构重构优化。」**
+
+### 核心变更
+
+- **P3 指标补完**：
+  - **蜈蚣图识别**：`detect_centipede_pattern()` (基于长上/下影、十字星、量能与价格趋势评分)。
+  - **牛绳理论量化**：`detect_bull_rope()` (基于白线/黄线关系、缺口百分比与趋势判定)。
+  - **量比战法引擎**：`detect_volume_ratio_strategy()` (识别攻击日、出货日、单向拉升等6类场景)。
+  - **沙漏评分 V9**：`calculate_sandglass_score()` (缩量收敛、均线结构等5因子评分，判定完美图形)。
+- **工程质量与 CLI 修复**：
+  - 修复 CLI 中 `backtest`, `trade`, `daily` 子命令因参数解析顺序错误无法执行的致命 Bug。
+  - 数据库补齐交易追踪（tracking）相关的 4 张核心数据表及索引。
+  - 清理 indicators 和 strategies 模块中的死代码、冗余 try/except 以及 `calculate_ma` 重复实现。
+  - 精简 `pyproject.toml` 和 `requirements.txt` 依赖，将 `yt-dlp` 和 `faster-whisper` 等语料处理库移动至 `corpus` 可选依赖中。
+  - 移除 5.8MB 的 actionlint 二进制文件并加入 `.gitignore`。
+  - 提升 `tushare_client.py` 异常处理一致性（出错时统一返回 `None`）。
+  - CI 配置优化，收紧 lint、quality-gate 等 CI Job 的质量关卡。
+
+---
+
 ## [v3.0.0] - 2026-06-03
+
 
 > **「v3.0.0 正式版：编排模式 + 人生/创业蒸馏 + 双维度扩展。」**
 

@@ -6,9 +6,6 @@ import pytest
 from modules.strategies import (
     StrategyType,
     Priority,
-    calculate_ma,
-    calculate_kdj,
-    calculate_bbi,
     detect_b1,
     detect_b2,
     detect_b3,
@@ -33,6 +30,8 @@ from modules.strategies import (
     detect_top_pinwheel,
 )
 from modules.indicators import detect_volume_attack, DailyData
+from modules.indicators.core import calculate_ma
+from modules.strategies.core import _calc_kdj as calculate_kdj, _calc_bbi as calculate_bbi
 from datetime import datetime, timedelta
 from tests.conftest import make_kline_row, generate_uptrend_klines
 from tests.conftest import generate_downtrend_klines, generate_b1_scenario

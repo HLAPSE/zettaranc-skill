@@ -203,7 +203,6 @@ def detect_kirin_stage(klines: list[DailyData]) -> dict:
     if len(klines) < 60:
         return result
 
-    klines[-1]
 
     # ========== 计算辅助指标 ==========
     position = _calculate_position_ratio(klines)

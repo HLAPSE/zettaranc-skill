@@ -37,23 +37,6 @@ from .sell_signals import (
 from .kirin import analyze_kirin_phase  # noqa: F401  re-export
 
 
-# Backward compatibility functions
-def calculate_ma(prices: list[float], period: int) -> float:
-    """已废弃：请使用 indicators.calculate_ma"""
-    from ..indicators import calculate_ma as _calc_ma_ind
-
-    return _calc_ma_ind(prices, period)
-
-
-def calculate_kdj(klines: list[dict], period: int = 9) -> tuple[float, float, float]:
-    """已废弃：请使用 indicators.calculate_kdj（接收 DailyData）"""
-    return _calc_kdj(klines)
-
-
-def calculate_bbi(klines: list[dict]) -> float:
-    """已废弃：请使用 indicators.calculate_bbi（接收 DailyData）"""
-    return _calc_bbi(klines)
-
 
 def _post_process_signals(signals: list[StrategySignal]) -> list[StrategySignal]:
     """
@@ -277,10 +260,7 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
                 )
 
             # MACD 金叉空 / 死叉多
-            try:
-                from ..indicators import calculate_macd
-            except ImportError:
-                from ..indicators import calculate_macd
+            from ..indicators import calculate_macd
             dif_list_all, dea_list_all, _ = calculate_macd(daily_klines)
             if dif_list_all and dea_list_all:
                 trap = detect_macd_trap(dif_list_all, dea_list_all)
@@ -395,10 +375,7 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
                 )
 
             # ========== P2 指标：三波理论 ==========
-            try:
-                from ..indicators import detect_three_waves
-            except ImportError:
-                from ..indicators import detect_three_waves
+            from ..indicators import detect_three_waves
             wave = detect_three_waves(daily_klines)
             if wave["wave"] != "未知" and wave["confidence"] >= 0.5:
                 wave_map = {
@@ -436,10 +413,7 @@ def detect_all_strategies(ts_code: str, days: int = 120) -> list[StrategySignal]
                     )
 
             # ========== P2 指标：麒麟会四阶段 ==========
-            try:
-                from ..indicators import detect_kirin_stage
-            except ImportError:
-                from ..indicators import detect_kirin_stage
+            from ..indicators import detect_kirin_stage
             kirin = detect_kirin_stage(daily_klines)
             if kirin["stage"] != "未知" and kirin["confidence"] >= 0.4:
                 kirin_map = {

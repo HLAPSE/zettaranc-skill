@@ -46,7 +46,7 @@ def detect_divergence(klines: list[DailyData], dif_list: list[float]) -> dict:
 
     if window_end > window_start:
         max_close = max(closes[window_start:window_end])
-        closes[window_start:window_end].index(max_close) + window_start
+        max_idx = closes[window_start:window_end].index(max_close) + window_start
 
         # 对应窗口的DIF最大值
         dif_window_start = max(0, window_start)
@@ -64,7 +64,7 @@ def detect_divergence(klines: list[DailyData], dif_list: list[float]) -> dict:
     # ====== 底背离检测 ======
     if window_end > window_start:
         min_close = min(closes[window_start:window_end])
-        closes[window_start:window_end].index(min_close) + window_start
+        min_idx = closes[window_start:window_end].index(min_close) + window_start
 
         dif_window_start = max(0, window_start)
         dif_window_end = min(len(dif_list), window_end)
@@ -209,7 +209,7 @@ def detect_double_line_cross(klines: list[DailyData]) -> tuple[bool, bool]:
     if len(klines) < 115:
         return False, False
 
-    [k.close for k in klines]
+
 
     # 计算历史白线和大哥线
     white_values = []
@@ -229,7 +229,7 @@ def detect_double_line_cross(klines: list[DailyData]) -> tuple[bool, bool]:
     # 今天、前天、昨天
     w_today = white_values[-1]
     w_yesterday = white_values[-2]
-    white_values[-3]
+
 
     d_today = dg_values[-1]
     d_yesterday = dg_values[-2]

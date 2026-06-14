@@ -680,8 +680,6 @@ def main():
     p_track.add_argument("--status", choices=["active", "paused", "removed"], default="active", help="状态筛选")
     p_track.add_argument("--json", action="store_true", help="JSON输出")
 
-    args = parser.parse_args()
-
     # ── backtest（shaofu / multi / portfolio）──
     p_bt = subparsers.add_parser("backtest", help="策略回测")
     p_bt_sub = p_bt.add_subparsers(dest="bt_action", required=True)
@@ -712,6 +710,9 @@ def main():
     # ── daily ──
     p_daily = subparsers.add_parser("daily", help="每日五步工作流")
     p_daily.add_argument("--json", action="store_true", help="JSON输出")
+
+    args = parser.parse_args()
+
     # 调度表
     from modules.cli_commands import cmd_backtest, cmd_trade, cmd_daily
 

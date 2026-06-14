@@ -59,3 +59,6 @@ CLAUDE.md.bak
 # 日志文件（临时文件，不入库）
 logs/*.log
 logs/*.jsonl
+
+# 二进制工具（应通过包管理器安装）
+actionlint
