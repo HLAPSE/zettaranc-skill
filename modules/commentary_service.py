@@ -56,7 +56,6 @@ def _load_skill_sections() -> str:
 
     extracted: list[str] = []
     in_section = False
-    current_section = ""
     section_depth = 0
 
     for line in lines:
@@ -65,14 +64,12 @@ def _load_skill_sections() -> str:
             header = line.strip()
             if header in target_sections:
                 in_section = True
-                current_section = header
                 section_depth = 2
                 extracted.append(f"\n{header}\n")
                 continue
             elif in_section and section_depth == 2:
                 # 遇到下一个二级标题，结束当前章节
                 in_section = False
-                current_section = ""
 
         # 检测三级标题（在决策启发式内部需要保留子章节）
         if in_section and line.startswith("### "):
@@ -90,7 +87,6 @@ def _load_skill_sections() -> str:
 def _load_knowledge_snippets(analysis: dict[str, Any]) -> str:
     """根据股票状态条件注入相关知识片段"""
     indicators = analysis.get("indicators", {})
-    score = analysis.get("score", {})
     diagnosis = analysis.get("diagnosis", {})
     signals = analysis.get("signals", [])
 
@@ -182,7 +178,6 @@ def _build_user_prompt(analysis: dict[str, Any]) -> str:
     score = analysis.get("score", {})
     diagnosis = analysis.get("diagnosis", {})
     waves = analysis.get("waves")
-    kirin = analysis.get("kirin")
     signals = analysis.get("signals", [])
 
     kdj = indicators.get("kdj", {})
@@ -196,7 +191,7 @@ def _build_user_prompt(analysis: dict[str, Any]) -> str:
 
     # 构建指标快照
     lines = [
-        f"请分析以下股票的最新量化数据，用 Z哥的风格给出点评：",
+        "请分析以下股票的最新量化数据，用 Z哥的风格给出点评：",
         "",
         f"【基本信息】{ts_code} {name} | 收盘 ¥{price} ({pct_chg:+.2f}%) | 日期 {trade_date}",
         "",

@@ -127,7 +127,7 @@ class TestP3SandglassB1Integration:
         klines = generate_sandglass_contraction(n=30)
         score, reasons = score_b1_opportunity(klines)
         # 检查原因中是否包含沙漏相关因子
-        sandglass_reasons = [r for r in reasons if "沙漏" in r]
+        _sandglass_reasons = [r for r in reasons if "沙漏" in r]
         # 只要有沙漏相关原因即可（不一定能触发，因为J值可能不满足B1条件）
         # 但评分应在合理范围
         assert 0 <= score <= 100

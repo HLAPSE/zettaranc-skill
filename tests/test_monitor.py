@@ -22,11 +22,11 @@ def test_monitor_empty(temp_db):
 def test_monitor_with_items(mock_notify, mock_report, mock_scan, mock_sync, temp_db, db_conn):
     """测试自选股有数据时的正常扫描流程"""
     from tests.conftest import write_stock_basic
-    
+
     # 写入测试自选股
     write_stock_basic(db_conn, "600487.SH", "亨通光电")
     add_watch("600487.SH", name="亨通光电")
-    
+
     # 模拟数据同步、扫描和报告生成
     mock_sync.return_value = {"600487.SH": 1}
     mock_scan.return_value = {
@@ -37,18 +37,18 @@ def test_monitor_with_items(mock_notify, mock_report, mock_scan, mock_sync, temp
     }
     mock_report.return_value = "测试自选股每日报告\n600487.SH 亨通光电 出现B1买点"
     mock_notify.return_value = {"macos": True, "feishu": False}
-    
+
     # 运行监控，应该成功写入文件，并执行通知推送
     res = run_watchlist_monitor(sync_days=5, enable_push=True)
-    
+
     assert res["status"] == "success"
     assert res["alerts_count"] == 1
     assert res["summary"]["b1_count"] == 1
-    
+
     # 验证本地报告已写盘
     report_file = Path("data/reports/monitor_alert.md")
     assert report_file.exists()
     assert "测试自选股每日报告" in report_file.read_text(encoding="utf-8")
-    
+
     # 验证主动通知被触发了
     mock_notify.assert_called_once()

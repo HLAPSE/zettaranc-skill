@@ -4,7 +4,8 @@
 """
 
 import sqlite3
-from typing import Any, Optional, Callable
+from typing import Any, Optional
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 import os

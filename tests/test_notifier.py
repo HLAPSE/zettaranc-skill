@@ -18,7 +18,7 @@ def test_notify_macos(mock_run):
     res = notify_macos("测试标题", "测试内容")
     assert res is True
     mock_run.assert_called_once()
-    
+
     # 测试异常
     mock_run.side_effect = Exception("AppleScript error")
     assert notify_macos("测试", "内容") is False
@@ -30,7 +30,7 @@ def test_notify_feishu(mock_post):
     res = notify_feishu("https://fake-webhook.url", "标题", "消息")
     assert res is True
     mock_post.assert_called_once()
-    
+
     # 模拟网络失败
     mock_post.side_effect = Exception("network error")
     assert notify_feishu("https://fake-webhook.url", "标题", "消息") is False
@@ -44,7 +44,7 @@ def test_notify_all_mac(mock_uname, mock_feishu, mock_macos):
     mock_uname.return_value = MagicMock(sysname="Darwin")
     mock_macos.return_value = True
     mock_feishu.return_value = True
-    
+
     res = notify_all("测试标题", "测试内容", webhook_url="https://fake-webhook.url")
     assert res["macos"] is True
     assert res["feishu"] is True
@@ -60,7 +60,7 @@ def test_notify_all_linux(mock_uname, mock_feishu, mock_macos):
     mock_uname.return_value = MagicMock(sysname="Linux")
     mock_macos.return_value = True
     mock_feishu.return_value = True
-    
+
     res = notify_all("测试标题", "测试内容", webhook_url="https://fake-webhook.url")
     assert res["macos"] is False
     assert res["feishu"] is True

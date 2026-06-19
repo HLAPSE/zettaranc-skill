@@ -24,14 +24,14 @@ def notify_macos(title: str, message: str, sound_name: str = "Glass") -> bool:
     try:
         title_esc = escape_applescript_string(title)
         msg_esc = escape_applescript_string(message)
-        
+
         # 组装 AppleScript 指令
         script = f'display notification "{msg_esc}" with title "{title_esc}"'
         if sound_name:
             script += f' sound name "{sound_name}"'
-            
+
         cmd = ["osascript", "-e", script]
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(cmd, check=True, capture_output=True)
         return True
     except Exception as e:
         logger.error("macOS 通知发送失败: %s", e)
@@ -65,26 +65,26 @@ def notify_all(title: str, message: str, webhook_url: str | None = None) -> dict
     全通路推送：系统通知 + 飞书推送（如果配置了）
     """
     results = {}
-    
+
     # 1. 尝试 macOS 本地通知
     # 只有当系统是 mac 时才进行
     try:
         sysname = os.uname().sysname
     except AttributeError:
         sysname = "Unknown"
-        
+
     if sysname == "Darwin":
         results["macos"] = notify_macos(title, message)
     else:
         results["macos"] = False
-        
+
     # 2. 尝试飞书通知
     url = webhook_url or os.getenv("IM_PUSH_WEBHOOK")
     if url:
         results["feishu"] = notify_feishu(url, title, message)
     else:
         results["feishu"] = False
-        
+
     return results
 
 
