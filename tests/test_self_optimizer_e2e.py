@@ -1,4 +1,5 @@
 """E2E test for self-optimizer V2 pipeline."""
+
 import json
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from modules.self_optimizer.param_registry import get_defaults
 
 class FixedScorer(BacktestScorer):
     """Mock scorer: 返回递增固定分数。"""
+
     def __init__(self, scores: list[float]):
         super().__init__(stock_pool=["FAKE"], days=30, max_stocks=1)
         self._scores = iter(scores)
@@ -30,6 +32,7 @@ class FixedScorer(BacktestScorer):
 
 class FixedMutator(ParamMutator):
     """Mock mutator: 每次单步调整 j_threshold。"""
+
     def __init__(self):
         super().__init__(seed=0)
 

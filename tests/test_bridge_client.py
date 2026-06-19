@@ -21,6 +21,7 @@ from modules.bridge_client import (
 
 # ============ BridgeConfig 测试 ============
 
+
 class TestBridgeConfig:
     def test_default_config(self):
         cfg = BridgeConfig()
@@ -38,6 +39,7 @@ class TestBridgeConfig:
 
 
 # ============ 健康检查测试 ============
+
 
 class TestIsBridgeAvailable:
     def test_never_enabled(self):
@@ -62,6 +64,7 @@ class TestIsBridgeAvailable:
 
 
 # ============ GET 接口测试 ============
+
 
 class TestGetBridgeDaily:
     @patch("modules.bridge_client.is_bridge_available")
@@ -117,6 +120,7 @@ class TestGetBridgeStockList:
 
 # ============ POST 接口测试 ============
 
+
 class TestQueryBridgeLocal:
     @patch("modules.bridge_client.is_bridge_available")
     def test_bridge_disabled(self, mock_available):
@@ -128,9 +132,7 @@ class TestQueryBridgeLocal:
     @patch("modules.bridge_client._http_post")
     def test_success(self, mock_post, mock_available):
         mock_available.return_value = True
-        mock_post.return_value = {
-            "data": [{"ts_code": "600519.SH", "close": 100}]
-        }
+        mock_post.return_value = {"data": [{"ts_code": "600519.SH", "close": 100}]}
         result = query_bridge_local("daily", where="ts_code = '600519.SH'")
         assert len(result) == 1
 
@@ -146,22 +148,19 @@ class TestQueryBridgeSql:
     @patch("modules.bridge_client._http_post")
     def test_success(self, mock_post, mock_available):
         mock_available.return_value = True
-        mock_post.return_value = {
-            "data": [{"ts_code": "600519.SH"}]
-        }
+        mock_post.return_value = {"data": [{"ts_code": "600519.SH"}]}
         result = query_bridge_sql("SELECT * FROM daily_kline LIMIT 1")
         assert len(result) == 1
 
 
 # ============ 降级网关测试 ============
 
+
 class TestGetDailyKlines:
     @patch("modules.bridge_client.get_bridge_daily")
     @patch("modules.bridge_client._get_local_daily")
     def test_bridge_success_no_fallback(self, mock_local, mock_bridge):
-        mock_bridge.return_value = [
-            {"ts_code": "600519.SH", "trade_date": "20240101", "close": 100}
-        ]
+        mock_bridge.return_value = [{"ts_code": "600519.SH", "trade_date": "20240101", "close": 100}]
         result = get_daily_klines("600519.SH", days=30)
         assert len(result) == 1
         mock_local.assert_not_called()
@@ -170,9 +169,7 @@ class TestGetDailyKlines:
     @patch("modules.bridge_client._get_local_daily")
     def test_bridge_empty_fallback(self, mock_local, mock_bridge):
         mock_bridge.return_value = []
-        mock_local.return_value = [
-            {"ts_code": "600519.SH", "trade_date": "20240101", "close": 100}
-        ]
+        mock_local.return_value = [{"ts_code": "600519.SH", "trade_date": "20240101", "close": 100}]
         result = get_daily_klines("600519.SH", days=30)
         assert len(result) == 1
         mock_local.assert_called_once()
@@ -182,9 +179,7 @@ class TestGetDailyKlines:
     def test_bridge_failure_fallback(self, mock_local, mock_bridge):
         # mock_bridge 返回空列表 = 模拟 get_bridge_daily 内部捕获异常后返回 []
         mock_bridge.return_value = []
-        mock_local.return_value = [
-            {"ts_code": "600519.SH", "trade_date": "20240101", "close": 100}
-        ]
+        mock_local.return_value = [{"ts_code": "600519.SH", "trade_date": "20240101", "close": 100}]
         result = get_daily_klines("600519.SH", days=30)
         assert len(result) == 1
         mock_local.assert_called_once()

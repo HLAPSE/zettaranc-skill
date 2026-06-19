@@ -71,22 +71,55 @@ _indicator_memory_cache: dict[tuple[str, str], IndicatorResult] = {}
 # IndicatorResult 属性 <-> DB 列名的映射
 # 新增字段只需在此添加一行，load/save 自动同步
 _FLOAT_FIELDS: list[str] = [
-    "k", "d", "j", "dif", "dea", "macd_hist", "bbi",
-    "ma5", "ma10", "ma20", "ma60",
-    "rsi6", "rsi12", "rsi24", "wr5", "wr10",
-    "boll_mid", "boll_upper", "boll_lower", "boll_width", "boll_position",
-    "vol_ratio", "zg_white", "dg_yellow",
-    "rsl_short", "rsl_long",
-    "brick_value", "brick_count",
-    "prev_high", "prev_low", "dmi_plus", "dmi_minus", "adx",
-    "net_lg_mf", "net_elg_mf", "last_b1_price",
+    "k",
+    "d",
+    "j",
+    "dif",
+    "dea",
+    "macd_hist",
+    "bbi",
+    "ma5",
+    "ma10",
+    "ma20",
+    "ma60",
+    "rsi6",
+    "rsi12",
+    "rsi24",
+    "wr5",
+    "wr10",
+    "boll_mid",
+    "boll_upper",
+    "boll_lower",
+    "boll_width",
+    "boll_position",
+    "vol_ratio",
+    "zg_white",
+    "dg_yellow",
+    "rsl_short",
+    "rsl_long",
+    "brick_value",
+    "brick_count",
+    "prev_high",
+    "prev_low",
+    "dmi_plus",
+    "dmi_minus",
+    "adx",
+    "net_lg_mf",
+    "net_elg_mf",
+    "last_b1_price",
 ]
 
 _BOOL_FIELDS: list[str] = [
-    "is_gold_cross", "is_dead_cross", "is_needle_20",
-    "brick_trend_up", "is_fanbao",
-    "is_beidou", "is_suoliang", "is_jiayin_zhenyang",
-    "is_jiayang_zhenyin", "is_fangliang_yinxian",
+    "is_gold_cross",
+    "is_dead_cross",
+    "is_needle_20",
+    "brick_trend_up",
+    "is_fanbao",
+    "is_beidou",
+    "is_suoliang",
+    "is_jiayin_zhenyang",
+    "is_jiayang_zhenyin",
+    "is_fangliang_yinxian",
 ]
 
 _INT_FIELDS: list[str] = ["sell_score"]
@@ -109,10 +142,7 @@ def _load_from_row(row) -> IndicatorResult:
     for f in _STR_FIELDS:
         kw[f] = row[f] or ""
     sig_val = row["signal"]
-    kw["signal"] = (
-        TradeSignal(sig_val) if sig_val and sig_val in [e.value for e in TradeSignal]
-        else TradeSignal.WATCH
-    )
+    kw["signal"] = TradeSignal(sig_val) if sig_val and sig_val in [e.value for e in TradeSignal] else TradeSignal.WATCH
     return IndicatorResult(**kw)
 
 
@@ -120,30 +150,75 @@ def _build_save_tuple(result: IndicatorResult, today) -> tuple:
     """构建 INSERT 行 tuple（统一字段→位置映射，与 _load_from_row 保持一致）"""
     sig_val = result.signal.value if hasattr(result.signal, "value") else str(result.signal)
     return (
-        result.ts_code, result.trade_date,
-        today.close, today.open, today.high, today.low, today.vol, today.pct_chg,
-        result.k, result.d, result.j, result.dif, result.dea, result.macd_hist, result.bbi,
-        result.ma5, result.ma10, result.ma20, result.ma60,
-        result.rsi6, result.rsi12, result.rsi24, result.wr5, result.wr10,
-        result.boll_mid, result.boll_upper, result.boll_lower, result.boll_width, result.boll_position,
-        result.vol_ratio, result.zg_white, result.dg_yellow,
-        int(result.is_gold_cross), int(result.is_dead_cross),
-        result.rsl_short, result.rsl_long, int(result.is_needle_20),
-        result.brick_value, result.brick_trend, result.brick_count,
-        int(result.brick_trend_up), int(result.is_fanbao),
-        int(result.is_beidou), int(result.is_suoliang),
-        int(result.is_jiayin_zhenyang), int(result.is_jiayang_zhenyin),
+        result.ts_code,
+        result.trade_date,
+        today.close,
+        today.open,
+        today.high,
+        today.low,
+        today.vol,
+        today.pct_chg,
+        result.k,
+        result.d,
+        result.j,
+        result.dif,
+        result.dea,
+        result.macd_hist,
+        result.bbi,
+        result.ma5,
+        result.ma10,
+        result.ma20,
+        result.ma60,
+        result.rsi6,
+        result.rsi12,
+        result.rsi24,
+        result.wr5,
+        result.wr10,
+        result.boll_mid,
+        result.boll_upper,
+        result.boll_lower,
+        result.boll_width,
+        result.boll_position,
+        result.vol_ratio,
+        result.zg_white,
+        result.dg_yellow,
+        int(result.is_gold_cross),
+        int(result.is_dead_cross),
+        result.rsl_short,
+        result.rsl_long,
+        int(result.is_needle_20),
+        result.brick_value,
+        result.brick_trend,
+        result.brick_count,
+        int(result.brick_trend_up),
+        int(result.is_fanbao),
+        int(result.is_beidou),
+        int(result.is_suoliang),
+        int(result.is_jiayin_zhenyang),
+        int(result.is_jiayang_zhenyin),
         int(result.is_fangliang_yinxian),
-        result.sell_score, "", sig_val, sig_val,
-        result.prev_high, result.prev_low,
-        result.dmi_plus, result.dmi_minus, result.adx,
-        result.net_lg_mf, result.net_elg_mf,
-        result.last_b1_date, result.last_b1_price,
-        "", 0, "NEUTRAL", None,
+        result.sell_score,
+        "",
+        sig_val,
+        sig_val,
+        result.prev_high,
+        result.prev_low,
+        result.dmi_plus,
+        result.dmi_minus,
+        result.adx,
+        result.net_lg_mf,
+        result.net_elg_mf,
+        result.last_b1_date,
+        result.last_b1_price,
+        "",
+        0,
+        "NEUTRAL",
+        None,
     )
 
 
-_SAVE_SQL = """
+_SAVE_SQL = (
+    """
     INSERT OR REPLACE INTO indicator_cache
     (ts_code, trade_date, close, open, high, low, vol, pct_chg,
      k, d, j, dif, dea, macd_hist, bbi,
@@ -159,8 +234,11 @@ _SAVE_SQL = """
      prev_high, prev_low, dmi_plus, dmi_minus, adx,
      net_lg_mf, net_elg_mf, last_b1_date, last_b1_price,
      last_yidong_date, market_pct_chg, market_dir, updated_at)
-    VALUES (""" + ",".join(["?"] * 64) + """)
+    VALUES ("""
+    + ",".join(["?"] * 64)
+    + """)
 """
+)
 
 
 def _load_indicator_cache(ts_code: str, trade_date: str) -> IndicatorResult | None:
@@ -278,6 +356,7 @@ def get_realtime_data(ts_code: str) -> DailyData | None:
 #
 # 每个管道步骤 = (min_klines, fn(klines, result) -> None)
 # 新增指标只需写一个函数 + 在 _PIPELINE 中注册
+
 
 def _step_kdj(klines, result):
     k, d, j = calculate_kdj(klines)
@@ -491,36 +570,36 @@ def _step_sell_score(klines, result):
 
 # 计算管道：(最小K线数, 计算函数)
 _PIPELINE: list[tuple[int, callable]] = [
-    (0,   _step_kdj),
-    (30,  _step_macd),
-    (24,  _step_bbi),
-    (0,   _step_moving_averages),
-    (25,  _step_rsi),
-    (10,  _step_wr),
-    (20,  _step_bollinger),
-    (0,   _step_vol_ratio),
+    (0, _step_kdj),
+    (30, _step_macd),
+    (24, _step_bbi),
+    (0, _step_moving_averages),
+    (25, _step_rsi),
+    (10, _step_wr),
+    (20, _step_bollinger),
+    (0, _step_vol_ratio),
     (115, _step_double_line),
-    (22,  _step_needle_20),
-    (22,  _step_needle_30),
-    (10,  _step_brick),
-    (2,   _step_prev_high_low),
-    (30,  _step_dmi),
-    (0,   _step_volume_pattern),
-    (10,  _step_b1),
-    (10,  _step_b2),
-    (10,  _step_key_k),
-    (10,  _step_violence_k),
-    (10,  _step_two_30),
-    (20,  _step_nana),
+    (22, _step_needle_20),
+    (22, _step_needle_30),
+    (10, _step_brick),
+    (2, _step_prev_high_low),
+    (30, _step_dmi),
+    (0, _step_volume_pattern),
+    (10, _step_b1),
+    (10, _step_b2),
+    (10, _step_key_k),
+    (10, _step_violence_k),
+    (10, _step_two_30),
+    (20, _step_nana),
     (120, _step_golden_bowl),
-    (10,  _step_breathing),
-    (6,   _step_sb1),
-    (15,  _step_sb1_detailed),
-    (15,  _step_double_gun),
-    (65,  _step_yidong),
-    (15,  _step_b3),
-    (10,  _step_four_brick),
-    (0,   _step_sell_score),
+    (10, _step_breathing),
+    (6, _step_sb1),
+    (15, _step_sb1_detailed),
+    (15, _step_double_gun),
+    (65, _step_yidong),
+    (15, _step_b3),
+    (10, _step_four_brick),
+    (0, _step_sell_score),
 ]
 
 

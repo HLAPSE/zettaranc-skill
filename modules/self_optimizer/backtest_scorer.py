@@ -10,6 +10,7 @@ BacktestScorer — 基于真实回测的参数评分引擎
   20% 总收益率      return ∈ [-10%, +50%] → [0, 20]  clamp
   15% 最大回撤      dd ∈ [0%, 40%]       → [15, 0]  线性反向
 """
+
 from __future__ import annotations
 
 import logging
@@ -89,9 +90,18 @@ class BacktestScorer:
 
     # 默认股票池：有完整数据的历史回测票
     DEFAULT_POOL = [
-        "000001.SZ", "000002.SZ", "000004.SZ", "000005.SZ",
-        "000006.SZ", "000007.SZ", "000008.SZ", "000009.SZ",
-        "000010.SZ", "000011.SZ", "000012.SZ", "000014.SZ",
+        "000001.SZ",
+        "000002.SZ",
+        "000004.SZ",
+        "000005.SZ",
+        "000006.SZ",
+        "000007.SZ",
+        "000008.SZ",
+        "000009.SZ",
+        "000010.SZ",
+        "000011.SZ",
+        "000012.SZ",
+        "000014.SZ",
         "600487.SH",
     ]
 
@@ -148,15 +158,20 @@ class BacktestScorer:
         except Exception as e:
             logger.warning("回测 %s 失败: %s", ts_code, e)
             return StockScore(
-                ts_code=ts_code, win_rate=0, sharpe_ratio=0,
-                total_return=0, max_drawdown=0, total_trades=0, score=0,
+                ts_code=ts_code,
+                win_rate=0,
+                sharpe_ratio=0,
+                total_return=0,
+                max_drawdown=0,
+                total_trades=0,
+                score=0,
             )
 
         score = self._compute_single_score(result)
         return StockScore(
             ts_code=ts_code,
             win_rate=result.win_rate,
-            sharpe_ratio=result.sharpe_ratio if hasattr(result, 'sharpe_ratio') else 0,
+            sharpe_ratio=result.sharpe_ratio if hasattr(result, "sharpe_ratio") else 0,
             total_return=result.total_return,
             max_drawdown=result.max_drawdown,
             total_trades=result.total_trades,
@@ -175,11 +190,11 @@ class BacktestScorer:
         s_win = min(40.0, r.win_rate * 40.0)
         raw_pf = r.profit_factor if r.profit_factor != float("inf") else 10.0
         s_pf = max(0, min(20.0, raw_pf / 10.0 * 20.0))
-        raw_ret = r.avg_return if hasattr(r, 'avg_return') else 0
+        raw_ret = r.avg_return if hasattr(r, "avg_return") else 0
         s_ret = max(0, min(25.0, (raw_ret + 0.10) / 0.30 * 25.0))
 
         # 15% 最大回撤（clamp [0%, 40%]，越小越好）
-        raw_dd = r.max_drawdown if hasattr(r, 'max_drawdown') else 0
+        raw_dd = r.max_drawdown if hasattr(r, "max_drawdown") else 0
         s_dd = max(0, min(15.0, (0.40 - raw_dd) / 0.40 * 15.0))
 
         return round(s_win + s_pf + s_ret + s_dd, 2)
@@ -193,8 +208,9 @@ class BacktestScorer:
             self._rng.shuffle(chosen)
         else:
             import random as _r
+
             _r.shuffle(chosen)
-        return chosen[:self._max_stocks]
+        return chosen[: self._max_stocks]
 
 
 def demo() -> None:

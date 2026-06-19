@@ -1,4 +1,5 @@
 """Tests for ParamMutator — 参数变异引擎。"""
+
 import pytest
 
 from modules.self_optimizer.mutator import ParamMutator, MutationRecord
@@ -6,6 +7,7 @@ from modules.self_optimizer.param_registry import get_defaults, get_registry
 
 
 # ==================== Fixtures ====================
+
 
 @pytest.fixture
 def mutator():
@@ -20,6 +22,7 @@ def default_params():
 
 
 # ==================== 基础行为 ====================
+
 
 def test_mutate_one_returns_new_params_and_record(mutator, default_params):
     """单次变异返回 (新参数集, 记录)。"""
@@ -51,9 +54,7 @@ def test_mutate_one_param_in_range(mutator, default_params):
         )
         if spec:
             val = params[rec.strategy][rec.param_name]
-            assert spec.min <= val <= spec.max, (
-                f"{rec.strategy}.{rec.param_name}={val} 不在 [{spec.min}, {spec.max}]"
-            )
+            assert spec.min <= val <= spec.max, f"{rec.strategy}.{rec.param_name}={val} 不在 [{spec.min}, {spec.max}]"
 
 
 def test_mutate_one_with_strategy_filter(mutator, default_params):
@@ -81,7 +82,8 @@ def test_pick_param_falls_back_to_unwired_when_none_wired(mutator, default_param
     """当所有 wired 参数被用完时（mutate_n 场景），应正常返回 None。"""
     params, rec = mutator.mutate_one(
         default_params,
-        strategy_filter="stop_loss", param_filter="trailing_stop_activation",
+        strategy_filter="stop_loss",
+        param_filter="trailing_stop_activation",
     )
     assert rec.strategy == "stop_loss"
     assert rec.param_name == "trailing_stop_activation"
@@ -89,14 +91,13 @@ def test_pick_param_falls_back_to_unwired_when_none_wired(mutator, default_param
 
 def test_mutate_one_with_param_filter(mutator, default_params):
     """指定 param_filter 后只变异该参数。"""
-    params, rec = mutator.mutate_one(
-        default_params, strategy_filter="b1", param_filter="j_threshold"
-    )
+    params, rec = mutator.mutate_one(default_params, strategy_filter="b1", param_filter="j_threshold")
     assert rec.strategy == "b1"
     assert rec.param_name == "j_threshold"
 
 
 # ==================== 多重变异 ====================
+
 
 def test_mutate_n_returns_n_records(mutator, default_params):
     """mutate_n(2) 返回 2 条记录。"""
@@ -121,6 +122,7 @@ def test_mutate_n_does_not_exceed_available_params(mutator, default_params):
 
 # ==================== 历史记录 ====================
 
+
 def test_history_tracks_mutations(mutator, default_params):
     """history 随每次 mutate 增长。"""
     assert mutator.mutation_count == 0
@@ -139,6 +141,7 @@ def test_clear_history(mutator, default_params):
 
 
 # ==================== 变异策略 ====================
+
 
 def test_strategy_step_changes_by_exact_step(mutator, default_params):
     """step 变异的变化量正好是 ±step（考虑浮点精度）。"""
@@ -173,12 +176,11 @@ def test_strategy_jitter_changes_by_less_than_2x_step(mutator, default_params):
         )
         if spec:
             delta = abs(rec.new_value - rec.old_value)
-            assert delta <= spec.step * 2.0, (
-                f"{rec.strategy}.{rec.param_name}: delta={delta} > 2*step={spec.step * 2}"
-            )
+            assert delta <= spec.step * 2.0, f"{rec.strategy}.{rec.param_name}: delta={delta} > 2*step={spec.step * 2}"
 
 
 # ==================== 重置 ====================
+
 
 def test_reset_to_defaults(mutator, default_params):
     """reset_to_defaults 回到 registry 默认值。"""
@@ -200,6 +202,7 @@ def test_reset_is_deep_copy(mutator, default_params):
 
 # ==================== 确定性 ====================
 
+
 def test_deterministic_seed():
     """相同 seed 产生相同的变异序列。"""
     m1 = ParamMutator(seed=123)
@@ -215,6 +218,7 @@ def test_deterministic_seed():
 
 
 # ==================== 边界情况 ====================
+
 
 def test_mutate_with_empty_params(mutator):
     """空参数集仍能变异（从 registry 拿默认值当 old_val）。"""
@@ -237,9 +241,13 @@ def test_mutate_with_unknown_filter(mutator, default_params):
 def test_record_delta_property():
     """MutationRecord.delta 计算正确。"""
     r = MutationRecord(
-        strategy="b1", param_name="j_threshold",
-        old_value=30, new_value=28, delta_pct=-6.67,
-        mutation_type="step", description="test",
+        strategy="b1",
+        param_name="j_threshold",
+        old_value=30,
+        new_value=28,
+        delta_pct=-6.67,
+        mutation_type="step",
+        description="test",
     )
     assert r.delta == -2
 

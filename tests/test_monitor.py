@@ -33,7 +33,7 @@ def test_monitor_with_items(mock_notify, mock_report, mock_scan, mock_sync, temp
         "alerts": [
             MagicMock(ts_code="600487.SH", name="亨通光电", alert_type="B1", level="INFO", message="出现B1买点")
         ],
-        "summary": {"total": 1, "b1_count": 1, "exit_count": 0, "break_count": 0, "abnormal_count": 0}
+        "summary": {"total": 1, "b1_count": 1, "exit_count": 0, "break_count": 0, "abnormal_count": 0},
     }
     mock_report.return_value = "测试自选股每日报告\n600487.SH 亨通光电 出现B1买点"
     mock_notify.return_value = {"macos": True, "feishu": False}

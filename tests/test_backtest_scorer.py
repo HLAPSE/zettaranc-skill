@@ -1,4 +1,5 @@
 """Tests for BacktestScorer — 参数评分引擎。"""
+
 import pytest
 
 from modules.self_optimizer.backtest_scorer import (
@@ -18,6 +19,7 @@ def scorer():
         days=60,
     )
 
+
 @pytest.fixture
 def seeded_db(temp_db, db_conn):
     """临时数据库灌入 B1 场景数据。"""
@@ -30,7 +32,9 @@ def seeded_db(temp_db, db_conn):
 
 class TestStockScore:
     def test_has_trades_positive(self):
-        s = StockScore(ts_code="A", win_rate=0.5, sharpe_ratio=0, total_return=0, max_drawdown=0, total_trades=5, score=50)
+        s = StockScore(
+            ts_code="A", win_rate=0.5, sharpe_ratio=0, total_return=0, max_drawdown=0, total_trades=5, score=50
+        )
         assert s.has_trades is True
 
     def test_has_trades_zero(self):
@@ -50,18 +54,22 @@ class TestScoringResult:
         assert r.composite_score == 66.0
 
     def test_multiple_stocks(self):
-        r = ScoringResult(scores=[
-            StockScore("A", 0, 0, 0, 0, 0, 50),
-            StockScore("B", 0, 0, 0, 0, 0, 70),
-        ])
+        r = ScoringResult(
+            scores=[
+                StockScore("A", 0, 0, 0, 0, 0, 50),
+                StockScore("B", 0, 0, 0, 0, 0, 70),
+            ]
+        )
         assert r.composite_score == 60.0
 
     def test_traded_count(self):
-        r = ScoringResult(scores=[
-            StockScore("A", 0, 0, 0, 0, 5, 50),
-            StockScore("B", 0, 0, 0, 0, 0, 0),
-            StockScore("C", 0, 0, 0, 0, 3, 30),
-        ])
+        r = ScoringResult(
+            scores=[
+                StockScore("A", 0, 0, 0, 0, 5, 50),
+                StockScore("B", 0, 0, 0, 0, 0, 0),
+                StockScore("C", 0, 0, 0, 0, 3, 30),
+            ]
+        )
         assert r.traded_count == 2
 
 
@@ -103,10 +111,7 @@ class TestBacktestScorer:
         mutated = scorer.score(params=params)
 
         scores_eq = abs(mutated.composite_score - baseline.composite_score) < 0.01
-        trade_counts_eq = (
-            sum(s.total_trades for s in mutated.scores)
-            == sum(s.total_trades for s in baseline.scores)
-        )
+        trade_counts_eq = sum(s.total_trades for s in mutated.scores) == sum(s.total_trades for s in baseline.scores)
         assert not (scores_eq and trade_counts_eq)
 
     def test_pool_selection_respects_max_stocks(self):

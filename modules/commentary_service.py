@@ -214,13 +214,15 @@ def _build_user_prompt(analysis: dict[str, Any]) -> str:
     if macd_flags:
         lines[-1] += f" | {' / '.join(macd_flags)}"
 
-    lines.extend([
-        f"- 均线: MA5={ma.get('ma5', 0):.2f} MA20={ma.get('ma20', 0):.2f} MA60={ma.get('ma60', 0):.2f}",
-        f"- 布林带位置: {bollinger.get('position', 0):.1f}%",
-        f"- RSI: RSI6={rsi.get('rsi6', 0):.2f} RSI12={rsi.get('rsi12', 0):.2f} RSI24={rsi.get('rsi24', 0):.2f}",
-        f"- 量比: {indicators.get('vol_ratio', 0):.2f}",
-        f"- 双线: 白线={double_line.get('white', 0):.2f} 黄线={double_line.get('yellow', 0):.2f}",
-    ])
+    lines.extend(
+        [
+            f"- 均线: MA5={ma.get('ma5', 0):.2f} MA20={ma.get('ma20', 0):.2f} MA60={ma.get('ma60', 0):.2f}",
+            f"- 布林带位置: {bollinger.get('position', 0):.1f}%",
+            f"- RSI: RSI6={rsi.get('rsi6', 0):.2f} RSI12={rsi.get('rsi12', 0):.2f} RSI24={rsi.get('rsi24', 0):.2f}",
+            f"- 量比: {indicators.get('vol_ratio', 0):.2f}",
+            f"- 双线: 白线={double_line.get('white', 0):.2f} 黄线={double_line.get('yellow', 0):.2f}",
+        ]
+    )
 
     dl_flags = []
     if double_line.get("is_gold_cross"):
@@ -230,14 +232,16 @@ def _build_user_prompt(analysis: dict[str, Any]) -> str:
     if dl_flags:
         lines[-1] += f" | {' / '.join(dl_flags)}"
 
-    lines.extend([
-        f"- 砖形图: {brick.get('trend', 'N/A')} ({brick.get('count', 0)}块)",
-        f"- DMI: +DI={dmi.get('plus', 0):.2f} -DI={dmi.get('minus', 0):.2f} ADX={dmi.get('adx', 0):.2f}",
-        f"- 交易信号: {indicators.get('signal', 'N/A')}",
-        "",
-        f"【综合评分】{score.get('total', 0):.1f}分 ({score.get('rating', '')})",
-        f"- B1={score.get('b1_score', 0)} 趋势={score.get('trend_score', 0)} 量价={score.get('volume_score', 0)} 风险={score.get('risk_score', 0)}",
-    ])
+    lines.extend(
+        [
+            f"- 砖形图: {brick.get('trend', 'N/A')} ({brick.get('count', 0)}块)",
+            f"- DMI: +DI={dmi.get('plus', 0):.2f} -DI={dmi.get('minus', 0):.2f} ADX={dmi.get('adx', 0):.2f}",
+            f"- 交易信号: {indicators.get('signal', 'N/A')}",
+            "",
+            f"【综合评分】{score.get('total', 0):.1f}分 ({score.get('rating', '')})",
+            f"- B1={score.get('b1_score', 0)} 趋势={score.get('trend_score', 0)} 量价={score.get('volume_score', 0)} 风险={score.get('risk_score', 0)}",
+        ]
+    )
 
     reasons = score.get("reasons", [])
     if reasons:
@@ -246,19 +250,21 @@ def _build_user_prompt(analysis: dict[str, Any]) -> str:
     if warnings:
         lines.append(f"- 警告: {'; '.join(warnings[:4])}")
 
-    lines.extend([
-        "",
-        "【诊断结果】",
-        f"- 风险等级: {diagnosis.get('risk_level', 'N/A')}",
-        f"- 趋势: {diagnosis.get('trend_status', 'N/A')}",
-        f"- 价格位置: {diagnosis.get('price_position', 'N/A')}",
-        f"- 防卖飞: {diagnosis.get('sell_score', 0)}/5 {diagnosis.get('sell_score_desc', '')}",
-        f"- 麒麟会: {diagnosis.get('kirin_phase', 'N/A')}",
-        f"- 牛绳: {diagnosis.get('bull_rope', 'N/A')}",
-    ])
+    lines.extend(
+        [
+            "",
+            "【诊断结果】",
+            f"- 风险等级: {diagnosis.get('risk_level', 'N/A')}",
+            f"- 趋势: {diagnosis.get('trend_status', 'N/A')}",
+            f"- 价格位置: {diagnosis.get('price_position', 'N/A')}",
+            f"- 防卖飞: {diagnosis.get('sell_score', 0)}/5 {diagnosis.get('sell_score_desc', '')}",
+            f"- 麒麟会: {diagnosis.get('kirin_phase', 'N/A')}",
+            f"- 牛绳: {diagnosis.get('bull_rope', 'N/A')}",
+        ]
+    )
 
     if waves:
-        lines.append(f"- 三波: {waves.get('wave', 'N/A')} (置信度 {waves.get('confidence', 0)*100:.0f}%)")
+        lines.append(f"- 三波: {waves.get('wave', 'N/A')} (置信度 {waves.get('confidence', 0) * 100:.0f}%)")
 
     # 战法信号（最近 5 个）
     recent_signals = signals[:5]
@@ -266,25 +272,29 @@ def _build_user_prompt(analysis: dict[str, Any]) -> str:
         lines.append("")
         lines.append("【最近战法信号】")
         for s in recent_signals:
-            lines.append(f"- {s.get('strategy', '')} @ {s.get('date', '')} | {s.get('action', '')} | {s.get('description', '')[:60]}")
+            lines.append(
+                f"- {s.get('strategy', '')} @ {s.get('date', '')} | {s.get('action', '')} | {s.get('description', '')[:60]}"
+            )
 
     # 输出格式指令
-    lines.extend([
-        "",
-        "请按以下结构输出点评（控制在 500-800 字）：",
-        "",
-        "1. **开盘定性**（1-2句话概括当前状态）",
-        "2. **技术面解读**（指标之间的共振/矛盾关系，不是逐个念数字）",
-        "3. **战法信号**（当前信号意味着什么）",
-        "4. **操作建议**（具体的进场/止损/止盈规则，不要含糊其辞）",
-        "5. **Z哥金句**（一句收尾，要有你的风格）",
-        "",
-        "注意：",
-        "- 不要逐个指标念数据，要说指标之间的关系",
-        "- 不要说「建议关注」这种废话，给具体的操作规则",
-        "- 用你的风格说话，不要像AI",
-        "- 不要使用 markdown 标题（#），用加粗（**）标注小标题即可",
-    ])
+    lines.extend(
+        [
+            "",
+            "请按以下结构输出点评（控制在 500-800 字）：",
+            "",
+            "1. **开盘定性**（1-2句话概括当前状态）",
+            "2. **技术面解读**（指标之间的共振/矛盾关系，不是逐个念数字）",
+            "3. **战法信号**（当前信号意味着什么）",
+            "4. **操作建议**（具体的进场/止损/止盈规则，不要含糊其辞）",
+            "5. **Z哥金句**（一句收尾，要有你的风格）",
+            "",
+            "注意：",
+            "- 不要逐个指标念数据，要说指标之间的关系",
+            "- 不要说「建议关注」这种废话，给具体的操作规则",
+            "- 用你的风格说话，不要像AI",
+            "- 不要使用 markdown 标题（#），用加粗（**）标注小标题即可",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -330,6 +340,7 @@ def generate_commentary(analysis: dict[str, Any]) -> dict[str, Any]:
     start_ts = time.perf_counter()
     try:
         from modules.llm_providers import MiniMaxProvider
+
         provider = MiniMaxProvider()
         text = provider.generate(system_prompt, user_prompt, temperature=0.7)
         elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
@@ -349,7 +360,8 @@ def generate_commentary(analysis: dict[str, Any]) -> dict[str, Any]:
 
         # 过滤掉模型思考过程标签
         import re
-        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     except ValueError as e:
         elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
         try:

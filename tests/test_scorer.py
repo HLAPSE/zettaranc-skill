@@ -1,4 +1,5 @@
 """Tests for trading score (60% real + 40% LLM stub)."""
+
 import pytest
 
 from modules.self_optimizer.scorer import (
@@ -71,6 +72,7 @@ def test_total_score_combines_real_and_llm(good_monthly_stats, monkeypatch):
     """验证 60% 真实 + 40% LLM 加总公式."""
     # monkeypatch LLM 调用避免真打 API
     from modules.self_optimizer import scorer
+
     monkeypatch.setattr(scorer, "compute_llm_score", lambda proposed: 30.0)
     total, breakdown = compute_total_score("2026-05", good_monthly_stats, proposed={})
     # 60 分真实 + 30 分 LLM = 90

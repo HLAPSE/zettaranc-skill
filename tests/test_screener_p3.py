@@ -14,6 +14,7 @@ from tests.conftest import generate_uptrend_klines, generate_b1_scenario, make_d
 
 # ============ 工厂函数：构造特定量比场景 ============
 
+
 def generate_volume_ratio_super_attack(n=30, ts_code="600519.SH"):
     """构造超级攻击场景：量比 > 40 且涨"""
     rows = generate_uptrend_klines(n=n, ts_code=ts_code, daily_pct=0.1, vol_base=500)
@@ -73,6 +74,7 @@ def generate_sandglass_contraction(n=30, ts_code="600519.SH"):
 
 
 # ============ P3 指标接入测试 ============
+
 
 class TestP3VolumeRatioIntegration:
     """量比战法融入 score_volume_pattern 测试"""
@@ -155,24 +157,29 @@ class TestP3ScreenerCriteriaRegistry:
     def test_bull_rope_registered(self):
         """牛绳条件已在注册表"""
         from modules.screener import _CRITERIA_REGISTRY
+
         assert "bull_rope" in _CRITERIA_REGISTRY
 
     def test_sandglass_perfect_registered(self):
         """沙漏完美条件已在注册表"""
         from modules.screener import _CRITERIA_REGISTRY
+
         assert "sandglass_perfect" in _CRITERIA_REGISTRY
 
     def test_volume_ratio_super_registered(self):
         """量比超级条件已在注册表"""
         from modules.screener import _CRITERIA_REGISTRY
+
         assert "volume_ratio_super" in _CRITERIA_REGISTRY
 
     def test_centipede_hard_filter_exists(self):
         """蜈蚣图硬过滤存在"""
         from modules.screener import _check_centipede
+
         assert callable(_check_centipede)
 
     def test_sandglass_min_filter_exists(self):
         """沙漏最低分过滤存在"""
         from modules.screener import _check_sandglass_min
+
         assert callable(_check_sandglass_min)

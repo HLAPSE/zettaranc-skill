@@ -1,4 +1,5 @@
 """Tests for trading reflex blacklist (8 anti-patterns)."""
+
 import pytest
 
 from modules.self_optimizer.reflex_blacklist import (
@@ -9,6 +10,7 @@ from modules.self_optimizer.reflex_blacklist import (
 
 
 # 8 个反例的 fixture
+
 
 @pytest.fixture
 def proposed_with_poor_strategy():
@@ -25,9 +27,7 @@ def analysis_with_low_sample():
     """反例 #2: stock_count<5 强行评估."""
     return {
         "analysis": {
-            "strategy_stats": [
-                {"strategy_tags": "小盘", "stock_count": 3, "avg_return": 5.0, "avg_drawdown": 8.0}
-            ]
+            "strategy_stats": [{"strategy_tags": "小盘", "stock_count": 3, "avg_return": 5.0, "avg_drawdown": 8.0}]
         }
     }
 
@@ -57,20 +57,14 @@ def llm_input_with_self_reference():
 def execution_log_silent_exception():
     """反例 #5: 异常被 swallow 而非 raise."""
     return {
-        "execution_log": [
-            {"action": "analyze_strategy", "status": "failure", "raised": False, "message": "soft fail"}
-        ]
+        "execution_log": [{"action": "analyze_strategy", "status": "failure", "raised": False, "message": "soft fail"}]
     }
 
 
 @pytest.fixture
 def proposed_multi_strategy_mutation():
     """反例 #6: 单轮提议改动 >2 个策略标签."""
-    return {
-        "proposed": [
-            {"strategy": "A"}, {"strategy": "B"}, {"strategy": "C"}
-        ]
-    }
+    return {"proposed": [{"strategy": "A"}, {"strategy": "B"}, {"strategy": "C"}]}
 
 
 @pytest.fixture
@@ -78,8 +72,10 @@ def history_high_dryrun():
     """反例 #7: dry-run 比例 >30%."""
     return {
         "history": [
-            {"status": "dry_run"}, {"status": "dry_run"},
-            {"status": "dry_run"}, {"status": "keep"},
+            {"status": "dry_run"},
+            {"status": "dry_run"},
+            {"status": "dry_run"},
+            {"status": "keep"},
         ]
     }
 
@@ -87,12 +83,11 @@ def history_high_dryrun():
 @pytest.fixture
 def scoring_no_real_data():
     """反例 #8: 只用 LLM judge 未参考 monthly_reviews_self."""
-    return {
-        "scoring": {"real_weight": 0.0, "llm_weight": 1.0, "hard_rule_weight": 0.0}
-    }
+    return {"scoring": {"real_weight": 0.0, "llm_weight": 1.0, "hard_rule_weight": 0.0}}
 
 
 # 8 个单测
+
 
 def test_high_return_no_warning(proposed_with_poor_strategy):
     violations = check_all(proposed_with_poor_strategy)
@@ -143,7 +138,9 @@ def test_check_all_returns_empty_when_clean():
     """通过的反例集应返回空列表."""
     clean_ctx = {
         "proposed": [{"strategy": "X", "status": "good", "avg_return": 12.0, "avg_drawdown": 8.0, "stock_count": 20}],
-        "analysis": {"strategy_stats": [{"strategy_tags": "X", "stock_count": 20, "avg_return": 12.0, "avg_drawdown": 8.0}]},
+        "analysis": {
+            "strategy_stats": [{"strategy_tags": "X", "stock_count": 20, "avg_return": 12.0, "avg_drawdown": 8.0}]
+        },
         "llm_input": {"contains_harness_output": False},
         "execution_log": [{"status": "success", "raised": False}],
         "history": [{"status": "keep"}],

@@ -91,8 +91,10 @@ class TushareClient:
                 if attempt == max_retries - 1:
                     logger.error(f"[{api_name}] 最终调用失败: {e}")
                     return None
-                sleep_time = 2 ** attempt
-                logger.warning(f"[{api_name}] API 调用异常: {e}, 等待 {sleep_time} 秒后重试 ({attempt+1}/{max_retries})")
+                sleep_time = 2**attempt
+                logger.warning(
+                    f"[{api_name}] API 调用异常: {e}, 等待 {sleep_time} 秒后重试 ({attempt + 1}/{max_retries})"
+                )
                 time.sleep(sleep_time)
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
@@ -110,27 +112,17 @@ class TushareClient:
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """获取指数日线（如沪深300）"""
         return self._call_api_with_retry(
-            "get_index_daily",
-            self._pro.index_daily,
-            ts_code=ts_code, start_date=start_date, end_date=end_date
+            "get_index_daily", self._pro.index_daily, ts_code=ts_code, start_date=start_date, end_date=end_date
         )
 
     def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
         """获取 A 股实时行情"""
         ts_code_str = ",".join(ts_codes)
-        return self._call_api_with_retry(
-            "get_realtime_quote",
-            ts.realtime_quote,
-            ts_code=ts_code_str
-        )
+        return self._call_api_with_retry("get_realtime_quote", ts.realtime_quote, ts_code=ts_code_str)
 
     def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
         """获取个股资金流向"""
-        return self._call_api_with_retry(
-            "get_moneyflow",
-            self._pro.moneyflow,
-            ts_code=ts_code, trade_date=trade_date
-        )
+        return self._call_api_with_retry("get_moneyflow", self._pro.moneyflow, ts_code=ts_code, trade_date=trade_date)
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
         """获取股票基本信息"""
@@ -152,9 +144,7 @@ class TushareClient:
     def get_financial_data(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """获取财务指标"""
         return self._call_api_with_retry(
-            "get_financial_data",
-            self._pro.fina_indicator,
-            ts_code=ts_code, start_date=start_date, end_date=end_date
+            "get_financial_data", self._pro.fina_indicator, ts_code=ts_code, start_date=start_date, end_date=end_date
         )
 
     def get_trade_cal(self, exchange: str = "SSE", start_date: str = "", end_date: str = "") -> pd.DataFrame | None:

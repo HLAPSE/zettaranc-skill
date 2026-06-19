@@ -2,6 +2,7 @@
 
 用 ParamMutator 变异参数 → BacktestScorer 跑回测评分 → ratchet keep/revert.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -59,8 +60,13 @@ def run_round(
 
     if mutator is not None and current_best_params is not None:
         return _run_v2_round(
-            round_n, old_score, history, scorer, mutator,
-            current_best_params, timestamp,
+            round_n,
+            old_score,
+            history,
+            scorer,
+            mutator,
+            current_best_params,
+            timestamp,
         )
     return _run_v1_legacy_round(round_n, old_score, target, history, timestamp)
 

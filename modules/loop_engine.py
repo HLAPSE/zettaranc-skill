@@ -527,12 +527,14 @@ class ShaofuLoopEngine:
         # Step 5: 卤煮止盈
         if self._check_lu_zhu_internal(klines, day_idx):
             if self.config.lu_half:
-                trade.partial_exits.append({
-                    "date": klines[day_idx].trade_date,
-                    "price": current_price,
-                    "pnl_pct": pnl_pct,
-                    "type": "卤煮减半",
-                })
+                trade.partial_exits.append(
+                    {
+                        "date": klines[day_idx].trade_date,
+                        "price": current_price,
+                        "pnl_pct": pnl_pct,
+                        "type": "卤煮减半",
+                    }
+                )
                 trade.entry_reason += " [已卤煮减半]"
                 return trade, None
             else:
@@ -582,9 +584,7 @@ class ShaofuLoopEngine:
         if current_trade is not None and klines:
             last = klines[-1]
             pnl_pct = (last.close - current_trade.entry_price) / current_trade.entry_price * 100
-            completed_trades.append(
-                self._close_trade(current_trade, last.trade_date, last.close, "数据末尾", pnl_pct)
-            )
+            completed_trades.append(self._close_trade(current_trade, last.trade_date, last.close, "数据末尾", pnl_pct))
 
         return completed_trades
 

@@ -1,4 +1,5 @@
 """Tests for param_registry — 参数注册表结构性验证。"""
+
 import pytest
 
 from modules.self_optimizer.param_registry import (
@@ -67,8 +68,14 @@ def test_optimizable_list_format():
 def test_param_spec_is_frozen():
     """ParamSpec 是不可变的。"""
     spec = ParamSpec(
-        name="test", default=10, min=0, max=100, step=1,
-        category="entry", description="test", impact="test",
+        name="test",
+        default=10,
+        min=0,
+        max=100,
+        step=1,
+        category="entry",
+        description="test",
+        impact="test",
     )
     with pytest.raises(Exception):
         spec.default = 20  # frozen dataclass 应该报错
@@ -114,7 +121,9 @@ def test_registry_is_immutable():
     reg = get_registry()
     original_count = len(reg)
     reg["hacked"] = StrategyParamGroup(  # type: ignore[assignment]
-        strategy_name="hacked", display_name="hacked", description="",
+        strategy_name="hacked",
+        display_name="hacked",
+        description="",
     )
     assert len(get_registry()) == original_count
 

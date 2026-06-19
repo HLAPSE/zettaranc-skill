@@ -37,13 +37,13 @@ MutationStrategy = Literal["step", "random", "jitter"]
 class MutationRecord:
     """单次变异的完整记录。"""
 
-    strategy: str                     # 哪个策略（如 "b1"）
-    param_name: str                   # 哪个参数（如 "j_threshold"）
-    old_value: float | int            # 变异前
-    new_value: float | int            # 变异后
-    delta_pct: float                  # 变化百分比
-    mutation_type: MutationStrategy   # 变异策略
-    description: str                  # 人类可读的描述
+    strategy: str  # 哪个策略（如 "b1"）
+    param_name: str  # 哪个参数（如 "j_threshold"）
+    old_value: float | int  # 变异前
+    new_value: float | int  # 变异后
+    delta_pct: float  # 变化百分比
+    mutation_type: MutationStrategy  # 变异策略
+    description: str  # 人类可读的描述
 
     @property
     def delta(self) -> float | int:
@@ -94,8 +94,12 @@ class ParamMutator:
         candidate = self._pick_param(strategy_filter, param_filter)
         if candidate is None:
             return current_params, MutationRecord(
-                strategy="", param_name="", old_value=0, new_value=0,
-                delta_pct=0.0, mutation_type=strategy,
+                strategy="",
+                param_name="",
+                old_value=0,
+                new_value=0,
+                delta_pct=0.0,
+                mutation_type=strategy,
                 description="无可用参数（可能 registry 为空）",
             )
         strategy_name, param_name, spec = candidate
@@ -117,9 +121,7 @@ class ParamMutator:
             new_val = self._random_mutate(spec)
 
         # 构建新参数集
-        new_params = {
-            sname: dict(params) for sname, params in current_params.items()
-        }
+        new_params = {sname: dict(params) for sname, params in current_params.items()}
         if strategy_name not in new_params:
             new_params[strategy_name] = {}
         new_params[strategy_name][param_name] = new_val
@@ -133,10 +135,7 @@ class ParamMutator:
             new_value=new_val,
             delta_pct=round(pct, 2),
             mutation_type=strategy,
-            description=(
-                f"{strategy_name}.{param_name}: {old_val} → {new_val} "
-                f"({pct:+.1f}%) [{spec.description}]"
-            ),
+            description=(f"{strategy_name}.{param_name}: {old_val} → {new_val} ({pct:+.1f}%) [{spec.description}]"),
         )
         self.history.append(record)
         return new_params, record
@@ -156,9 +155,7 @@ class ParamMutator:
         records: list[MutationRecord] = []
         # 收集可用的参数
         all_params = [
-            (s, p, spec)
-            for s, p, spec in self._iter_params()
-            if strategy_filter is None or s == strategy_filter
+            (s, p, spec) for s, p, spec in self._iter_params() if strategy_filter is None or s == strategy_filter
         ]
         if not all_params:
             return params, records
@@ -167,17 +164,17 @@ class ParamMutator:
         for s, p, spec in chosen:
             # 构造一个临时的 filter 来 mutate 特定参数
             params, rec = self.mutate_one(
-                params, strategy=strategy,
-                strategy_filter=s, param_filter=p,
+                params,
+                strategy=strategy,
+                strategy_filter=s,
+                param_filter=p,
             )
             records.append(rec)
         return params, records
 
     def reset_to_defaults(self) -> dict[str, dict[str, float | int]]:
         """回到出厂默认值。"""
-        return {
-            sname: dict(params) for sname, params in self._defaults.items()
-        }
+        return {sname: dict(params) for sname, params in self._defaults.items()}
 
     @property
     def mutation_count(self) -> int:

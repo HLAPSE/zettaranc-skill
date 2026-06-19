@@ -131,9 +131,7 @@ def backtest_signals(
                 exit_price = _stop_loss_price(current_trade.entry_price, stop_loss_pct)
                 current_trade.exit_date = date
                 current_trade.exit_price = exit_price
-                current_trade.pnl, current_trade.pnl_pct = _calc_pnl(
-                    current_trade.entry_price, exit_price
-                )
+                current_trade.pnl, current_trade.pnl_pct = _calc_pnl(current_trade.entry_price, exit_price)
                 current_trade.exit_reason = "stop_loss"
                 result.trades.append(current_trade)
                 current_trade = None
@@ -143,9 +141,7 @@ def backtest_signals(
                 exit_price = _take_profit_price(current_trade.entry_price, take_profit_pct)
                 current_trade.exit_date = date
                 current_trade.exit_price = exit_price
-                current_trade.pnl, current_trade.pnl_pct = _calc_pnl(
-                    current_trade.entry_price, exit_price
-                )
+                current_trade.pnl, current_trade.pnl_pct = _calc_pnl(current_trade.entry_price, exit_price)
                 current_trade.exit_reason = "take_profit"
                 result.trades.append(current_trade)
                 current_trade = None
@@ -168,8 +164,12 @@ def backtest_signals(
         # 卖出信号
         elif sig.action == "SELL" and current_trade is not None:
             trade = _make_trade(
-                ts_code, current_trade.entry_date, current_trade.entry_price,
-                date, price, "signal",
+                ts_code,
+                current_trade.entry_date,
+                current_trade.entry_price,
+                date,
+                price,
+                "signal",
             )
             result.trades.append(trade)
             current_trade = None
@@ -178,8 +178,12 @@ def backtest_signals(
     if current_trade is not None and klines:
         last = klines[-1]
         trade = _make_trade(
-            ts_code, current_trade.entry_date, current_trade.entry_price,
-            last["trade_date"], last["close"], "end_of_data",
+            ts_code,
+            current_trade.entry_date,
+            current_trade.entry_price,
+            last["trade_date"],
+            last["close"],
+            "end_of_data",
         )
         result.trades.append(trade)
 
@@ -241,6 +245,7 @@ def backtest_strategy(
     try:
         from modules.self_optimizer.param_registry import get_active_param
     except ImportError:
+
         def get_active_param(s, n, d):
             return d  # fallback
 
@@ -349,9 +354,9 @@ def _calc_pnl(entry_price: float, exit_price: float, shares: int = 1) -> tuple[f
     return pnl, pnl_pct
 
 
-def _make_trade(ts_code: str, entry_date: str, entry_price: float,
-                exit_date: str, exit_price: float, reason: str,
-                shares: int = 1) -> Trade:
+def _make_trade(
+    ts_code: str, entry_date: str, entry_price: float, exit_date: str, exit_price: float, reason: str, shares: int = 1
+) -> Trade:
     """构建 Trade 记录（统一创建入口，避免各方法手写 Trade(...)）"""
     pnl, pnl_pct = _calc_pnl(entry_price, exit_price, shares)
     return Trade(
@@ -498,8 +503,13 @@ def backtest_multi_strategy(
                 exit_price = _stop_loss_price(position.entry_price, stop_loss_pct)
                 cash += position.shares * exit_price
                 trade = _make_trade(
-                    ts_code, position.entry_date, position.entry_price,
-                    date, exit_price, "stop_loss", position.shares,
+                    ts_code,
+                    position.entry_date,
+                    position.entry_price,
+                    date,
+                    exit_price,
+                    "stop_loss",
+                    position.shares,
                 )
                 result.trades.append(trade)
                 position = None
@@ -511,8 +521,13 @@ def backtest_multi_strategy(
                 exit_price = _take_profit_price(position.entry_price, take_profit_pct)
                 cash += position.shares * exit_price
                 trade = _make_trade(
-                    ts_code, position.entry_date, position.entry_price,
-                    date, exit_price, "take_profit", position.shares,
+                    ts_code,
+                    position.entry_date,
+                    position.entry_price,
+                    date,
+                    exit_price,
+                    "take_profit",
+                    position.shares,
                 )
                 result.trades.append(trade)
                 position = None
@@ -555,8 +570,13 @@ def backtest_multi_strategy(
         elif top_signal.action == "SELL" and position is not None:
             cash += position.shares * price
             trade = _make_trade(
-                ts_code, position.entry_date, position.entry_price,
-                date, price, "signal", position.shares,
+                ts_code,
+                position.entry_date,
+                position.entry_price,
+                date,
+                price,
+                "signal",
+                position.shares,
             )
             result.trades.append(trade)
             position = None
@@ -570,8 +590,13 @@ def backtest_multi_strategy(
         exit_price = last["close"]
         cash += position.shares * exit_price
         trade = _make_trade(
-            ts_code, position.entry_date, position.entry_price,
-            last["trade_date"], exit_price, "end_of_data", position.shares,
+            ts_code,
+            position.entry_date,
+            position.entry_price,
+            last["trade_date"],
+            exit_price,
+            "end_of_data",
+            position.shares,
         )
         result.trades.append(trade)
         position = None
@@ -661,8 +686,13 @@ def backtest_portfolio(
                 exit_price = _stop_loss_price(pos.entry_price, stop_loss_pct)
                 cash += pos.shares * exit_price
                 trade = _make_trade(
-                    ts_code, pos.entry_date, pos.entry_price,
-                    date, exit_price, "stop_loss", pos.shares,
+                    ts_code,
+                    pos.entry_date,
+                    pos.entry_price,
+                    date,
+                    exit_price,
+                    "stop_loss",
+                    pos.shares,
                 )
                 result.trades.append(trade)
                 data["position"] = None
@@ -672,8 +702,13 @@ def backtest_portfolio(
                 exit_price = _take_profit_price(pos.entry_price, take_profit_pct)
                 cash += pos.shares * exit_price
                 trade = _make_trade(
-                    ts_code, pos.entry_date, pos.entry_price,
-                    date, exit_price, "take_profit", pos.shares,
+                    ts_code,
+                    pos.entry_date,
+                    pos.entry_price,
+                    date,
+                    exit_price,
+                    "take_profit",
+                    pos.shares,
                 )
                 result.trades.append(trade)
                 data["position"] = None
@@ -723,8 +758,13 @@ def backtest_portfolio(
             elif top_signal.action == "SELL" and pos is not None:
                 cash += pos.shares * price
                 trade = _make_trade(
-                    ts_code, pos.entry_date, pos.entry_price,
-                    date, price, "signal", pos.shares,
+                    ts_code,
+                    pos.entry_date,
+                    pos.entry_price,
+                    date,
+                    price,
+                    "signal",
+                    pos.shares,
                 )
                 result.trades.append(trade)
                 data["position"] = None
@@ -747,8 +787,13 @@ def backtest_portfolio(
         exit_price = last["close"]
         cash += pos.shares * exit_price
         trade = _make_trade(
-            ts_code, pos.entry_date, pos.entry_price,
-            last["trade_date"], exit_price, "end_of_data", pos.shares,
+            ts_code,
+            pos.entry_date,
+            pos.entry_price,
+            last["trade_date"],
+            exit_price,
+            "end_of_data",
+            pos.shares,
         )
         result.trades.append(trade)
         data["position"] = None

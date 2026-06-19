@@ -130,6 +130,7 @@ def _get_indicator_funcs() -> SimpleNamespace:
             detect_trade_signal,
             calculate_dmi,
         )
+
         _INDICATOR_FUNCS = SimpleNamespace(
             get_kline_data=get_kline_data,
             precompute_kdj_sequence=precompute_kdj_sequence,
@@ -247,39 +248,65 @@ def _compute_day_indicators(
         "vol": today.vol,
         "pct_chg": today.pct_chg,
         # KDJ
-        "k": k, "d": d, "j": j,
+        "k": k,
+        "d": d,
+        "j": j,
         # MACD
-        "dif": dif, "dea": dea, "macd_hist": macd_hist,
+        "dif": dif,
+        "dea": dea,
+        "macd_hist": macd_hist,
         # 均线
-        "bbi": bbi, "ma5": ma5, "ma10": ma10, "ma20": ma20, "ma60": ma60,
+        "bbi": bbi,
+        "ma5": ma5,
+        "ma10": ma10,
+        "ma20": ma20,
+        "ma60": ma60,
         # RSI / WR
-        "rsi6": rsi6, "rsi12": rsi12, "rsi24": rsi24,
-        "wr5": wr5, "wr10": wr10,
+        "rsi6": rsi6,
+        "rsi12": rsi12,
+        "rsi24": rsi24,
+        "wr5": wr5,
+        "wr10": wr10,
         # 布林带
-        "boll_mid": boll_mid, "boll_upper": boll_upper, "boll_lower": boll_lower,
-        "boll_width": boll_width, "boll_position": boll_pos,
+        "boll_mid": boll_mid,
+        "boll_upper": boll_upper,
+        "boll_lower": boll_lower,
+        "boll_width": boll_width,
+        "boll_position": boll_pos,
         # 量比
         "vol_ratio": vol_ratio,
         # 双线
-        "zg_white": zg_white, "dg_yellow": dg_yellow,
-        "gold_cross": gold_cross, "dead_cross": dead_cross,
+        "zg_white": zg_white,
+        "dg_yellow": dg_yellow,
+        "gold_cross": gold_cross,
+        "dead_cross": dead_cross,
         # 单针
-        "rsl_short": rsl_short, "rsl_long": rsl_long, "is_needle": is_needle,
+        "rsl_short": rsl_short,
+        "rsl_long": rsl_long,
+        "is_needle": is_needle,
         # 砖型
-        "brick_value": brick_value, "brick_trend": brick_trend,
-        "brick_count": brick_count, "brick_trend_up": brick_trend_up, "is_fanbao": is_fanbao,
+        "brick_value": brick_value,
+        "brick_trend": brick_trend,
+        "brick_count": brick_count,
+        "brick_trend_up": brick_trend_up,
+        "is_fanbao": is_fanbao,
         # 量价信号
-        "is_beidou": is_beidou, "is_suoliang": is_suoliang,
+        "is_beidou": is_beidou,
+        "is_suoliang": is_suoliang,
         "is_jiayin_zhenyang": is_jiayin_zhenyang,
         "is_jiayang_zhenyin": is_jiayang_zhenyin,
         "is_fangliang_yinxian": is_fangliang_yinxian,
         # 卖出
-        "sell_score": sell_score, "sell_reason": sell_reason,
+        "sell_score": sell_score,
+        "sell_reason": sell_reason,
         "signal_desc": signal_desc,
         # 关键价位
-        "prev_high": prev_high, "prev_low": prev_low,
+        "prev_high": prev_high,
+        "prev_low": prev_low,
         # DMI
-        "dmi_plus": dmi_plus, "dmi_minus": dmi_minus, "adx": adx,
+        "dmi_plus": dmi_plus,
+        "dmi_minus": dmi_minus,
+        "adx": adx,
     }
 
 
@@ -310,28 +337,60 @@ def _build_indicator_row(ts_code: str, ind: dict[str, Any]) -> tuple:
     """
     return (
         ts_code,
-        ind["close"], ind["open"], ind["high"], ind["low"], ind["vol"], ind["pct_chg"],
-        ind["k"], ind["d"], ind["j"],
-        ind["dif"], ind["dea"], ind["macd_hist"],
+        ind["close"],
+        ind["open"],
+        ind["high"],
+        ind["low"],
+        ind["vol"],
+        ind["pct_chg"],
+        ind["k"],
+        ind["d"],
+        ind["j"],
+        ind["dif"],
+        ind["dea"],
+        ind["macd_hist"],
         ind["bbi"],
-        ind["ma5"], ind["ma10"], ind["ma20"], ind["ma60"],
-        ind["rsi6"], ind["rsi12"], ind["rsi24"],
-        ind["wr5"], ind["wr10"],
-        ind["boll_mid"], ind["boll_upper"], ind["boll_lower"],
-        ind["boll_width"], ind["boll_position"],
+        ind["ma5"],
+        ind["ma10"],
+        ind["ma20"],
+        ind["ma60"],
+        ind["rsi6"],
+        ind["rsi12"],
+        ind["rsi24"],
+        ind["wr5"],
+        ind["wr10"],
+        ind["boll_mid"],
+        ind["boll_upper"],
+        ind["boll_lower"],
+        ind["boll_width"],
+        ind["boll_position"],
         ind["vol_ratio"],
-        ind["zg_white"], ind["dg_yellow"],
-        int(ind["gold_cross"]), int(ind["dead_cross"]),
-        ind["rsl_short"], ind["rsl_long"], int(ind["is_needle"]),
-        ind["brick_value"], ind["brick_trend"], ind["brick_count"],
-        int(ind["brick_trend_up"]), int(ind["is_fanbao"]),
-        int(ind["is_beidou"]), int(ind["is_suoliang"]),
-        int(ind["is_jiayin_zhenyang"]), int(ind["is_jiayang_zhenyin"]),
+        ind["zg_white"],
+        ind["dg_yellow"],
+        int(ind["gold_cross"]),
+        int(ind["dead_cross"]),
+        ind["rsl_short"],
+        ind["rsl_long"],
+        int(ind["is_needle"]),
+        ind["brick_value"],
+        ind["brick_trend"],
+        ind["brick_count"],
+        int(ind["brick_trend_up"]),
+        int(ind["is_fanbao"]),
+        int(ind["is_beidou"]),
+        int(ind["is_suoliang"]),
+        int(ind["is_jiayin_zhenyang"]),
+        int(ind["is_jiayang_zhenyin"]),
         int(ind["is_fangliang_yinxian"]),
-        ind["sell_score"], ind["sell_reason"],
-        ind["signal_desc"], ind["signal_desc"],  # signal, signal_desc 当前复用同一值
-        ind["prev_high"], ind["prev_low"],
-        ind["dmi_plus"], ind["dmi_minus"], ind["adx"],
+        ind["sell_score"],
+        ind["sell_reason"],
+        ind["signal_desc"],
+        ind["signal_desc"],  # signal, signal_desc 当前复用同一值
+        ind["prev_high"],
+        ind["prev_low"],
+        ind["dmi_plus"],
+        ind["dmi_minus"],
+        ind["adx"],
         0,  # net_lg_mf（暂未实现）
         0,  # net_elg_mf（暂未实现）
         None,  # last_b1_date（暂未实现）
@@ -386,8 +445,10 @@ class DataSyncer:
             except Exception as e:
                 if attempt == max_retries - 1:
                     raise e
-                sleep_time = 2 ** attempt
-                logger.warning(f"[{api_name}] API 调用异常: {e}, 等待 {sleep_time} 秒后重试 ({attempt+1}/{max_retries})")
+                sleep_time = 2**attempt
+                logger.warning(
+                    f"[{api_name}] API 调用异常: {e}, 等待 {sleep_time} 秒后重试 ({attempt + 1}/{max_retries})"
+                )
                 time.sleep(sleep_time)
 
     def _log_sync(self, data_type: str, ts_code: str | None, last_date: str, status: str, message: str = ""):
@@ -498,7 +559,9 @@ class DataSyncer:
             df = self._call_api_with_retry(
                 "stock_basic",
                 self.pro.stock_basic,
-                exchange="", list_status="L", fields="ts_code,name,area,industry,market,list_date,is_hs"
+                exchange="",
+                list_status="L",
+                fields="ts_code,name,area,industry,market,list_date,is_hs",
             )
 
             if df is None or len(df) == 0:
@@ -691,7 +754,9 @@ class DataSyncer:
             else:
                 macd_dif_seq = macd_dea_seq = macd_hist_seq = None
 
-            insert_sql = f"INSERT OR REPLACE INTO indicator_cache ({_INDICATOR_INSERT_COLUMNS}) VALUES ({','.join(['?'] * 60)})"
+            insert_sql = (
+                f"INSERT OR REPLACE INTO indicator_cache ({_INDICATOR_INSERT_COLUMNS}) VALUES ({','.join(['?'] * 60)})"
+            )
 
             with get_connection() as conn:
                 cursor = conn.cursor()
@@ -700,8 +765,15 @@ class DataSyncer:
                     yesterday = sub_klines[-2] if len(sub_klines) > 1 else None
 
                     ind = _compute_day_indicators(
-                        f, sub_klines, kline, yesterday,
-                        kdj_seq, macd_dif_seq, macd_dea_seq, macd_hist_seq, i,
+                        f,
+                        sub_klines,
+                        kline,
+                        yesterday,
+                        kdj_seq,
+                        macd_dif_seq,
+                        macd_dea_seq,
+                        macd_hist_seq,
+                        i,
                     )
                     row = _build_indicator_row(ts_code, ind)
                     cursor.execute(insert_sql, row)
@@ -767,9 +839,7 @@ class DataSyncer:
                 end_date = datetime.now().strftime("%Y%m%d")
 
             df = self._call_api_with_retry(
-                "stk_factor",
-                self.pro.stk_factor,
-                ts_code=ts_code, start_date=start_date, end_date=end_date
+                "stk_factor", self.pro.stk_factor, ts_code=ts_code, start_date=start_date, end_date=end_date
             )
 
             if df is None or len(df) == 0:
@@ -832,9 +902,7 @@ class DataSyncer:
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
-        return self._batch_sync(
-            "Tushare指标", lambda code: self.sync_stk_factor(code, start_date, end_date), ts_codes
-        )
+        return self._batch_sync("Tushare指标", lambda code: self.sync_stk_factor(code, start_date, end_date), ts_codes)
 
     # ==================== 每日估值指标 (PE/PB/PS) ====================
 
@@ -931,9 +999,7 @@ class DataSyncer:
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
-        return self._batch_sync(
-            "估值指标", lambda code: self.sync_daily_basic(code, start_date, end_date), ts_codes
-        )
+        return self._batch_sync("估值指标", lambda code: self.sync_daily_basic(code, start_date, end_date), ts_codes)
 
     # ==================== 资金流向 ====================
 

@@ -83,11 +83,7 @@ def run_watchlist_monitor(sync_days: int = 30, enable_push: bool = True) -> dict
         logger.info("发现警报，触发多通路主动推送...")
         notify_all(title=title, message=summary_msg)
 
-    return {
-        "alerts_count": len(alerts),
-        "summary": summary,
-        "status": "success"
-    }
+    return {"alerts_count": len(alerts), "summary": summary, "status": "success"}
 
 
 def main():
@@ -99,10 +95,7 @@ def main():
     args = p.parse_args()
 
     # 配置基础日志输出到控制台
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
     res = run_watchlist_monitor(sync_days=args.days, enable_push=not args.no_push)
     print(f"扫描完毕。状态: {res['status']}, 警报数: {res.get('alerts_count', 0)}")

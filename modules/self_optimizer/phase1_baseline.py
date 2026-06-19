@@ -1,4 +1,5 @@
 """Phase 1: baseline score from monthly_reviews_self + LLM judge stub."""
+
 from __future__ import annotations
 
 from typing import Any

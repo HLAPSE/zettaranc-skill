@@ -293,10 +293,15 @@ class ReviewGenerator:
     # ==================== 文本生成（参数化模板，消除三处同构 if-else） ====================
 
     def _generate_review_summary(
-        self, ts_code: str, monthly_return: float | None,
-        max_drawdown: float, max_gain: float,
-        buy_signals_count: int, sell_signals_count: int,
-        correct_buy_signals: int, correct_sell_signals: int,
+        self,
+        ts_code: str,
+        monthly_return: float | None,
+        max_drawdown: float,
+        max_gain: float,
+        buy_signals_count: int,
+        sell_signals_count: int,
+        correct_buy_signals: int,
+        correct_sell_signals: int,
     ) -> str:
         """生成复盘总结"""
         parts = []
@@ -319,18 +324,19 @@ class ReviewGenerator:
         return "；".join(parts)
 
     def _generate_lessons_learned(
-        self, ts_code: str, monthly_return: float | None,
-        max_drawdown: float, buy_signals_count: int, correct_buy_signals: int,
+        self,
+        ts_code: str,
+        monthly_return: float | None,
+        max_drawdown: float,
+        buy_signals_count: int,
+        correct_buy_signals: int,
     ) -> str:
         """生成经验教训"""
         # (条件, 输出) 规则表
         rules: list[tuple[bool, str]] = [
-            (monthly_return is not None and monthly_return < -5,
-             "月度亏损较大，需要加强止损纪律"),
-            (monthly_return is not None and monthly_return > 10,
-             "月度收益良好，但要注意止盈"),
-            (max_drawdown > 15,
-             "最大回撤过大，需要优化仓位管理"),
+            (monthly_return is not None and monthly_return < -5, "月度亏损较大，需要加强止损纪律"),
+            (monthly_return is not None and monthly_return > 10, "月度收益良好，但要注意止盈"),
+            (max_drawdown > 15, "最大回撤过大，需要优化仓位管理"),
         ]
         if buy_signals_count > 0:
             acc = correct_buy_signals / buy_signals_count * 100
@@ -343,17 +349,18 @@ class ReviewGenerator:
         return "；".join(lessons)
 
     def _generate_adjustment_suggestions(
-        self, ts_code: str, monthly_return: float | None,
-        max_drawdown: float, buy_signals_count: int, correct_buy_signals: int,
+        self,
+        ts_code: str,
+        monthly_return: float | None,
+        max_drawdown: float,
+        buy_signals_count: int,
+        correct_buy_signals: int,
     ) -> str:
         """生成策略调整建议"""
         rules: list[tuple[bool, str]] = [
-            (monthly_return is not None and monthly_return < -5,
-             "收紧止损条件，降低单笔亏损"),
-            (monthly_return is not None and monthly_return > 10,
-             "考虑增加仓位，扩大收益"),
-            (max_drawdown > 15,
-             "降低单票仓位，分散风险"),
+            (monthly_return is not None and monthly_return < -5, "收紧止损条件，降低单笔亏损"),
+            (monthly_return is not None and monthly_return > 10, "考虑增加仓位，扩大收益"),
+            (max_drawdown > 15, "降低单票仓位，分散风险"),
         ]
         if buy_signals_count > 0:
             acc = correct_buy_signals / buy_signals_count * 100

@@ -45,12 +45,7 @@ def notify_feishu(webhook_url: str, title: str, message: str) -> bool:
     if not webhook_url:
         return False
     try:
-        payload = {
-            "msg_type": "text",
-            "content": {
-                "text": f"🔔 【{title}】\n{message}"
-            }
-        }
+        payload = {"msg_type": "text", "content": {"text": f"🔔 【{title}】\n{message}"}}
         headers = {"Content-Type": "application/json"}
         resp = requests.post(webhook_url, json=payload, headers=headers, timeout=10)
         resp.raise_for_status()
@@ -90,6 +85,7 @@ def notify_all(title: str, message: str, webhook_url: str | None = None) -> dict
 
 if __name__ == "__main__":
     import sys
+
     # 简单自测
     print("测试发送 macOS 通知...")
     res = notify_all("Z哥量化测试", "这是一条测试警报，一切正常！")

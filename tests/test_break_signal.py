@@ -1,4 +1,5 @@
 """Tests for break signal (连续 2 轮 Δ<2 → stop)."""
+
 from modules.self_optimizer.phase2_hillclimb import (
     RoundResult,
     check_break_signal,

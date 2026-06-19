@@ -28,18 +28,22 @@ _CRITERIA_REGISTRY: dict[str, CriteriaFn] = {}
 
 def _register(name: str):
     """装饰器：注册筛选条件处理函数"""
+
     def decorator(fn: CriteriaFn) -> CriteriaFn:
         _CRITERIA_REGISTRY[name] = fn
         return fn
+
     return decorator
 
 
 # ---------- 硬过滤 ----------
 
+
 def _check_centipede(klines) -> bool:
     """蜈蚣图硬过滤：呼吸紊乱的票直接排除"""
     try:
         from .indicators import detect_centipede_pattern
+
         return bool(detect_centipede_pattern(klines).get("is_centipede"))
     except Exception:
         return False
@@ -49,12 +53,14 @@ def _check_sandglass_min(klines, min_score: int = 50) -> bool:
     """沙漏最低分过滤"""
     try:
         from .indicators import calculate_sandglass_score
+
         return calculate_sandglass_score(klines).get("score", 0) < min_score
     except Exception:
         return False
 
 
 # ---------- 基础评分条件 ----------
+
 
 @_register("b1")
 def _criteria_b1(klines, score: "StockScore") -> bool:
@@ -78,9 +84,11 @@ def _criteria_breakout(klines, score: "StockScore") -> bool:
 
 # ---------- 高级战法条件 ----------
 
+
 @_register("super_b1")
 def _criteria_super_b1(klines, score: "StockScore") -> bool:
     from .strategies import detect_sb1
+
     for i in range(max(10, len(klines) - 5), len(klines)):
         sig = detect_sb1(klines, i)
         if sig:
@@ -92,6 +100,7 @@ def _criteria_super_b1(klines, score: "StockScore") -> bool:
 @_register("changan")
 def _criteria_changan(klines, score: "StockScore") -> bool:
     from .strategies import detect_changan
+
     for i in range(max(3, len(klines) - 5), len(klines)):
         sig = detect_changan(klines, i)
         if sig:
@@ -103,6 +112,7 @@ def _criteria_changan(klines, score: "StockScore") -> bool:
 @_register("b2_breakout")
 def _criteria_b2_breakout(klines, score: "StockScore") -> bool:
     from .strategies import detect_b2
+
     for i in range(max(15, len(klines) - 5), len(klines)):
         sig = detect_b2(klines, i)
         if sig:
@@ -114,6 +124,7 @@ def _criteria_b2_breakout(klines, score: "StockScore") -> bool:
 @_register("b3_consensus")
 def _criteria_b3_consensus(klines, score: "StockScore") -> bool:
     from .strategies import detect_b3
+
     for i in range(max(20, len(klines) - 5), len(klines)):
         sig = detect_b3(klines, i)
         if sig:
@@ -124,9 +135,11 @@ def _criteria_b3_consensus(klines, score: "StockScore") -> bool:
 
 # ---------- P2 指标（三波/麒麟） ----------
 
+
 @_register("build_wave")
 def _criteria_build_wave(klines, score: "StockScore") -> bool:
     from .indicators import detect_three_waves
+
     wave = detect_three_waves(klines)
     if wave["wave"] == "建仓波" and wave["confidence"] >= 0.5:
         score.reasons.append(f"建仓波(conf={wave['confidence']})")
@@ -137,6 +150,7 @@ def _criteria_build_wave(klines, score: "StockScore") -> bool:
 @_register("xishou")
 def _criteria_xishou(klines, score: "StockScore") -> bool:
     from .indicators import detect_kirin_stage
+
     kirin = detect_kirin_stage(klines)
     if kirin["stage"] == "吸筹" and kirin["confidence"] >= 0.5:
         score.reasons.append(f"吸筹({kirin['sub_type']}, conf={kirin['confidence']})")
@@ -147,6 +161,7 @@ def _criteria_xishou(klines, score: "StockScore") -> bool:
 @_register("safe")
 def _criteria_safe(klines, score: "StockScore") -> bool:
     from .indicators import detect_three_waves, detect_kirin_stage
+
     wave = detect_three_waves(klines)
     kirin = detect_kirin_stage(klines)
     is_safe = wave["wave"] != "冲刺波" and kirin["stage"] not in ("派发", "回落")
@@ -157,9 +172,11 @@ def _criteria_safe(klines, score: "StockScore") -> bool:
 
 # ---------- P3 指标 ----------
 
+
 @_register("bull_rope")
 def _criteria_bull_rope(klines, score: "StockScore") -> bool:
     from .indicators import detect_bull_rope
+
     daily_klines = _dict_to_daily(klines)
     rope = detect_bull_rope(daily_klines)
     if rope.get("status") == "牵牛" and rope.get("is_bullish"):
@@ -171,6 +188,7 @@ def _criteria_bull_rope(klines, score: "StockScore") -> bool:
 @_register("sandglass_perfect")
 def _criteria_sandglass_perfect(klines, score: "StockScore") -> bool:
     from .indicators import calculate_sandglass_score
+
     daily_klines = _dict_to_daily(klines)
     sg = calculate_sandglass_score(daily_klines)
     if sg.get("is_perfect") or sg.get("score", 0) >= 80:
@@ -182,6 +200,7 @@ def _criteria_sandglass_perfect(klines, score: "StockScore") -> bool:
 @_register("volume_ratio_super")
 def _criteria_volume_ratio_super(klines, score: "StockScore") -> bool:
     from .indicators import detect_volume_ratio_strategy
+
     daily_klines = _dict_to_daily(klines)
     vr = detect_volume_ratio_strategy(daily_klines)
     if vr.get("action") == "立即买" or vr.get("scenario") in ("超级攻击", "攻击日", "单向拉升"):
@@ -570,6 +589,7 @@ def score_volume_pattern(klines: list) -> tuple[float, list[str]]:
     # ========== P3 升级：量比战法 6 场景判定（优先于简单量比计算）==========
     try:
         from .indicators import detect_volume_ratio_strategy
+
         vr = detect_volume_ratio_strategy(klines)
         scenario = vr.get("scenario", "")
         action = vr.get("action", "")

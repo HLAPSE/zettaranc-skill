@@ -155,9 +155,9 @@ def test_screen_calls_screen_stocks_not_self_loop(fake_screen_result, capsys):
     assert mock_screen.called
     # 裸 StockScore 构造（无 K 线参数）不应该被调——这正是 v2.9.0 bug 的触发点
     # 如果未来有人重新引入自写循环，StockScore(ts_code) 会被大量调
-    assert (
-        mock_bare_score.call_count == 0
-    ), f"cmd_screen 仍调用 StockScore() 自写循环（{mock_bare_score.call_count} 次）"
+    assert mock_bare_score.call_count == 0, (
+        f"cmd_screen 仍调用 StockScore() 自写循环（{mock_bare_score.call_count} 次）"
+    )
 
 
 def test_screen_limit_zero_means_full_market(fake_screen_result, capsys):

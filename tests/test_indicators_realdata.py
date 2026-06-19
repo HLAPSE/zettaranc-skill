@@ -138,9 +138,9 @@ def test_macd_dif_vs_stk_factor(merged):
     mean_diff = merged["macd_dif_diff_pct"].mean()
     max_diff = merged["macd_dif_diff_pct"].max()
 
-    assert (
-        median_diff < DIFF_TOLERANCE
-    ), f"MACD.dif 中位数 diff {median_diff:.2%} > {DIFF_TOLERANCE:.0%}（mean={mean_diff:.2%} max={max_diff:.2%}）"
+    assert median_diff < DIFF_TOLERANCE, (
+        f"MACD.dif 中位数 diff {median_diff:.2%} > {DIFF_TOLERANCE:.0%}（mean={mean_diff:.2%} max={max_diff:.2%}）"
+    )
 
 
 def test_macd_dea_vs_stk_factor(merged):

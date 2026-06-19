@@ -2,6 +2,7 @@
 
 V1 stub: 返回固定值. V1.1+ 接 modules/llm_providers.py.
 """
+
 from __future__ import annotations
 
 from typing import Any

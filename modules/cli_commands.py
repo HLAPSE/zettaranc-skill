@@ -484,8 +484,13 @@ def _daily_step_watchlist(report: dict) -> list:
             "break_count": summary.get("break_count", 0),
             "abnormal_count": summary.get("abnormal_count", 0),
             "alerts": [
-                {"ts_code": a.ts_code, "name": a.name, "alert_type": a.alert_type,
-                 "level": a.level, "message": a.message}
+                {
+                    "ts_code": a.ts_code,
+                    "name": a.name,
+                    "alert_type": a.alert_type,
+                    "level": a.level,
+                    "message": a.message,
+                }
                 for a in alerts
             ],
         }
@@ -493,11 +498,15 @@ def _daily_step_watchlist(report: dict) -> list:
 
         for a in alerts:
             if a.alert_type in ("B1", "B2", "EXIT"):
-                report["signals"].append({
-                    "ts_code": a.ts_code, "name": a.name,
-                    "signal": a.alert_type, "message": a.message,
-                    "source": "watchlist",
-                })
+                report["signals"].append(
+                    {
+                        "ts_code": a.ts_code,
+                        "name": a.name,
+                        "signal": a.alert_type,
+                        "message": a.message,
+                        "source": "watchlist",
+                    }
+                )
         return watches
     except Exception as e:
         _warn(f"观察池扫描失败: {e}")
@@ -514,17 +523,24 @@ def _daily_step_screener(report: dict) -> None:
         top_picks = []
         for s in top_picks_raw[:10]:
             pick = {
-                "ts_code": s.ts_code, "name": s.name,
-                "score": round(s.score, 1), "b1_score": round(s.b1_score, 1),
-                "trend_score": round(s.trend_score, 1), "rating": s.rating,
+                "ts_code": s.ts_code,
+                "name": s.name,
+                "score": round(s.score, 1),
+                "b1_score": round(s.b1_score, 1),
+                "trend_score": round(s.trend_score, 1),
+                "rating": s.rating,
             }
             top_picks.append(pick)
             if s.b1_score >= 50:
-                report["signals"].append({
-                    "ts_code": s.ts_code, "name": s.name, "signal": "B1",
-                    "message": f"综合评分 {s.score:.0f}，B1评分 {s.b1_score:.0f}",
-                    "source": "screener",
-                })
+                report["signals"].append(
+                    {
+                        "ts_code": s.ts_code,
+                        "name": s.name,
+                        "signal": "B1",
+                        "message": f"综合评分 {s.score:.0f}，B1评分 {s.b1_score:.0f}",
+                        "source": "screener",
+                    }
+                )
         report["top_picks"] = top_picks
     except Exception as e:
         _warn(f"全市场选股失败: {e}")
@@ -549,10 +565,12 @@ def _daily_step_portfolio(report: dict, watches: list) -> None:
         for code in check_codes:
             try:
                 diag = diagnose_stock(code, days=60)
-                portfolio_status.append({
-                    "ts_code": code,
-                    "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
-                })
+                portfolio_status.append(
+                    {
+                        "ts_code": code,
+                        "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
+                    }
+                )
             except Exception as e:
                 portfolio_status.append({"ts_code": code, "error": str(e)})
         report["portfolio_status"] = portfolio_status
@@ -613,8 +631,9 @@ def _print_daily_report(report: dict, today: str) -> None:
     if isinstance(report["top_picks"], list) and report["top_picks"]:
         print("\n【B1 潜力股 TOP 10】")
         for i, p in enumerate(report["top_picks"], 1):
-            print(f"  {i:2}. {p['ts_code']} {p['name']:<8} "
-                  f"评分:{p['score']:5.1f}  B1:{p['b1_score']:5.1f}  {p['rating']}")
+            print(
+                f"  {i:2}. {p['ts_code']} {p['name']:<8} 评分:{p['score']:5.1f}  B1:{p['b1_score']:5.1f}  {p['rating']}"
+            )
 
     if report["portfolio_status"]:
         print("\n【持仓诊断】")

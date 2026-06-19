@@ -1,4 +1,5 @@
 """Phase 3: 汇总报告 (results.tsv + optimization_drafts/ + improvement_log)."""
+
 from __future__ import annotations
 
 import json

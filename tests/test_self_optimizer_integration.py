@@ -1,4 +1,5 @@
 """集成测试: phase1 baseline + phase2 keep/revert + phase2 break."""
+
 from __future__ import annotations
 
 import pytest
@@ -34,14 +35,17 @@ class TestPhase2V2Pipeline:
 
     def _make_fake_scorer(self, baseline: float, mutated: float) -> BacktestScorer:
         """scorer 返回固定基线/变异分数。"""
+
         class FakeScorer(BacktestScorer):
             def score(self, **kw):
                 ss = StockScore("FAKE", 0, 0, 0, 0, 5, mutated)
                 return ScoringResult(scores=[ss])
+
             def score_vs_baseline(self, params):
                 b = ScoringResult(scores=[StockScore("FAKE", 0, 0, 0, 0, 5, baseline)])
                 m = ScoringResult(scores=[StockScore("FAKE", 0, 0, 0, 0, 5, mutated)])
                 return b, m
+
         return FakeScorer(stock_pool=["FAKE"], days=30, max_stocks=1)
 
     def test_revert_when_score_drops(self):
@@ -51,8 +55,13 @@ class TestPhase2V2Pipeline:
         params = get_defaults()
 
         result = run_round(
-            round_n=1, old_score=80.0, target="trading", history=[],
-            scorer=scorer, mutator=mutator, current_best_params=params,
+            round_n=1,
+            old_score=80.0,
+            target="trading",
+            history=[],
+            scorer=scorer,
+            mutator=mutator,
+            current_best_params=params,
         )
         assert result.status == "revert"
         assert result.new_score < result.old_score
@@ -64,8 +73,13 @@ class TestPhase2V2Pipeline:
         params = get_defaults()
 
         result = run_round(
-            round_n=1, old_score=80.0, target="trading", history=[],
-            scorer=scorer, mutator=mutator, current_best_params=params,
+            round_n=1,
+            old_score=80.0,
+            target="trading",
+            history=[],
+            scorer=scorer,
+            mutator=mutator,
+            current_best_params=params,
         )
         assert result.status == "keep"
         assert result.new_score > result.old_score
@@ -78,11 +92,13 @@ class TestPhase2V2Pipeline:
             def __init__(self):
                 super().__init__(stock_pool=["FAKE"], days=30, max_stocks=1)
                 self._call = 0
+
             def score(self, **kw):
                 self._call += 1
                 score = {1: 80.3, 2: 80.1, 3: 80.4}.get(self._call, 80.0)
                 ss = StockScore("FAKE", 0, 0, 0, 0, 5, score)
                 return ScoringResult(scores=[ss])
+
             def score_vs_baseline(self, params):
                 m = self.score()
                 b = self.score()
@@ -95,8 +111,13 @@ class TestPhase2V2Pipeline:
         for n in range(1, 5):
             old = 80.0 if n == 1 else (history[-1].new_score if history else 80.0)
             result = run_round(
-                round_n=n, old_score=old, target="trading", history=history,
-                scorer=scorer, mutator=mutator, current_best_params=params,
+                round_n=n,
+                old_score=old,
+                target="trading",
+                history=history,
+                scorer=scorer,
+                mutator=mutator,
+                current_best_params=params,
             )
             history.append(result)
             if result.status == "break":
@@ -113,27 +134,39 @@ class TestPhase2V2Pipeline:
             def score(self, **kw):
                 ss = StockScore("FAKE", 0.5, 0, 0.1, 0.2, 5, 85.0)
                 return ScoringResult(scores=[ss])
+
             def score_vs_baseline(self, p):
                 b = self.score()
                 m = self.score()
                 return b, m
 
         result = run_round(
-            round_n=1, old_score=80.0, target="trading", history=[],
+            round_n=1,
+            old_score=80.0,
+            target="trading",
+            history=[],
             scorer=TrackingScorer(stock_pool=["FAKE"], days=30, max_stocks=1),
-            mutator=mutator, current_best_params=params,
+            mutator=mutator,
+            current_best_params=params,
         )
         assert result.mutated_params != {}
         assert "b1" in result.mutated_params
 
     def test_check_break_signal_utility(self):
         """check_break_signal 纯函数正常工作。"""
+
         def make(status, delta):
             return RoundResult(
-                    round=1, old_score=80.0, new_score=80.0 + delta,
-                    delta=delta, status=status, violations=[],
-                    proposed_diff="", timestamp="",
-                )
+                round=1,
+                old_score=80.0,
+                new_score=80.0 + delta,
+                delta=delta,
+                status=status,
+                violations=[],
+                proposed_diff="",
+                timestamp="",
+            )
+
         assert check_break_signal([make("keep", 0.3), make("keep", 0.4)], 0.5) is True
         assert check_break_signal([make("keep", 1.0), make("keep", 1.0)], 0.5) is False
         assert check_break_signal([]) is False
