@@ -76,8 +76,15 @@ export default function KlineChart({ data, height = 820 }: Props) {
     '冲刺波': 'rgba(244, 63, 94, 0.20)', // 粉红
   };
 
+  interface MarkAreaItem {
+    name?: string;
+    xAxis?: string;
+    itemStyle?: { color?: string };
+    label?: Record<string, unknown>;
+  }
+
   const generateMarkArea = (sequence: string[] | undefined, colors: Record<string, string>) => {
-    const areas: any[] = [];
+    const areas: Array<[MarkAreaItem, MarkAreaItem]> = [];
     if (!sequence || sequence.length === 0) return undefined;
 
     let startIdx = 0;

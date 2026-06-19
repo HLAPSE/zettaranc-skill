@@ -1,3 +1,4 @@
+import { AxiosError } from 'axios';
 import { useCommentary } from '../../hooks/useStockAnalysis';
 import type { CommentaryResponse } from '../../api/types';
 
@@ -77,7 +78,7 @@ function renderInline(text: string): string {
 
   // 3. 百分比：xx.xx% / xx%  → 蓝色 badge
   protectedText = protectedText.replace(
-    /([+\-]?\d+(?:\.\d+)?)%/g,
+    /([+-]?\d+(?:\.\d+)?)%/g,
     '<span class="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded font-mono tabular-nums text-[11px] font-bold bg-accent-cyan/15 text-accent-cyan border border-accent-cyan/30">$1%</span>'
   );
 
@@ -94,6 +95,7 @@ function renderInline(text: string): string {
   );
 
   // 6. 还原 **加粗**
+  // eslint-disable-next-line no-control-regex -- 使用 \u0001 作为临时占位符，避免与后续正则冲突
   protectedText = protectedText.replace(/\u0001BOLD(\d+)\u0001/g, (_m, idx) => boldSegments[Number(idx)]);
 
   return protectedText;
@@ -123,8 +125,9 @@ function Skeleton() {
 export default function CommentaryCard({ tsCode }: Props) {
   const { data, isLoading, isError, error, refetch } = useCommentary(tsCode);
 
-  const isNotConfigured = (error as any)?.response?.status === 503;
-  const isFailed = (error as any)?.response?.status === 502;
+  const axiosError = error instanceof AxiosError ? error : null;
+  const isNotConfigured = axiosError?.response?.status === 503;
+  const isFailed = axiosError?.response?.status === 502;
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-accent-gold/30 bg-gradient-to-br from-bg-card via-bg-secondary to-bg-card shadow-[0_0_40px_-15px_rgba(245,158,11,0.25)]">
