@@ -391,7 +391,7 @@ def is_perfect_pattern(klines: list) -> tuple[bool, list[str]]:
 
 def score_b1_opportunity(klines: list) -> tuple[float, list[str]]:
     """
-    评估B1买点机会
+    评估B1买点机会（P3：融入沙漏评分因子）
 
     返回: (评分0-100, 原因列表)
     """
@@ -437,6 +437,42 @@ def score_b1_opportunity(klines: list) -> tuple[float, list[str]]:
     if ma20 < today.close < ma60:
         score += 15
         reasons.append("中期均线区间")
+
+    # ========== P3 升级：沙漏因子融入 B1 评分 ==========
+    try:
+        from .indicators import calculate_sandglass_score
+
+        sg = calculate_sandglass_score(klines)
+        sg_factors = sg.get("factors", {})
+        sg_score = sg.get("score", 0)
+
+        # 沙漏"缩量收敛"增强 B1 缩量回调确认
+        contraction = sg_factors.get("缩量收敛", 0)
+        if contraction >= 12:
+            score += 10
+            reasons.append(f"沙漏·缩量收敛({contraction}分)")
+        elif contraction >= 8:
+            score += 5
+            reasons.append(f"沙漏·缩量收敛({contraction}分)")
+
+        # 沙漏"枢轴邻近"确认低位支撑
+        pivot = sg_factors.get("枢轴邻近", 0)
+        if pivot >= 16:
+            score += 8
+            reasons.append(f"沙漏·枢轴邻近({pivot}分)")
+        elif pivot >= 12:
+            score += 4
+            reasons.append(f"沙漏·枢轴邻近({pivot}分)")
+
+        # 沙漏完美图形（≥80分）额外确认
+        if sg.get("is_perfect"):
+            score += 15
+            reasons.append(f"沙漏完美图形({sg_score}分)")
+        elif sg_score >= 65:
+            score += 5
+            reasons.append(f"沙漏良好({sg_score}分)")
+    except Exception:
+        pass
 
     # 风险提示
     if j > 0:
@@ -511,7 +547,7 @@ def score_trend(klines: list) -> tuple[float, str]:
 
 def score_volume_pattern(klines: list) -> tuple[float, list[str]]:
     """
-    评估量价形态
+    评估量价形态（P3：接入量比战法 6 场景判定）
     """
     if klines and isinstance(klines[0], dict):
         klines = _dict_to_daily(klines)
@@ -522,26 +558,55 @@ def score_volume_pattern(klines: list) -> tuple[float, list[str]]:
     today = klines[-1]
     vols = [k.vol for k in klines]
     vol_ma5 = calculate_vol_ma(vols, 5)
+    vol_ratio = today.vol / vol_ma5 if vol_ma5 > 0 else 1.0
 
     score = 50
     reasons = []
 
-    # 量比
-    vol_ratio = today.vol / vol_ma5
-    if vol_ratio >= 2:
-        score += 20
-        reasons.append(f"倍量(量比{vol_ratio:.1f}x)")
-    elif vol_ratio >= 1.5:
-        score += 10
-        reasons.append("放量")
-    elif vol_ratio <= 0.5:
-        score += 10
-        reasons.append("缩量")
-    else:
-        score -= 5
-        reasons.append("量能正常")
+    # ========== P3 升级：量比战法 6 场景判定（优先于简单量比计算）==========
+    try:
+        from .indicators import detect_volume_ratio_strategy
+        vr = detect_volume_ratio_strategy(klines)
+        scenario = vr.get("scenario", "")
+        action = vr.get("action", "")
 
-    # 涨跌配合
+        if scenario == "超级攻击":
+            score += 30
+            reasons.append(f"量比战法·超级攻击(量比{vr['vol_ratio']})")
+        elif scenario == "攻击日":
+            score += 25
+            reasons.append(f"量比战法·攻击日(量比{vr['vol_ratio']})")
+        elif scenario == "单向拉升":
+            score += 18
+            reasons.append(f"量比战法·单向拉升(量比{vr['vol_ratio']})")
+        elif scenario == "出货日":
+            score -= 25
+            reasons.append(f"量比战法·出货日(量比{vr['vol_ratio']})→出货嫌疑")
+        elif scenario == "弱势日":
+            score -= 15
+            reasons.append(f"量比战法·弱势日(量比{vr['vol_ratio']})")
+        elif scenario == "正常震荡":
+            if action == "慢买逢低吸纳":
+                score += 5
+                reasons.append(f"量比战法·震荡吸筹(量比{vr['vol_ratio']})")
+            else:
+                reasons.append("量比战法·观望")
+    except Exception:
+        # 降级到简单量比计算
+        if vol_ratio >= 2:
+            score += 20
+            reasons.append(f"倍量(量比{vol_ratio:.1f}x)")
+        elif vol_ratio >= 1.5:
+            score += 10
+            reasons.append("放量")
+        elif vol_ratio <= 0.5:
+            score += 10
+            reasons.append("缩量")
+        else:
+            score -= 5
+            reasons.append("量能正常")
+
+    # 涨跌配合（保留，作为量比战法的补充验证）
     if today.pct_chg > 3 and vol_ratio > 1.2:
         score += 15
         reasons.append("价涨量增(攻击形态)")
@@ -1022,6 +1087,9 @@ def main():
             "build_wave",
             "xishou",
             "safe",
+            "bull_rope",
+            "sandglass_perfect",
+            "volume_ratio_super",
         ],
         help="选股条件",
     )
