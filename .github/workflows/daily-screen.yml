@@ -1,6 +1,8 @@
 name: Daily Stock Screen (Z哥选股)
 
 on:
+  push:
+    branches: [main]
   schedule:
     # 每个交易日 21:00 UTC+8 = 13:00 UTC（北京时间晚上 9 点）
     # 周一到周五执行
