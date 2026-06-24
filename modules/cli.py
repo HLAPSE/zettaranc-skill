@@ -475,6 +475,9 @@ def cmd_sync(args):
         print(syncer.get_sync_status())
 
     elif action == "stk-factor":
+        if os.getenv("DATA_MODE", "websearch") == "akshare":
+            print("AkShare 模式下跳过 Tushare 官方指标同步")
+            return
         syncer = DataSyncer()
         if args.ts_code:
             print(f"正在同步 Tushare 官方指标: {args.ts_code} ...")

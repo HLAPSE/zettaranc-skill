@@ -20,6 +20,11 @@ try:
 except ImportError:
     print("请先安装依赖: pip install tushare")
 
+try:
+    import akshare as ak
+except ImportError:
+    ak = None
+
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载，override=True）
 
 from .database import get_connection, get_db_path
@@ -407,9 +412,9 @@ class DataSyncer:
 
     def __init__(self, token: str | None = None):
         self.token = token or os.environ.get("TUSHARE_TOKEN")
+        self.data_mode = os.getenv("DATA_MODE", "websearch")
         # 仅在 JNB 模式下强制检查 Tushare 配置
-        data_mode = os.getenv("DATA_MODE", "websearch")
-        if data_mode == "jnb":
+        if self.data_mode == "jnb":
             if not self.token:
                 raise ValueError("JNB 模式下未设置 TUSHARE_TOKEN，请检查 .env 文件。")
             if not TUSHARE_API_URL:
@@ -419,9 +424,12 @@ class DataSyncer:
                 )
 
         # 初始化 Tushare
-        ts.set_token(self.token)
-        self.pro = ts.pro_api()
-        self.pro._DataApi__http_url = TUSHARE_API_URL
+        if self.data_mode != "akshare":
+            ts.set_token(self.token)
+            self.pro = ts.pro_api()
+            self.pro._DataApi__http_url = TUSHARE_API_URL
+        else:
+            self.pro = None
 
         # 向后兼容：保留 instance-level attrs（外部可能引用）
         # 但实际限流走模块级 _GLOBAL_LIMITER
@@ -554,6 +562,8 @@ class DataSyncer:
         同步股票基本信息
         股票信息基本不变化，每周同步一次即可
         """
+        if self.data_mode == "akshare":
+            return self._sync_stock_basic_akshare()
         logger.info("开始同步股票基本信息...")
         try:
             df = self._call_api_with_retry(
@@ -579,6 +589,32 @@ class DataSyncer:
 
         except Exception as e:
             logger.error(f"股票基本信息同步失败: {e}")
+            self._log_sync("stock_basic", None, "", "failed", str(e))
+            return 0
+
+    def _sync_stock_basic_akshare(self) -> int:
+        logger.info("开始同步股票基本信息 (AkShare)...")
+        try:
+            df = ak.stock_info_a_code_name()
+            if df is None or len(df) == 0:
+                logger.warning("获取股票基本信息失败 (AkShare)")
+                return 0
+
+            df = df.rename(columns={"code": "ts_code", "name": "name"})
+            df["area"] = ""
+            df["industry"] = ""
+            df["market"] = ""
+            df["list_date"] = ""
+            df["is_hs"] = ""
+            df = df[["ts_code", "name", "area", "industry", "market", "list_date", "is_hs"]].fillna("")
+            with get_connection() as conn:
+                df.to_sql("stock_basic", conn, if_exists="append", index=False, method="multi")
+
+            self._log_sync("stock_basic", None, datetime.now().strftime("%Y%m%d"), "success")
+            logger.info(f"股票基本信息同步完成 (AkShare)，共 {len(df)} 只")
+            return len(df)
+        except Exception as e:
+            logger.error(f"股票基本信息同步失败 (AkShare): {e}")
             self._log_sync("stock_basic", None, "", "failed", str(e))
             return 0
 
@@ -611,15 +647,40 @@ class DataSyncer:
             end_date = datetime.now().strftime("%Y%m%d")
 
         try:
-            df = self._call_api_with_retry(
-                "daily_kline",
-                ts.pro_bar,
-                ts_code=ts_code,
-                start_date=start_date,
-                end_date=end_date,
-                adj="qfq",
-                api=self.pro,
-            )
+            if self.data_mode == "akshare":
+                df = ak.stock_zh_a_hist(
+                    symbol=ts_code.split(".")[0],
+                    period="daily",
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq",
+                )
+                if df is not None and len(df) > 0:
+                    df = df.rename(
+                        columns={
+                            "日期": "trade_date",
+                            "开盘": "open",
+                            "最高": "high",
+                            "最低": "low",
+                            "收盘": "close",
+                            "成交量": "vol",
+                            "成交额": "amount",
+                            "涨跌幅": "pct_chg",
+                        }
+                    )
+                    df["ts_code"] = ts_code
+                    df["trade_date"] = df["trade_date"].astype(str).str.replace("-", "", regex=False)
+                    df = df[["ts_code", "trade_date", "open", "high", "low", "close", "vol", "amount", "pct_chg"]]
+            else:
+                df = self._call_api_with_retry(
+                    "daily_kline",
+                    ts.pro_bar,
+                    ts_code=ts_code,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adj="qfq",
+                    api=self.pro,
+                )
 
             if df is None or len(df) == 0:
                 return 0
@@ -832,6 +893,8 @@ class DataSyncer:
         Returns:
             更新条数
         """
+        if self.data_mode == "akshare":
+            return 0
         try:
             if start_date is None:
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
@@ -940,6 +1003,8 @@ class DataSyncer:
         Returns:
             更新条数
         """
+        if self.data_mode == "akshare":
+            return self._sync_daily_basic_akshare(ts_code, start_date, end_date)
         try:
             self.ensure_daily_basic_columns()
             self._rate_limit("daily_basic")
@@ -990,6 +1055,65 @@ class DataSyncer:
             self._log_sync("daily_basic", ts_code, "", "failed", str(e))
             return 0
 
+    def _sync_daily_basic_akshare(self, ts_code: str, start_date: str = "", end_date: str = "") -> int:
+        try:
+            self.ensure_daily_basic_columns()
+
+            if not start_date:
+                start_date = (datetime.now() - timedelta(days=730)).strftime("%Y%m%d")
+            if not end_date:
+                end_date = datetime.now().strftime("%Y%m%d")
+
+            df = ak.stock_a_indicator_lg(symbol=ts_code.split(".")[0])
+            if df is None or len(df) == 0:
+                return 0
+
+            df = df.rename(
+                columns={
+                    "trade_date": "trade_date",
+                    "pe": "pe",
+                    "pe_ttm": "pe_ttm",
+                    "pb": "pb",
+                    "ps": "ps",
+                    "ps_ttm": "ps_ttm",
+                    "total_mv": "total_mv",
+                    "circ_mv": "circ_mv",
+                }
+            )
+            df = df[df["trade_date"] >= start_date]
+            df = df[df["trade_date"] <= end_date]
+
+            with get_connection() as conn:
+                cursor = conn.cursor()
+                for row in df.itertuples(index=False):
+                    row_dict = row._asdict()
+                    cursor.execute(
+                        """
+                        UPDATE daily_kline SET
+                            pe = ?, pe_ttm = ?, pb = ?, ps = ?, ps_ttm = ?,
+                            total_mv = ?, circ_mv = ?
+                        WHERE ts_code = ? AND trade_date = ?
+                    """,
+                        (
+                            row_dict.get("pe"),
+                            row_dict.get("pe_ttm"),
+                            row_dict.get("pb"),
+                            row_dict.get("ps"),
+                            row_dict.get("ps_ttm"),
+                            row_dict.get("total_mv"),
+                            row_dict.get("circ_mv"),
+                            ts_code,
+                            row_dict["trade_date"],
+                        ),
+                    )
+
+            self._log_sync("daily_basic", ts_code, end_date, "success")
+            return len(df)
+        except Exception as e:
+            logger.error(f"每日估值指标同步失败 (AkShare) {ts_code}: {e}")
+            self._log_sync("daily_basic", ts_code, "", "failed", str(e))
+            return 0
+
     def sync_all_daily_basic(self, ts_codes: list[str] | None = None, days: int = 730) -> dict[str, int]:
         """批量同步每日估值指标（并发）"""
         self.ensure_daily_basic_columns()
@@ -1014,6 +1138,8 @@ class DataSyncer:
         Returns:
             更新条数
         """
+        if self.data_mode == "akshare":
+            return self._sync_moneyflow_akshare(ts_code, trade_date)
         try:
             self._rate_limit("moneyflow")
             df = self.pro.moneyflow(ts_code=ts_code, trade_date=trade_date)
@@ -1061,6 +1187,54 @@ class DataSyncer:
         except Exception as e:
             logger.error(f"资金流向同步失败 {ts_code} {trade_date}: {e}")
             self._log_sync("moneyflow", ts_code, "", "failed", str(e))
+            return 0
+
+    def _sync_moneyflow_akshare(self, ts_code: str, trade_date: str) -> int:
+        try:
+            df = ak.stock_individual_fund_flow(stock=ts_code.split(".")[0], market="sh" if ts_code.endswith(".SH") else "sz")
+            if df is None or len(df) == 0:
+                return 0
+
+            df = df.rename(
+                columns={
+                    "日期": "trade_date",
+                    "主力净流入-净占比": "net_mf",
+                    "小单净流入-净占比": "pct_mf",
+                    "主力净流入-净额": "net_mf_amount",
+                }
+            )
+            df["trade_date"] = df["trade_date"].astype(str).str.replace("-", "", regex=False)
+            df = df[df["trade_date"] == trade_date]
+            if len(df) == 0:
+                return 0
+
+            with get_connection() as conn:
+                cursor = conn.cursor()
+                for row in df.itertuples(index=False):
+                    row_dict = row._asdict()
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO moneyflow
+                        (ts_code, trade_date, buy_sm_amount, buy_md_amount,
+                         buy_lg_amount, buy_elg_amount, sell_sm_amount,
+                         sell_md_amount, sell_lg_amount, sell_elg_amount,
+                         net_mf, pct_mf)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            ts_code,
+                            row_dict["trade_date"],
+                            0, 0, 0, 0, 0, 0, 0, 0,
+                            row_dict.get("net_mf"),
+                            row_dict.get("pct_mf"),
+                        ),
+                    )
+
+            self._log_sync("moneyflow", ts_code, trade_date, "success")
+            return len(df)
+        except Exception as e:
+            logger.error(f"资金流向同步失败 (AkShare) {ts_code} {trade_date}: {e}")
+            self._log_sync("moneyflow", ts_code, trade_date, "failed", str(e))
             return 0
 
     # ==================== 工具方法 ====================

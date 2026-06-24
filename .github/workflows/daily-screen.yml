@@ -1,0 +1,161 @@
+name: Daily Stock Screen (Z哥选股)
+
+on:
+  schedule:
+    # 每个交易日 21:00 UTC+8 = 13:00 UTC（北京时间晚上 9 点）
+    # 周一到周五执行
+    - cron: "0 13 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "选股策略 (B1 / 完美图形 / 超级B1 / 建仓波 / 吸筹 / 安全 / 量比战法)"
+        required: false
+        default: "B1"
+        type: choice
+        options:
+          - B1
+          - 完美图形
+          - 超级B1
+          - 建仓波
+          - 吸筹
+          - 安全
+          - 量比战法
+      limit:
+        description: "输出上限"
+        required: false
+        default: "20"
+        type: string
+
+jobs:
+  daily-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Prepare environment
+        env:
+          DATA_MODE: ${{ vars.DATA_MODE }}
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          TUSHARE_API_URL: ${{ secrets.TUSHARE_API_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          DB_PATH: ${{ vars.DB_PATH }}
+        run: |
+          # 如果 DB_PATH 未设置，使用默认值
+          DB_PATH="${DB_PATH:-data/stock_data.db}"
+          echo "DATA_MODE=$DATA_MODE" >> .env
+          echo "TUSHARE_TOKEN=$TUSHARE_TOKEN" >> .env
+          echo "TUSHARE_API_URL=$TUSHARE_API_URL" >> .env
+          echo "LLM_API_KEY=$LLM_API_KEY" >> .env
+          echo "LLM_BASE_URL=$LLM_BASE_URL" >> .env
+          echo "LLM_MODEL=$LLM_MODEL" >> .env
+          echo "DB_PATH=$DB_PATH" >> .env
+          echo "DATA_DIR=data" >> .env
+
+      - name: Run daily screen
+        id: screen
+        run: |
+          STRATEGY="${{ github.event.inputs.strategy || 'B1' }}"
+          LIMIT="${{ github.event.inputs.limit || '20' }}"
+          echo "strategy=$STRATEGY" >> "$GITHUB_OUTPUT"
+          echo "limit=$LIMIT" >> "$GITHUB_OUTPUT"
+
+          .venv/bin/zt screen --strategy "$STRATEGY" --limit "$LIMIT" --json > screen_result.json 2>&1 || true
+
+          # 输出结果摘要
+          echo "=== 选股结果 ==="
+          cat screen_result.json || echo "(无结果)"
+
+      - name: Upload screen result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-result-${{ github.run_id }}
+          path: screen_result.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Notify via GitHub Issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const strategy = '${{ steps.screen.outputs.strategy || 'B1' }}';
+            const limit = '${{ steps.screen.outputs.limit || '20' }}';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let resultText = '';
+            try {
+              resultText = fs.readFileSync('screen_result.json', 'utf8');
+            } catch (e) {
+              resultText = '(无法读取结果文件)';
+            }
+
+            const today = new Date().toISOString().slice(0, 10);
+            const title = `📊 每日选股报告 ${today} [${strategy}]`;
+
+            const body = [
+              `## Z哥每日选股报告`,
+              ``,
+              `- 日期: ${today}`,
+              `- 策略: ${strategy}`,
+              `- 上限: ${limit}`,
+              `- 工作流: [查看运行详情](${runUrl})`,
+              ``,
+              `### 选股结果`,
+              ``,
+              '```json',
+              resultText || '(无结果)',
+              '```',
+              ``,
+              `> 由 GitHub Actions 自动生成`,
+            ].join('\n');
+
+            // 查找今天是否已有同名 issue，有则评论，无则创建
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'daily-screen',
+              state: 'open',
+              per_page: 5,
+            });
+
+            const existing = issues.find(i => i.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['daily-screen'],
+              });
+            }
