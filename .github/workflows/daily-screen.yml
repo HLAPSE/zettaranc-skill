@@ -96,6 +96,101 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Notify via Feishu Webhook
+        if: always()
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK" ]; then
+            echo "FEISHU_WEBHOOK 未配置，跳过飞书通知"
+            exit 0
+          fi
+
+          STRATEGY="${{ steps.screen.outputs.strategy || 'B1' }}"
+          LIMIT="${{ steps.screen.outputs.limit || '20' }}"
+          TODAY=$(date -u +%Y-%m-%d)
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          STATUS="${{ job.status }}"
+
+          # 读取选股结果，提取命中数量和前 10 只
+          RESULT=$(cat screen_result.json 2>/dev/null || echo '{}')
+          COUNT=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('count',0))" 2>/dev/null || echo "0")
+
+          # 提取前 10 只股票摘要
+          TOP10=$(echo "$RESULT" | python3 -c "
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              stocks = d.get('stocks', [])[:10]
+              for s in stocks:
+                  print(f\"{s['ts_code']} {s.get('name','')} | 评分:{s.get('score',0)} | {s.get('rating','')}\")
+          except:
+              print('(无结果)')
+          " 2>/dev/null || echo "(无结果)")
+
+          # 状态图标
+          if [ "$STATUS" = "success" ]; then
+              ICON="✅"
+          else
+              ICON="❌"
+          fi
+
+          # 构建飞书富文本消息
+          CONTENT=$(cat <<EOF
+          {
+            "msg_type": "interactive",
+            "card": {
+              "header": {
+                "title": {
+                  "tag": "plain_text",
+                  "content": "${ICON} Z哥每日选股报告 ${TODAY} [${STRATEGY}]"
+                },
+                "template": "${STATUS}"
+              },
+              "elements": [
+                {
+                  "tag": "div",
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "**日期**: ${TODAY}\n**策略**: ${STRATEGY}\n**命中**: ${COUNT} 只\n**状态**: ${STATUS}\n**运行**: [查看详情](${RUN_URL})"
+                  }
+                },
+                {
+                  "tag": "hr"
+                },
+                {
+                  "tag": "div",
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "### 选股结果 (前10)\n\`\`\`\n${TOP10}\n\`\`\`"
+                  }
+                },
+                {
+                  "tag": "hr"
+                },
+                {
+                  "tag": "note",
+                  "elements": [
+                    {
+                      "tag": "plain_text",
+                      "content": "由 GitHub Actions 自动生成 | Z哥量化选股"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+          EOF
+          )
+
+          # 发送到飞书
+          curl -s -X POST "$FEISHU_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "$CONTENT"
+
+          echo ""
+          echo "=== 飞书通知已发送 ==="
+
       - name: Notify via GitHub Issue
         if: always()
         uses: actions/github-script@v7
