@@ -30,6 +30,9 @@ jobs:
   daily-screen:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      issues: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +84,7 @@ jobs:
           echo "strategy=$STRATEGY" >> "$GITHUB_OUTPUT"
           echo "limit=$LIMIT" >> "$GITHUB_OUTPUT"
 
-          .venv/bin/zt screen --strategy "$STRATEGY" --limit "$LIMIT" --json > screen_result.json 2>&1 || true
+          zt screen --strategy "$STRATEGY" --limit "$LIMIT" --json > screen_result.json 2>&1 || true
 
           # 输出结果摘要
           echo "=== 选股结果 ==="
