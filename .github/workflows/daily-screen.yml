@@ -84,6 +84,29 @@ jobs:
           RESULT=$(cat screen_result.json 2>/dev/null || echo '{}')
           COUNT=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('count',0))" 2>/dev/null || echo "0")
 
+          MARKET_INFO=$(echo "$RESULT" | python3 -c "
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              m = d.get('market', {})
+              direction = m.get('direction', '未知')
+              reason = m.get('reason', '')
+              print(f'{direction} | {reason}')
+          except:
+              print('未知')
+          " 2>/dev/null || echo "未知")
+
+          SECTORS_INFO=$(echo "$RESULT" | python3 -c "
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              sectors = d.get('hot_sectors', [])
+              for s in sectors[:5]:
+                  print(f\"{s['sector']}: {s['avg_gain']:+.1f}% ({s['stock_count']}只)\")
+          except:
+              print('(无)')
+          " 2>/dev/null || echo "(无)")
+
           TOP10=$(echo "$RESULT" | python3 -c "
           import sys, json
           try:
@@ -101,7 +124,7 @@ jobs:
             "msg_type": "interactive",
             "card": {
               "header": {
-                "title": { "tag": "plain_text", "content": "${ICON} Z哥每日选股 ${TODAY} [${STRATEGY}]" },
+                "title": { "tag": "plain_text", "content": "${ICON} Z哥三步选股 ${TODAY} [${STRATEGY}]" },
                 "template": "${STATUS}"
               },
               "elements": [
@@ -109,7 +132,15 @@ jobs:
                   "tag": "div",
                   "text": {
                     "tag": "lark_md",
-                    "content": "**日期**: ${TODAY}\n**策略**: ${STRATEGY}\n**命中**: ${COUNT} 只\n**状态**: ${STATUS}\n**运行**: [查看详情](${RUN_URL})"
+                    "content": "**择时**: ${MARKET_INFO}\n**日期**: ${TODAY}\n**策略**: ${STRATEGY}\n**命中**: ${COUNT} 只\n**运行**: [查看详情](${RUN_URL})"
+                  }
+                },
+                { "tag": "hr" },
+                {
+                  "tag": "div",
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "### 主线板块\n\`\`\`\n${SECTORS_INFO}\n\`\`\`"
                   }
                 },
                 { "tag": "hr" },
@@ -123,7 +154,7 @@ jobs:
                 { "tag": "hr" },
                 {
                   "tag": "note",
-                  "elements": [{ "tag": "plain_text", "content": "GitHub Actions 自动生成 | Z哥量化选股" }]
+                  "elements": [{ "tag": "plain_text", "content": "GitHub Actions 自动生成 | Z哥三步选股: 择时→找主线→选股" }]
                 }
               ]
             }
