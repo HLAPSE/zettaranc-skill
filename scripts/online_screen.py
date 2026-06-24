@@ -409,6 +409,58 @@ def screen_online(strategy: str, limit: int) -> dict:
         bs.logout()
 
 
+def generate_llm_review(data: dict) -> str:
+    """用 LLM 生成 Z哥风格的综合点评"""
+    import os
+    from modules.llm_providers import MiniMaxProvider
+
+    api_key = os.getenv("LLM_API_KEY", "")
+    if not api_key:
+        return "(LLM_API_KEY 未配置，跳过点评)"
+
+    market = data.get("market", {})
+    sectors = data.get("hot_sectors", [])
+    stocks = data.get("results", [])
+
+    system_prompt = """你是Z哥，一位前阳光私募冠军基金经理。请根据今日的择时判断、主线板块和选股结果，用你自己的口吻做一个简短点评（200字以内）。
+
+要求：
+1. 先说大盘：多头还是空头，能不能做
+2. 再说主线：哪些板块强，为什么
+3. 最后说操作：从选股结果里挑1-2只重点说，给明确建议
+4. 口吻要接地气，像跟朋友聊天，不要用书面语
+5. 如果是空头市场，强调空仓观望，不要冒险"""
+
+    # 构建用户消息
+    sector_text = "\n".join(f"  {s['sector']}: 均涨{s['avg_gain']:+.1f}% ({s['stock_count']}只)" for s in sectors)
+    stock_text = "\n".join(
+        f"  {r.ts_code} {r.name} | 评分:{r.score} | 理由:{', '.join(r.reasons[:2])}"
+        for r in stocks[:5]
+    ) if stocks else "  (无命中)"
+
+    user_message = f"""今日市场数据：
+
+【择时】
+方向: {market.get('direction', '未知')}
+原因: {market.get('reason', '')}
+上证: {market.get('close', '-')} (涨跌{market.get('pct_chg', '-')}%)
+白线: {market.get('white_line', '-')} | 黄线: {market.get('yellow_line', '-')}
+
+【主线板块】
+{sector_text}
+
+【选股结果】
+{stock_text}
+
+请做点评。"""
+
+    try:
+        provider = MiniMaxProvider()
+        return provider.generate(system_prompt, user_message, temperature=0.7)
+    except Exception as e:
+        return f"(LLM 点评失败: {e})"
+
+
 def main():
     parser = argparse.ArgumentParser(description="在线选股 (BaoStock 直连, Z哥三步法)")
     parser.add_argument("--strategy", default="B1", help="选股策略")
@@ -420,10 +472,17 @@ def main():
     results = data["results"]
     market = data["market"]
 
+    # LLM 点评
+    print("\n=== LLM 点评 ===", file=sys.stderr)
+    review = generate_llm_review(data)
+    print(f"  {review[:80]}...", file=sys.stderr)
+    data["review"] = review
+
     if args.json:
         output = {
             "market": market,
             "hot_sectors": data["hot_sectors"],
+            "review": review,
             "criteria": args.strategy,
             "count": len(results),
             "stocks": [
@@ -458,6 +517,11 @@ def main():
             print(f"  {r.ts_code} {r.name:<8} | 评分:{r.score:5.1f} | {r.rating}")
             if r.reasons:
                 print(f"    理由: {', '.join(r.reasons[:3])}")
+
+        print(f"\n{'=' * 60}")
+        print(f"[Z哥点评]")
+        print(f"{'=' * 60}")
+        print(review)
         print()
 
 
