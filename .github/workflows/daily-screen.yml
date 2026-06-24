@@ -50,35 +50,19 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Prepare environment
-        env:
-          DATA_MODE: ${{ vars.DATA_MODE }}
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
-          TUSHARE_API_URL: ${{ secrets.TUSHARE_API_URL }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
-          LLM_MODEL: ${{ secrets.LLM_MODEL }}
-          DB_PATH: ${{ vars.DB_PATH }}
-        run: |
-          DB_PATH="${DB_PATH:-data/stock_data.db}"
-          echo "DATA_MODE=$DATA_MODE" >> .env
-          echo "TUSHARE_TOKEN=$TUSHARE_TOKEN" >> .env
-          echo "TUSHARE_API_URL=$TUSHARE_API_URL" >> .env
-          echo "LLM_API_KEY=$LLM_API_KEY" >> .env
-          echo "LLM_BASE_URL=$LLM_BASE_URL" >> .env
-          echo "LLM_MODEL=$LLM_MODEL" >> .env
-          echo "DB_PATH=$DB_PATH" >> .env
-          echo "DATA_DIR=data" >> .env
-
-      - name: Run daily screen
+      - name: Run daily screen (online)
         id: screen
+        env:
+          DATA_MODE: akshare
         run: |
           STRATEGY="${{ github.event.inputs.strategy || 'B1' }}"
           LIMIT="${{ github.event.inputs.limit || '20' }}"
           echo "strategy=$STRATEGY" >> "$GITHUB_OUTPUT"
 
-          zt screen --strategy "$STRATEGY" --limit "$LIMIT" --json > screen_result.json 2>&1 || true
+          python scripts/online_screen.py --strategy "$STRATEGY" --limit "$LIMIT" --json > screen_result.json 2>screen_log.txt || true
 
+          echo "=== 选股日志 ==="
+          tail -5 screen_log.txt
           echo "=== 选股结果 ==="
           cat screen_result.json || echo "(无结果)"
 
