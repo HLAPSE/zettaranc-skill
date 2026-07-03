@@ -132,9 +132,9 @@ class ReviewGenerator:
                     monthly_return = (end_price - start_price) / start_price * 100
 
                 # 计算最大回撤和最大涨幅
-                max_drawdown = 0
-                max_gain = 0
-                prices = [r.get("close") for r in records if r.get("close")]
+                max_drawdown = 0.0
+                max_gain = 0.0
+                prices: list[float] = [float(r["close"]) for r in records if r.get("close")]
 
                 if len(prices) >= 2:
                     peak = prices[0]
@@ -252,9 +252,11 @@ class ReviewGenerator:
                 records = [dict(row) for row in cursor.fetchall()]
 
                 # 按信号类型统计
-                signal_stats = {}
+                signal_stats: dict[str, dict[str, Any]] = {}
                 for record in records:
                     signal_type = record.get("signal_type")
+                    if not signal_type:
+                        continue
                     if signal_type not in signal_stats:
                         signal_stats[signal_type] = {"total": 0, "correct": 0, "scores": []}
 

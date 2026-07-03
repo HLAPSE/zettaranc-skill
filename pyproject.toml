@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zettaranc-skill"
-version = "3.1.0"
+version = "3.3.1"
 description = "zettaranc（万千）的思维框架与量化工具"
 readme = "README.md"
 license = {text = "MIT"}
@@ -78,3 +78,27 @@ indent-style = "space"
 namespace_packages = true
 explicit_package_bases = true
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["modules"]
+omit = [
+    "modules/__init__.py",
+    "tests/*",
+    "scripts/*",
+    "corpus/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+precision = 1
+fail_under = 0
+
+[tool.coverage.html]
+directory = "htmlcov"

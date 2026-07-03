@@ -29,7 +29,7 @@ class MiniMaxProvider(LLMProvider):
     def __init__(self, api_key: str | None = None, base_url: str | None = None, model: str | None = None):
         # 支持 LLM_API_KEY 或 ANTHROPIC_API_KEY
         self.api_key = api_key or os.getenv("LLM_API_KEY", "") or os.getenv("ANTHROPIC_API_KEY", "")
-        self.base_url = base_url or os.getenv("LLM_BASE_URL", self.DEFAULT_BASE_URL)
+        self.base_url: str = base_url or os.getenv("LLM_BASE_URL") or self.DEFAULT_BASE_URL
         self.model = model or os.getenv("LLM_MODEL", self.DEFAULT_MODEL)
 
         if not self.api_key:

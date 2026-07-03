@@ -8,6 +8,7 @@ import os
 import subprocess
 import logging
 import requests
+from typing import Any
 
 logger = logging.getLogger("zettaranc-notifier")
 
@@ -45,7 +46,7 @@ def notify_feishu(webhook_url: str, title: str, message: str) -> bool:
     if not webhook_url:
         return False
     try:
-        payload = {"msg_type": "text", "content": {"text": f"🔔 【{title}】\n{message}"}}
+        payload: dict[str, Any] = {"msg_type": "text", "content": {"text": f"🔔 【{title}】\n{message}"}}
         headers = {"Content-Type": "application/json"}
         resp = requests.post(webhook_url, json=payload, headers=headers, timeout=10)
         resp.raise_for_status()

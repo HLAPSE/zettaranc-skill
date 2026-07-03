@@ -80,20 +80,24 @@ def test_rate_limiter_wait_does_not_block_under_limit():
     assert elapsed < 0.5, f"10 次 wait() 耗时 {elapsed:.2f}s 异常长"
 
 
-def test_rate_limiter_blocks_when_over_limit():
-    """超过上限时 wait() 必须阻塞（至少等到下一个 60s 窗口有空位）"""
+def test_rate_limiter_blocks_when_over_limit(monkeypatch):
+    """超过上限时 wait() 必须调用 sleep 来阻塞（不实际等待 60s）"""
     from modules.data_sync import _RateLimiter
+    import time
 
     rl = _RateLimiter(max_per_min=3)  # 低上限
     # 先快速吃满 3 个 token
     for _ in range(3):
         rl.wait()
-    # 第 4 次必须阻塞
-    start = time.monotonic()
+
+    # 拦截真实 sleep，记录调用时长
+    slept_seconds: list[float] = []
+    monkeypatch.setattr(time, "sleep", slept_seconds.append)
+
+    # 第 4 次必须触发阻塞
     rl.wait()
-    elapsed = time.monotonic() - start
-    # 不需要等 60s，只要不是瞬时（>0.01s）就算阻塞
-    assert elapsed > 0.01, f"wait() 第 4 次未阻塞（elapsed={elapsed:.4f}s）"
+    assert slept_seconds, "wait() 超过上限时未调用 sleep 阻塞"
+    assert slept_seconds[0] > 0, f"sleep 时长异常：{slept_seconds[0]}"
 
 
 def test_rate_limiter_current_count_tracks_window():

@@ -278,7 +278,10 @@ class TrackingSyncer:
             return {}
 
     def _detect_signal(
-        self, indicator_data: dict[str, Any], kline_data: dict[str, Any] = None, prev_kline_data: dict[str, Any] = None
+        self,
+        indicator_data: dict[str, Any],
+        kline_data: dict[str, Any] | None = None,
+        prev_kline_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         检测交易信号（根据 Z 哥的策略）
