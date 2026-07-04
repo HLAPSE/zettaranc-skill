@@ -5,11 +5,9 @@ screener.py 选股测试（P3 指标接入扩展）
 import pytest
 from datetime import datetime, timedelta
 
-from modules.screener import (
-    score_b1_opportunity,
-    score_volume_pattern,
-)
-from tests.conftest import generate_uptrend_klines, generate_b1_scenario, make_daily_data
+from modules.screener.criteria import _CRITERIA_REGISTRY, _check_centipede, _check_sandglass_min
+from modules.screener.scoring import score_b1_opportunity, score_volume_pattern
+from tests.conftest import generate_b1_scenario, generate_uptrend_klines, make_daily_data
 
 
 # ============ 工厂函数：构造特定量比场景 ============

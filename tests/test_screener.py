@@ -2,20 +2,24 @@
 screener.py 选股测试
 """
 
+from modules.indicators import calculate_ma
 from modules.screener import (
-    StockScore,
-    MarketStatus,
-    calculate_ma,
-    calculate_vol_ma,
-    calculate_kdj,
+    analyze_stock,
     calculate_bbi,
+    calculate_kdj,
+    calculate_vol_ma,
+    format_stock_score,
+    get_all_stocks,
+    get_recent_klines,
     is_perfect_pattern,
     score_b1_opportunity,
+    score_risk,
     score_trend,
     score_volume_pattern,
-    score_risk,
+    screen_stocks,
 )
-from tests.conftest import generate_uptrend_klines, generate_downtrend_klines
+from modules.screener.models import MarketStatus, StockScore
+from tests.conftest import generate_downtrend_klines, generate_uptrend_klines
 
 
 class TestStockScore:
@@ -144,3 +148,31 @@ class TestScoreRisk:
         score, warnings = score_risk(klines)
         assert score == 50
         assert "数据不足" in warnings
+
+
+class TestScreenerShim:
+    """验证 modules.screener shim 仍导出公共 API"""
+
+    def test_shim_exports_public_api(self):
+        import modules.screener as shim
+
+        public_names = [
+            "StockScore",
+            "MarketStatus",
+            "get_all_stocks",
+            "get_recent_klines",
+            "analyze_stock",
+            "screen_stocks",
+            "format_stock_score",
+            "daily_workflow",
+            "is_perfect_pattern",
+            "score_b1_opportunity",
+            "score_trend",
+            "score_volume_pattern",
+            "score_risk",
+            "calculate_kdj",
+            "calculate_bbi",
+            "calculate_vol_ma",
+        ]
+        for name in public_names:
+            assert hasattr(shim, name), f"shim 缺少 {name}"
