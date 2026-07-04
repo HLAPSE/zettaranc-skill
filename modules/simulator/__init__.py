@@ -97,6 +97,7 @@ class Position:
     can_sell_date: str = ""  # T+1 最早可卖出日
     entry_commission: float = 0.0  # 买入时佣金
     is_st: bool = False  # 是否为 ST/*ST
+    notes: list[str] = field(default_factory=list)  # 持仓过程中的备注/锁定原因
 
 
 @dataclass

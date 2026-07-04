@@ -2,12 +2,14 @@
 """交易约束层单元测试。"""
 
 from modules.indicators import DailyData
+from modules.simulator import Position, SimulationConfig
 from modules.simulator.execution_constraints import (
     TradeConstraints,
     get_trade_constraints,
     is_price_limit_hit,
     next_trading_date,
 )
+from modules.simulator.exit_manager import check_exit
 
 
 def test_main_board_price_limit():
@@ -168,3 +170,133 @@ def test_is_price_limit_hit_kcb_20pct():
     hit, reason = is_price_limit_hit(kline, prev_close=10.0, ts_code="688001.SH")
     assert hit is True
     assert "12.00" in reason
+
+
+def test_t1_blocks_sell_on_entry_date():
+    """T+1 锁定：当前日期早于 can_sell_date 时，即使触发止损也不得卖出。"""
+    pos = Position(
+        ts_code="000001.SZ",
+        name="测试",
+        entry_date="20240101",
+        entry_price=100,
+        shares=100,
+        stop_loss=95,
+        take_profit=110,
+        risk_amount=1000,
+        can_sell_date="20240102",
+    )
+    klines = [
+        DailyData(
+            ts_code="000001.SZ",
+            trade_date="20240101",
+            open=100,
+            high=100,
+            low=94,
+            close=94,
+            vol=100,
+            amount=1000,
+            pct_chg=-6,
+        )
+    ]
+    action, shares = check_exit(pos, klines, SimulationConfig(t1_lock=True))
+    assert action == "HOLD"
+    assert shares == 0
+    assert any("T+1锁定" in note for note in pos.notes)
+
+
+def test_t1_allows_sell_on_can_sell_date():
+    """T+1 锁定：当前日期等于 can_sell_date 时，允许正常卖出。"""
+    pos = Position(
+        ts_code="000001.SZ",
+        name="测试",
+        entry_date="20240101",
+        entry_price=100,
+        shares=100,
+        stop_loss=95,
+        take_profit=110,
+        risk_amount=1000,
+        can_sell_date="20240102",
+    )
+    klines = [
+        DailyData(
+            ts_code="000001.SZ",
+            trade_date="20240102",
+            open=100,
+            high=100,
+            low=94,
+            close=94,
+            vol=100,
+            amount=1000,
+            pct_chg=-6,
+        )
+    ]
+    action, shares = check_exit(pos, klines, SimulationConfig(t1_lock=True))
+    assert action == "STOP_LOSS"
+    assert shares == 100
+
+
+def test_limit_down_blocks_sell():
+    """跌停约束阻止卖出：交易约束 can_sell=False 时强制 HOLD。"""
+    pos = Position(
+        ts_code="000001.SZ",
+        name="测试",
+        entry_date="20240101",
+        entry_price=100,
+        shares=100,
+        stop_loss=95,
+        take_profit=110,
+        risk_amount=1000,
+        can_sell_date="20240101",
+    )
+    klines = [
+        DailyData(
+            ts_code="000001.SZ",
+            trade_date="20240101",
+            open=100,
+            high=100,
+            low=94,
+            close=94,
+            vol=100,
+            amount=1000,
+            pct_chg=-6,
+        )
+    ]
+    constraints = TradeConstraints(can_buy=True, can_sell=False, reason="收盘跌停")
+    action, shares = check_exit(
+        pos, klines, SimulationConfig(t1_lock=False), constraints=constraints
+    )
+    assert action == "HOLD"
+    assert shares == 0
+    assert any("跌停" in note or "交易约束阻止卖出" in note for note in pos.notes)
+
+
+def test_normal_stop_loss_after_t1():
+    """T+1 解禁后，正常止损逻辑仍然生效。"""
+    pos = Position(
+        ts_code="000001.SZ",
+        name="测试",
+        entry_date="20240101",
+        entry_price=100,
+        shares=100,
+        stop_loss=95,
+        take_profit=110,
+        risk_amount=1000,
+        can_sell_date="20240102",
+    )
+    klines = [
+        DailyData(
+            ts_code="000001.SZ",
+            trade_date="20240103",
+            open=100,
+            high=100,
+            low=94,
+            close=94,
+            vol=100,
+            amount=1000,
+            pct_chg=-6,
+        )
+    ]
+    action, shares = check_exit(pos, klines, SimulationConfig(t1_lock=True))
+    assert action == "STOP_LOSS"
+    assert shares == 100
+    assert not any("T+1锁定" in note for note in pos.notes)
