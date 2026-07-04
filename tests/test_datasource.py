@@ -183,3 +183,12 @@ def test_composite_auto_does_not_use_tushare(monkeypatch, temp_db, db_conn):
 
     # 恢复原始方法（monkeypatch 会自动恢复，但显式恢复更安全）
     monkeypatch.setattr(TushareDataSource, "get_kline_dicts", original_get_kline_dicts)
+
+
+def test_composite_auto_does_not_eagerly_construct_tushare(monkeypatch):
+    """auto 模式下 CompositeDataSource 不应在构造时急切创建 TushareDataSource。"""
+    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+    composite = CompositeDataSource("auto")
+    assert composite._tushare is None
+    result = composite.health_check()
+    assert isinstance(result, bool)

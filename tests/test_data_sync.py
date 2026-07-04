@@ -160,6 +160,18 @@ def test_data_syncer_default_datasource_uses_explicit_token(monkeypatch):
     assert syncer._datasource.name == "tushare"
 
 
+def test_datasyncer_honors_token_argument(monkeypatch):
+    """TUSHARE_TOKEN 为空时，显式传入 token 仍应被用于构造 TushareDataSource"""
+    from modules.data_sync.syncer import DataSyncer
+    from modules.datasource import TushareDataSource
+
+    monkeypatch.setenv("DATA_MODE", "websearch")
+    monkeypatch.setenv("TUSHARE_TOKEN", "")
+    ds = DataSyncer(token="explicit-token")
+    assert isinstance(ds._datasource, TushareDataSource)
+    assert ds._datasource._client.token == "explicit-token"
+
+
 def test_data_syncer_with_datasource_skips_jnb_validation(monkeypatch):
     """提供 datasource 时，即使 JNB 模式缺少 token/URL 也不应抛错"""
     from modules.data_sync.syncer import DataSyncer
