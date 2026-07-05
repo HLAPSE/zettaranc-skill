@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .walk_forward import WalkForwardConfig
 
 
 class MarketRegime(Enum):
@@ -183,6 +186,9 @@ class SimulationConfig:
     strategy_lookback_days: int = 5
     min_resonance_score: float = 0.35
     strategy_category_weights: dict[str, float] = field(default_factory=dict)
+    # v0.4 新增：walk-forward 参数寻优配置
+    walk_forward: bool = False
+    wf_config: WalkForwardConfig | None = None
 
 
 @dataclass
