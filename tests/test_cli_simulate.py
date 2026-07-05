@@ -156,13 +156,19 @@ def test_cli_resonance_details_keys(capsys):
 def test_cli_walk_forward_arguments():
     """测试 walk-forward CLI 参数解析"""
     parser = build_parser()
-    args = parser.parse_args([
-        "simulate", "000001.SZ",
-        "--walk-forward",
-        "--wf-train-days", "120",
-        "--wf-test-days", "60",
-        "--wf-objective", "calmar",
-    ])
+    args = parser.parse_args(
+        [
+            "simulate",
+            "000001.SZ",
+            "--walk-forward",
+            "--wf-train-days",
+            "120",
+            "--wf-test-days",
+            "60",
+            "--wf-objective",
+            "calmar",
+        ]
+    )
 
     assert args.walk_forward is True
     assert args.wf_train_days == 120
@@ -186,26 +192,37 @@ def test_cli_walk_forward_objective_choices():
     parser = build_parser()
 
     for obj in ["calmar", "sharpe", "sortino", "total_return"]:
-        args = parser.parse_args([
-            "simulate", "000001.SZ",
-            "--walk-forward",
-            "--wf-objective", obj,
-        ])
+        args = parser.parse_args(
+            [
+                "simulate",
+                "000001.SZ",
+                "--walk-forward",
+                "--wf-objective",
+                obj,
+            ]
+        )
         assert args.wf_objective == obj
 
 
 def test_cli_walk_forward_invokes_run_walk_forward(capsys):
     """测试 --walk-forward 启用时调用 run_walk_forward 而非 run_simulation"""
     parser = build_parser()
-    args = parser.parse_args([
-        "simulate", "000001.SZ",
-        "--walk-forward",
-        "--wf-train-days", "60",
-        "--wf-test-days", "30",
-        "--wf-objective", "sharpe",
-        "--days", "180",
-        "--json",
-    ])
+    args = parser.parse_args(
+        [
+            "simulate",
+            "000001.SZ",
+            "--walk-forward",
+            "--wf-train-days",
+            "60",
+            "--wf-test-days",
+            "30",
+            "--wf-objective",
+            "sharpe",
+            "--days",
+            "180",
+            "--json",
+        ]
+    )
 
     mock_wf_result = MagicMock()
     mock_wf_result.windows = []
@@ -213,12 +230,15 @@ def test_cli_walk_forward_invokes_run_walk_forward(capsys):
 
     from modules.simulator.walk_forward import WalkForwardConfig
     from modules.simulator.metrics import PerformanceMetrics
+
     mock_wf_result.oos_metrics = PerformanceMetrics()
     mock_wf_result.overfit_ratio = 1.0
     mock_wf_result.config = WalkForwardConfig()
 
-    with patch("modules.simulator.walk_forward.run_walk_forward", return_value=mock_wf_result) as mock_wf, \
-         patch("modules.simulator.simulator.run_simulation") as mock_sim:
+    with (
+        patch("modules.simulator.walk_forward.run_walk_forward", return_value=mock_wf_result) as mock_wf,
+        patch("modules.simulator.simulator.run_simulation") as mock_sim,
+    ):
         cmd_simulate(args)
 
     mock_wf.assert_called_once()
