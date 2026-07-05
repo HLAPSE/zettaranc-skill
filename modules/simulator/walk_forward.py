@@ -187,10 +187,7 @@ def run_walk_forward(
         best_score = float("-inf")
 
         for params in param_grid:
-            result = _run_with_params(
-                ts_codes, dates, is_start_idx, oos_start_idx,
-                params, base_config, ds
-            )
+            result = _run_with_params(ts_codes, dates, is_start_idx, oos_start_idx, params, base_config, ds)
             score = _evaluate(result, wf_config.objective)
 
             if score > best_score:
@@ -198,30 +195,26 @@ def run_walk_forward(
                 best_params = params
 
         # 用最佳参数在 OOS 上验证
-        oos_result = _run_with_params(
-            ts_codes, dates, oos_start_idx, oos_end_idx,
-            best_params or {}, base_config, ds
-        )
+        oos_result = _run_with_params(ts_codes, dates, oos_start_idx, oos_end_idx, best_params or {}, base_config, ds)
         oos_score = _evaluate(oos_result, wf_config.objective)
 
         # 记录 IS 结果（用最佳参数重新跑 IS 段）
-        is_result = _run_with_params(
-            ts_codes, dates, is_start_idx, oos_start_idx,
-            best_params or {}, base_config, ds
-        )
+        is_result = _run_with_params(ts_codes, dates, is_start_idx, oos_start_idx, best_params or {}, base_config, ds)
 
-        windows.append(WalkForwardWindow(
-            window_index=window_idx,
-            is_start=dates[is_start_idx],
-            is_end=dates[oos_start_idx - 1],
-            oos_start=dates[oos_start_idx],
-            oos_end=dates[oos_end_idx - 1],
-            best_params=best_params or {},
-            is_score=best_score,
-            oos_score=oos_score,
-            is_result=is_result,
-            oos_result=oos_result,
-        ))
+        windows.append(
+            WalkForwardWindow(
+                window_index=window_idx,
+                is_start=dates[is_start_idx],
+                is_end=dates[oos_start_idx - 1],
+                oos_start=dates[oos_start_idx],
+                oos_end=dates[oos_end_idx - 1],
+                best_params=best_params or {},
+                is_score=best_score,
+                oos_score=oos_score,
+                is_result=is_result,
+                oos_result=oos_result,
+            )
+        )
 
         # 拼接 OOS 资金曲线
         all_oos_curves.extend(oos_result.equity_curve)

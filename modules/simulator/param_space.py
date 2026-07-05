@@ -16,8 +16,8 @@ import itertools
 class ParamDimension:
     """参数维度定义"""
 
-    name: str                # SimulationConfig 字段名
-    param_type: str          # "float" | "int" | "choice"
+    name: str  # SimulationConfig 字段名
+    param_type: str  # "float" | "int" | "choice"
     low: float | None = None
     high: float | None = None
     step: float | None = None
