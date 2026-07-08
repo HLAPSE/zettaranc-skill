@@ -15,6 +15,7 @@ import Settings from './pages/Settings';
 // 动态导入:重型页(ECharts 体积大,延迟到首次访问再加载)
 const StockAnalysis = lazy(() => import('./pages/StockAnalysis'));
 const Backtest = lazy(() => import('./pages/Backtest'));
+const Simulator = lazy(() => import('./pages/Simulator'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,6 +57,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageFallback />}>
                     <Backtest />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/simulator"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <Simulator />
                   </Suspense>
                 }
               />

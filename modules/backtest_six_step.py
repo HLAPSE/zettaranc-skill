@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 
 from .loop_engine import ShaofuLoopEngine, LoopConfig, LoopTrade
 from .indicators import DailyData, get_kline_data
+from .statistics import sharpe_t_test, monte_carlo_permutation_test, analyze_sub_periods
+from .statistics.criteria import validate_strategy, ValidationReport, CriteriaLevel
 
 
 @dataclass
@@ -35,6 +37,7 @@ class ShaofuBacktestResult:
     max_drawdown: float = 0  # 最大回撤%
     sharpe_ratio: float = 0  # 夏普比率
     equity_curve: list[float] = field(default_factory=list)  # 资金曲线
+    validation_report: Optional[ValidationReport] = None  # 统计检验报告（可选）
 
 
 def _calc_metrics(result: ShaofuBacktestResult) -> None:
@@ -79,10 +82,11 @@ def _calc_metrics(result: ShaofuBacktestResult) -> None:
     result.profit_factor = total_profit / total_loss if total_loss > 0 else float("inf")
 
     # 资金曲线：从 100 开始，逐笔复利
+    # 注意：pnl_pct 是百分比数值（如 5.0 表示 5%），需除以 100 转为小数比例
     equity = 100.0
     curve = [equity]
     for pnl in pnl_list:
-        equity *= 1 + pnl
+        equity *= 1 + pnl / 100.0
         curve.append(equity)
     result.equity_curve = curve
 
@@ -100,15 +104,15 @@ def _calc_metrics(result: ShaofuBacktestResult) -> None:
             max_dd = dd
     result.max_drawdown = max_dd
 
-    # 夏普比率（用每笔交易收益率，年化）
-    if len(pnl_list) > 1:
+    # 夏普比率（用每笔交易收益率，按交易频率年化）
+    if len(pnl_list) >= 3:
         avg_ret = sum(pnl_list) / len(pnl_list)
         variance = sum((r - avg_ret) ** 2 for r in pnl_list) / (len(pnl_list) - 1)
         std = math.sqrt(variance) if variance > 0 else 0.0
-        if std > 0:
-            # 假设平均每笔交易间隔约 10-20 天，年化约 252/avg_days 次交易
-            # 保守用 sqrt(252) 做标准化
-            result.sharpe_ratio = (avg_ret / std) * math.sqrt(252)
+        if std > 0.1:
+            avg_hold = result.avg_holding_days if result.avg_holding_days > 0 else 10.0
+            annualization = math.sqrt(252.0 / avg_hold)
+            result.sharpe_ratio = (avg_ret / std) * annualization
 
 
 def backtest_shaofu_single(
@@ -304,6 +308,117 @@ def summary_text(result: ShaofuBacktestResult) -> str:
             pnl = t.pnl_pct if hasattr(t, "pnl_pct") else 0.0
             marker = "+" if pnl > 0 else ""
             lines.append(f"  {t.entry_date}->{t.exit_date or '持有中'} {marker}{pnl:.2f}%")
+
+    return "\n".join(lines)
+
+
+def backtest_shaofu_with_validation(
+    ts_code: str,
+    days: int = 250,
+    config: LoopConfig | None = None,
+    klines: list[DailyData] | None = None,
+    market_regimes: dict[str, str] | None = None,
+    validation_level: CriteriaLevel = CriteriaLevel.MODERATE,
+) -> ShaofuBacktestResult:
+    """
+    单股票少妇战法回测 + 统计检验
+
+    在基础回测之上，自动运行：
+    1. 夏普比率 t 检验（p-value）
+    2. Bootstrap 置信区间（95% CI）
+    3. Monte Carlo 置换检验（防数据挖掘）
+    4. 子周期分析（牛/熊/震荡稳健性）
+
+    Args:
+        ts_code: 股票代码
+        days: 回测天数
+        config: 策略参数
+        klines: K线数据（可选）
+        market_regimes: 市场环境映射 {date: 'bull'/'bear'/'sideways'}（可选）
+        validation_level: 验证级别（strict/moderate/loose）
+
+    Returns:
+        ShaofuBacktestResult with validation_report
+
+    Example:
+        >>> result = backtest_shaofu_with_validation("600519.SH")
+        >>> print(result.validation_report.generate_summary())
+    """
+    # 1. 基础回测
+    result = backtest_shaofu_single(ts_code, days=days, config=config, klines=klines)
+
+    if not result.trades:
+        return result
+
+    # 2. 提取收益率序列（从资金曲线计算日收益率）
+    equity_curve = result.equity_curve
+    if len(equity_curve) < 5:
+        # 样本量太小，无法有效检验（至少需要5笔交易）
+        return result
+
+    daily_returns = []
+    for i in range(1, len(equity_curve)):
+        if equity_curve[i - 1] > 0:
+            daily_returns.append((equity_curve[i] - equity_curve[i - 1]) / equity_curve[i - 1])
+
+    if len(daily_returns) < 5:
+        return result
+
+    # 3. 夏普 t 检验 + Bootstrap CI
+    sharpe_test = sharpe_t_test(daily_returns)
+
+    # 4. Monte Carlo 置换检验
+    mc_test = monte_carlo_permutation_test(daily_returns, n_permutations=1000)
+
+    # 5. 子周期分析（如果提供了市场环境数据）
+    sub_period = None
+    if market_regimes:
+        trades_data = [
+            {
+                "date": t.entry_date,
+                "pnl_pct": t.pnl_pct,
+                "holding_days": t.holding_days,
+            }
+            for t in result.trades
+        ]
+        sub_period = analyze_sub_periods(trades_data, market_regimes)
+
+    # 6. 生成验证报告
+    perf_metrics = {
+        "win_rate": result.win_rate,
+        "profit_factor": result.profit_factor,
+        "max_drawdown": result.max_drawdown,
+        "sharpe_ratio": result.sharpe_ratio,
+    }
+
+    report = validate_strategy(
+        strategy_name=f"少妇战法-{ts_code}",
+        sharpe_test_result=sharpe_test,
+        monte_carlo_result=mc_test,
+        sub_period_result=sub_period,
+        performance_metrics=perf_metrics,
+        level=validation_level,
+    )
+
+    result.validation_report = report
+
+    return result
+
+
+def summary_with_validation(result: ShaofuBacktestResult) -> str:
+    """
+    格式化带统计检验的回测结果
+
+    Args:
+        result: 带验证报告的回测结果
+
+    Returns:
+        格式化字符串
+    """
+    lines = [summary_text(result), ""]
+
+    if result.validation_report:
+        lines.append(result.validation_report.generate_summary())
 
     return "\n".join(lines)
 

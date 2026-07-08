@@ -43,6 +43,7 @@ export const NAV_ITEMS = [
   { path: '/screen', label: '选股', icon: '◎' },
   { path: '/watchlist', label: '自选', icon: '★' },
   { path: '/backtest', label: '回测', icon: '⟲' },
+  { path: '/simulator', label: '模拟', icon: '∿' },
   { path: '/trades', label: '交易', icon: '⇄' },
   { path: '/settings', label: '设置', icon: '⚙' },
 ] as const;

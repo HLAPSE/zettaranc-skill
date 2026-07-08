@@ -16,9 +16,12 @@ CLI 扩展命令模块（待集成到 cli.py）
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from datetime import datetime
 from typing import Any, NoReturn
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== 工具函数 ====================
@@ -672,6 +675,65 @@ def cmd_monitor(args):
         print("详细警报分析已输出至 data/reports/monitor_alert.md")
 
 
+def _simulate_narrate_text(result: Any, wf_payload: dict[str, Any] | None) -> dict[str, Any]:
+    """simulate 子命令的 --narrate 适配：单模拟走 narrator；walk-forward 走叙事化摘要。"""
+    if result is not None:
+        try:
+            from .simulator.narrator import generate_simulation_narrative
+
+            return generate_simulation_narrative(result)
+        except Exception as exc:
+            logger.warning("narrate 失败，使用兜底文案: %s", exc)
+            return {
+                "simulation_id": "",
+                "ts_codes": [],
+                "days": 0,
+                "narrative_text": f"[narrate 生成失败] {exc}",
+                "generated_at": "",
+                "model_used": "",
+                "cached": False,
+                "error": "narrate_failed",
+            }
+
+    if wf_payload is not None:
+        oos = wf_payload.get("oos_metrics") or {}
+        narrative_lines = [
+            "【Walk-forward OOS 战绩】",
+            f"- 窗口数: {len(wf_payload.get('windows') or [])}",
+            f"- 训练/验证窗口: {wf_payload.get('config', {}).get('train_days')}/{wf_payload.get('config', {}).get('test_days')}",
+            f"- 目标函数: {wf_payload.get('config', {}).get('objective', 'calmar')}",
+            f"- OOS 年化: {oos.get('annualized_return', 0) * 100:+.2f}%",
+            f"- OOS 夏普: {oos.get('sharpe_ratio', 0):.2f}",
+            f"- OOS Calmar: {oos.get('calmar_ratio', 0):.2f}",
+            f"- OOS 最大回撤: {oos.get('max_drawdown', 0) * 100:.2f}%",
+            f"- 过拟合比率: {wf_payload.get('overfit_ratio', 1.0):.2f}（接近 1 = 不过拟合）",
+            "",
+            "（walk-forward 不调 LLM，直接看 OOS 拼接曲线与稳定性）",
+        ]
+        return {
+            "simulation_id": "walk_forward",
+            "ts_codes": [],
+            "days": wf_payload.get("config", {}).get("train_days", 0) + wf_payload.get("config", {}).get("test_days", 0),
+            "narrative_text": "\n".join(narrative_lines),
+            "generated_at": "",
+            "model_used": "",
+            "cached": False,
+        }
+
+    return {}
+
+
+def _simulate_print_narrative(narrative: dict[str, Any]) -> None:
+    """非 JSON 输出模式：把 narrative 以人类可读形式追加到 stdout。"""
+    print("\n" + "=" * 60)
+    print("Z哥点评")
+    print("=" * 60)
+    text = narrative.get("narrative_text") if narrative else ""
+    if not text:
+        text = narrative.get("error", "点评生成失败") if narrative else "点评生成失败"
+    print(text)
+
+
 def cmd_simulate(args) -> None:
     """
     少女/少妇模拟器 CLI 入口（v0.2）。
@@ -680,6 +742,7 @@ def cmd_simulate(args) -> None:
         zt simulate 600487.SH,601318.SH --days 250 --capital 1000000 --json
         zt simulate --days 120 --max-positions 3 --score 75
         zt simulate 600487.SH --cost-model advanced --slippage dynamic --atr-sizing
+        zt simulate 600487.SH --days 250 --narrate --json    # LLM 点评
     """
     from dataclasses import asdict
 
@@ -743,49 +806,59 @@ def cmd_simulate(args) -> None:
         )
 
         if use_json:
-            _json_output(wf_to_dict(wf_result))
+            payload = wf_to_dict(wf_result)
+            if getattr(args, "narrate", False):
+                payload["narrative"] = _simulate_narrate_text(result=None, wf_payload=payload)
+            _json_output(payload)
         else:
             print(wf_summary_text(wf_result))
+            if getattr(args, "narrate", False):
+                _simulate_print_narrative(_simulate_narrate_text(result=None, wf_payload=None))
         return
 
     result = run_simulation(ts_codes=ts_codes, days=days, config=config)
 
-    if use_json:
-        metrics_dict = asdict(result.metrics) if result.metrics else None
+    metrics_dict = asdict(result.metrics) if result.metrics else None
 
-        _json_output(
-            {
-                "initial_capital": result.initial_capital,
-                "final_value": result.final_value,
-                "total_return": round(result.total_return * 100, 2),
-                "max_drawdown": round(result.max_drawdown * 100, 2),
-                "sharpe_ratio": round(result.sharpe_ratio, 2),
-                "total_trades": result.total_trades,
-                "win_rate": round(result.win_rate, 3),
-                "profit_factor": round(result.profit_factor, 2),
-                "avg_holding_days": round(result.avg_holding_days, 1),
-                "open_positions": len(result.positions),
-                "trades": [
-                    {
-                        "ts_code": t.ts_code,
-                        "action": t.action,
-                        "date": t.date,
-                        "price": t.price,
-                        "shares": t.shares,
-                        "pnl": t.pnl,
-                        "pnl_pct": round(t.pnl_pct * 100, 2),
-                        "reason": t.reason,
-                    }
-                    for t in result.trades
-                ],
-                "equity_curve_sample": result.equity_curve[:: max(1, len(result.equity_curve) // 30)],
-                "metrics": metrics_dict,
-                "benchmark_curve_sample": result.benchmark_curve[:: max(1, len(result.benchmark_curve) // 30)],
-                "resonance_details": result.resonance_summary,
-            }
-        )
+    if use_json:
+        output_dict = {
+            "initial_capital": result.initial_capital,
+            "final_value": result.final_value,
+            "total_return": round(result.total_return * 100, 2),
+            "max_drawdown": round(result.max_drawdown * 100, 2),
+            "sharpe_ratio": round(result.sharpe_ratio, 2),
+            "total_trades": result.total_trades,
+            "win_rate": round(result.win_rate, 3),
+            "profit_factor": round(result.profit_factor, 2),
+            "avg_holding_days": round(result.avg_holding_days, 1),
+            "open_positions": len(result.positions),
+            "trades": [
+                {
+                    "ts_code": t.ts_code,
+                    "action": t.action,
+                    "date": t.date,
+                    "price": t.price,
+                    "shares": t.shares,
+                    "pnl": t.pnl,
+                    "pnl_pct": round(t.pnl_pct * 100, 2),
+                    "reason": t.reason,
+                }
+                for t in result.trades
+            ],
+            "equity_curve_sample": result.equity_curve[:: max(1, len(result.equity_curve) // 30)],
+            "metrics": metrics_dict,
+            "benchmark_curve_sample": result.benchmark_curve[:: max(1, len(result.benchmark_curve) // 30)],
+            "resonance_details": result.resonance_summary,
+        }
+
+        if getattr(args, "narrate", False):
+            output_dict["narrative"] = _simulate_narrate_text(result=result, wf_payload=None)
+
+        _json_output(output_dict)
     else:
         print(summary_text(result))
+        if getattr(args, "narrate", False):
+            _simulate_print_narrative(_simulate_narrate_text(result=result, wf_payload=None))
 
 
 # ==================== 主入口（独立运行示例） ====================

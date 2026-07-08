@@ -185,7 +185,8 @@ def evaluate_stock(
     signals = _extract_signals(score, klines)
 
     verdict = SignalVerdict.PASS
-    if score.score < 60:
+    threshold = config.position_score_threshold if config else 60.0
+    if score.score < threshold:
         verdict = SignalVerdict.LOW_SCORE
     elif "高风险阶段" in signals:
         verdict = SignalVerdict.HIGH_RISK

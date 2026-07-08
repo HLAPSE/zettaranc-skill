@@ -60,6 +60,8 @@ Thumbs.db
 CLAUDE.md
 CLAUDE.md.bak
 .omc/
+.omo/
+.kimi/
 
 # 对话实录（临时文件，不入库）
 对话实录*.md
@@ -88,3 +90,4 @@ frontend/vite
 # 数据报告输出（自动生成，不入库）
 data/reports/
 .superpowers/
+design-demos/

@@ -39,7 +39,7 @@ from ..screener.data import get_all_stocks, get_recent_klines
 from .execution_constraints import get_trade_constraints, next_trading_date
 from .execution_engine import execute_buy, execute_partial_sell, execute_sell
 from .exit_manager import check_exit
-from .market_context import get_market_context, max_positions_allowed
+from .market_context import get_market_context, max_positions_allowed, precompute_market_contexts
 from .position_sizer import build_position
 from .signal_filter import filter_signals, evaluate_stock
 from .metrics import calculate_metrics
@@ -314,9 +314,10 @@ def run_simulation(
         benchmark_curve=_load_benchmark_curve(dates, config.benchmark_code, ds),
     )
 
+    market_contexts = precompute_market_contexts(dates, datasource=ds)
+
     for date in dates:
-        # 市场环境
-        context = get_market_context(date, datasource=ds)
+        context = market_contexts.get(date) or get_market_context(date, datasource=ds)
 
         # 评估候选信号
         candidates: list[SignalScore] = []

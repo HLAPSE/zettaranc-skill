@@ -282,3 +282,81 @@ export interface CommentaryResponse {
   cached: boolean;
   error?: string;
 }
+
+// ── 模拟器 ──
+export interface SimulationMetrics {
+  total_return: number;
+  annualized_return: number;
+  benchmark_return: number | null;
+  alpha: number | null;
+  beta: number | null;
+  sharpe_ratio: number;
+  sortino_ratio: number | null;
+  calmar_ratio: number | null;
+  max_drawdown: number;
+  max_drawdown_duration: number | null;
+  win_rate: number;
+  profit_factor: number;
+  avg_win: number | null;
+  avg_loss: number | null;
+  gain_loss_ratio: number | null;
+  max_consecutive_wins: number | null;
+  max_consecutive_losses: number | null;
+  volatility_annual: number | null;
+}
+
+export interface SimulationTrade {
+  action: string;
+  ts_code: string;
+  date: string;
+  price: number;
+  shares: number;
+  pnl: number | null;
+  pnl_pct: number | null;
+  fee: number;
+  stamp_duty: number;
+  transfer_fee: number;
+  reason: string;
+}
+
+export interface SimulationEquityPoint {
+  date: string;
+  equity: number;
+  cash: number;
+  positions: number;
+  regime: string;
+}
+
+export interface SimulationRequest {
+  ts_codes: string[];
+  days: number;
+  capital: number;
+  max_positions: number;
+  risk_per_trade: number;
+  min_score: number;
+  min_signals: number;
+  atr_sizing: boolean;
+  max_position_pct: number;
+  benchmark: string;
+  cost_model: string;
+  slippage: string;
+  no_st: boolean;
+  strategy_mode: string;
+  strategy_lookback: number;
+  min_resonance_score: number;
+  walk_forward: boolean;
+  wf_train_days: number;
+  wf_test_days: number;
+  wf_objective: string;
+}
+
+export interface SimulationResponse {
+  summary: Record<string, unknown>;
+  metrics: SimulationMetrics | null;
+  equity_curve: SimulationEquityPoint[];
+  benchmark_curve: Array<{ date: string; close: number }>;
+  trades: SimulationTrade[];
+  rejected_entries: Array<Record<string, unknown>>;
+  resonance_summary: Record<string, unknown>;
+  positions: Array<Record<string, unknown>>;
+}

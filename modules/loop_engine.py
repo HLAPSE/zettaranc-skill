@@ -144,7 +144,7 @@ def _calc_stop_loss_price(
     entry_kline = klines[day_idx]
 
     if method == "entry_low":
-        return entry_kline.low
+        return entry_kline.low * 0.97
 
     if method == "n_structure_low":
         # 回溯找入场前最近的回调低点（N 型结构的前低）
@@ -508,17 +508,17 @@ class ShaofuLoopEngine:
         trade.max_adverse = min(trade.max_adverse, pnl_pct)
         trade.holding_days += 1
 
-        # Step 4: 收盘价止损
-        if self._check_stop_loss_internal(klines, day_idx, trade):
-            return None, self._close_trade(trade, klines[day_idx].trade_date, current_price, "止损", pnl_pct)
-
         # 白线死叉黄线（无条件清仓）
         if self._check_dead_cross_exit(klines, day_idx):
             return None, self._close_trade(trade, klines[day_idx].trade_date, current_price, "白线死叉黄线", pnl_pct)
 
-        # 最少持仓天数保护
+        # 最少持仓天数保护（止损在保护期后才生效，避免入场次日被震出）
         if trade.holding_days < self.config.min_holding_days:
             return trade, None
+
+        # Step 4: 收盘价止损
+        if self._check_stop_loss_internal(klines, day_idx, trade):
+            return None, self._close_trade(trade, klines[day_idx].trade_date, current_price, "止损", pnl_pct)
 
         # Step 6: 白线两日破位
         if self._check_white_line_exit_internal(klines, day_idx):

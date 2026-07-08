@@ -811,6 +811,7 @@ def build_parser():
     p_sim.add_argument("--strategy-lookback", type=int, default=5, help="战法信号回看交易日数")
     p_sim.add_argument("--min-resonance-score", type=float, default=0.35, help="共振模式最低入选分")
     p_sim.add_argument("--json", action="store_true", help="JSON输出")
+    p_sim.add_argument("--narrate", action="store_true", help="LLM 生成 Z哥风格点评")
     # v0.4 新增：walk-forward 参数寻优
     p_sim.add_argument("--walk-forward", action="store_true", help="启用 walk-forward 参数寻优")
     p_sim.add_argument("--wf-train-days", type=int, default=120, help="训练窗口天数（默认 120）")
