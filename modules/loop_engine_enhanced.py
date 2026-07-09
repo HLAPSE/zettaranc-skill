@@ -399,6 +399,7 @@ class EnhancedShaofuLoopEngine(ShaofuLoopEngine):
                     # 记录触发的策略
                     if hasattr(current_trade, "triggered_strategies"):
                         current_trade.triggered_strategies = signal.get("triggered_strategies", [])
+                    if hasattr(current_trade, "signal_strength"):
                         current_trade.signal_strength = signal.get("signal_strength", 0.0)
 
                     state = LoopState.HOLDING

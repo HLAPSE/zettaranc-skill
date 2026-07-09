@@ -296,7 +296,7 @@ def backtest_with_ensemble(
     # 2. 提取交易信号
     # TODO: 这里需要修改 LoopEngine，让它记录每个交易触发了哪些策略信号
     # 目前简化处理：假设所有交易都是 B1 信号
-    trades_with_signals = [
+    trades_with_signals: list[dict[str, Any]] = [
         {
             "entry_date": t.entry_date,
             "exit_date": t.exit_date,

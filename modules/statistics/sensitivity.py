@@ -255,7 +255,7 @@ def analyze_all_parameters(
             strategy_name=strategy_name,
             param_name=param_name,
             base_value=base_value,
-            scan_range=scan_range,
+            scan_range=scan_range,  # type: ignore[arg-type]
             evaluate_fn=evaluate_fn,
         )
 
