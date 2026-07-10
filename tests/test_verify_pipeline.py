@@ -1,6 +1,8 @@
 """v1.0 验收管线测试"""
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from modules.verify.pipeline import (
@@ -9,8 +11,13 @@ from modules.verify.pipeline import (
     StockResult,
     VerifyResult,
     _load_klines_with_precheck,
+    _run_single_stock_backtest,
     verify_v10_pipeline,
 )
+
+# 真实数据回归：未配置 TUSHARE_TOKEN 时整条测试 skip
+_TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "")
+_RUN_REALDATA = os.environ.get("RUN_REALDATA", "").lower() == "true"
 
 
 def test_dataclasses_importable():
@@ -46,3 +53,19 @@ def test_load_klines_skips_short_history():
     assert any(r.skipped for r in result)
     skipped_codes = [r.ts_code for r in result if r.skipped]
     assert "999999.SH" in skipped_codes
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(
+    not _TUSHARE_TOKEN or not _RUN_REALDATA,
+    reason="需配置 TUSHARE_TOKEN 并设置 RUN_REALDATA=true 才能跑真实数据回归",
+)
+def test_backtest_single_real_stock_returns_metrics():
+    """真实股票回测返回有效指标（无 token 时 skip）"""
+    result = _run_single_stock_backtest("600519.SH", days=250)
+    assert isinstance(result, StockResult)
+    assert result.ts_code == "600519.SH"
+    assert not result.skipped
+    # 至少有一个交易或零交易（极端行情）
+    assert result.trades >= 0
+    assert 0.0 <= result.win_rate <= 1.0

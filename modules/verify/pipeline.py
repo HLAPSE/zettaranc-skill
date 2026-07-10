@@ -9,7 +9,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from modules.backtest_six_step import backtest_shaofu_single
 from modules.datasource import get_datasource
+from modules.loop_engine import LoopConfig
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +123,46 @@ def _load_klines_with_precheck(
             )
 
     return results
+
+
+def _run_single_stock_backtest(
+    ts_code: str,
+    days: int,
+    config: LoopConfig | None = None,
+) -> StockResult:
+    """调 backtest_shaofu_single 返回 StockResult
+
+    任何回测异常都不抛出，整体捕获后返回 skipped=True 的 StockResult，
+    保证组合回测中单股失败不会中断整个流水线。
+    """
+    try:
+        # backtest_shaofu_single 返回 ShaofuBacktestResult（dataclass）
+        result = backtest_shaofu_single(ts_code, days=days, config=config)
+        # ShaofuBacktestResult 字段：total_trades, win_count, win_rate,
+        # total_return, sharpe_ratio, max_drawdown, equity_curve
+        return StockResult(
+            ts_code=ts_code,
+            name=getattr(result, "name", ""),
+            trades=result.total_trades,
+            win_rate=result.win_rate,
+            return_pct=result.total_return,
+            sharpe=result.sharpe_ratio,
+            max_drawdown=result.max_drawdown,
+            skipped=False,
+        )
+    except Exception as e:  # noqa: BLE001 - 单股回测失败不应中断整个组合
+        logger.warning("回测 %s 失败: %s", ts_code, e)
+        return StockResult(
+            ts_code=ts_code,
+            name="",
+            trades=0,
+            win_rate=0.0,
+            return_pct=0.0,
+            sharpe=0.0,
+            max_drawdown=0.0,
+            skipped=True,
+            skip_reason=f"回测异常: {e!s:.50}",
+        )
 
 
 def verify_v10_pipeline(
