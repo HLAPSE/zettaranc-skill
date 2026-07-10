@@ -55,6 +55,39 @@ zt analyze 600519.SH  # 用框架分析茅台，不需要行情数据
 
 ---
 
+## v3.7.0 验收工程化
+
+`zt verify v1.0` 一键完成少妇战法 v1.0 验收：
+
+```bash
+# 默认 50 只 × 250 天
+zt verify v1.0
+
+# 启用 Walk-forward
+zt verify v1.0 --limit 50 --days 250 --walk-forward
+
+# JSON 输出
+zt verify v1.0 --json
+
+# 自定义输出目录
+zt verify v1.0 --output data/reports/my_verify
+```
+
+输出报告：
+- `data/reports/verify_v10_<timestamp>.json` — 结构化（source of truth）
+- `data/reports/verify_v10_<timestamp>.md` — 人读（含五项指标表格）
+
+**五项硬指标**：
+| 指标 | 阈值 |
+|------|------|
+| Sharpe | ≥ 0.5 |
+| Calmar | ≥ 0.5 |
+| WinRate | ≥ 40% |
+| MaxDD | ≤ 25% |
+| OOS/IS | ≥ 0.6 |
+
+---
+
 ## 🎯 多因子优化成果（v3.3.3）
 
 **基于 200 只股票、500 天真实行情数据的完整优化**
@@ -1218,6 +1251,7 @@ zettaranc ❯ 平安银行 250 天模拟，A 股真实约束 + ATR 仓位：
 
 | 版本 | 核心变化 |
 |------|---------|
+| **v3.7.0** | 少妇战法 v1.0 验收工程化（一键命令 + 五项硬指标 + WF） | ✅ 已完成 |
 | **v3.6.0** | 模拟器 v0.4 — Walk-forward 参数寻优（滚动窗口 OOS、参数网格、optimizer_report） |
 | **v3.5.0** | 模拟器 v0.3 — 战法共振评分（strategy_adapter / resonance_scorer / environment_weights） |
 | **v3.4.0** | 模拟器 v0.2 — A 股真实约束（T+1 / 涨跌停 / ST）+ 真实成本 + 动态滑点 + ATR 仓位 + 专业回测指标 |

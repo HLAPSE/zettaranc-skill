@@ -2,6 +2,54 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v3.7.0 (2026-07-10)
+
+### 少妇战法 v1.0 验收工程化
+
+> **「v3.7.0：少妇战法 v1.0 验收工程化 —— 一键命令 + 五项硬指标自动判定 + Walk-forward 防过拟合。」**
+
+#### 新增模块 `modules/verify/`
+
+- **`pipeline.py`** — 统一回测管线（封装 `backtest_shaofu_portfolio` + 数据预检 + 指标聚合）
+- **`gates.py`** — 五项硬指标自动达标判定（Sharpe/Calmar/WinRate/MaxDD/OOS/IS）
+- **`walk_forward.py`** — 少妇六步 WF 适配（IS 寻优 + OOS 拼接 + OOS/IS 比率）
+- **`registry_writer.py`** — 多因子优化结果 → `param_registry` 写入器
+- **`report.py`** — JSON + Markdown 报告输出（JSON 是 source of truth）
+- **`cli.py`** — `zt verify v1.0` CLI 适配层
+
+#### 新增脚本
+
+- `scripts/verify_v10.py` — `zt verify v1.0` 薄壳入口
+
+#### 新增子命令
+
+- `zt verify v1.0 [--limit N] [--days N] [--walk-forward] [--json]`
+  - `--limit N`：[10, 500]，默认 50
+  - `--days N`：[120, 1000]，默认 250
+  - `--walk-forward`：启用 Walk-forward
+  - `--wf-train N` / `--wf-test N`：WF 窗口，默认 120 / 60
+
+#### 修改
+
+- `modules/loop_engine.py`：追加 `LoopConfig.from_registry()` 类方法（不改现有字段）
+- `modules/cli_commands.py`：注册 `verify` 子命令
+
+#### 五项硬指标阈值
+
+| 指标 | 阈值 | 方向 |
+|------|------|------|
+| Sharpe | ≥ 0.5 | higher |
+| Calmar | ≥ 0.5 | higher |
+| WinRate | ≥ 40% | higher |
+| MaxDD | ≤ 25% | lower |
+| OOS/IS | ≥ 0.6 | higher |
+
+#### 测试
+
+- 新增 `tests/test_verify_*.py`（6 个测试文件，~49 用例）
+- 零回归：892 → 941 passed（+ 49）
+- ruff + mypy 零错误
+
 ## v3.6.0 (2026-07-04)
 
 ### 少女/少妇模拟器 v0.4 —— Walk-forward 参数寻优
