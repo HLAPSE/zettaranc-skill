@@ -215,8 +215,22 @@ def verify_v10_pipeline(
     aggregate = _aggregate_metrics(per_stock, days)
 
     # 4. Gates 判定（Task 5）
+    # 4.5 Walk-forward（如果启用，Task 6）
+    wf_result = None
+    if walk_forward and not meta.get("empty_input"):
+        from .walk_forward import walk_forward_verify
+        wf_result = walk_forward_verify(
+            ts_codes=ts_codes,
+            days=days,
+            wf_train_days=wf_train_days,
+            wf_test_days=wf_test_days,
+            config=config,
+        )
+        meta["wf_degraded"] = wf_result.degraded
+        meta["wf_splits"] = len(wf_result.splits)
+
     from .gates import check_gates
-    gates = check_gates(aggregate, wf=None)  # Task 6 加入 wf
+    gates = check_gates(aggregate, wf=wf_result)
 
     return VerifyResult(
         per_stock=per_stock,
