@@ -17,6 +17,8 @@ from .indicators import DailyData, get_kline_data
 from .market_regime import MarketRegime
 from .statistics import sharpe_t_test, monte_carlo_permutation_test, analyze_sub_periods
 from .statistics.criteria import validate_strategy, ValidationReport, CriteriaLevel
+from .core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown, compute_sharpe, daily_returns
+from .core.net import disable_proxy
 
 if TYPE_CHECKING:
     from .market_regime import MarketRegimeClassifier
@@ -89,12 +91,14 @@ def _calc_metrics(result: ShaofuBacktestResult) -> None:
     total_loss = abs(sum(loss_pnls))
     result.profit_factor = total_profit / total_loss if total_loss > 0 else float("inf")
 
-    # 资金曲线：从 100 开始，逐笔复利
+    # 资金曲线：从 100 开始，逐笔按实际仓位复利
     # 注意：pnl_pct 是百分比数值（如 5.0 表示 5%），需除以 100 转为小数比例
     equity = 100.0
     curve = [equity]
-    for pnl in pnl_list:
-        equity *= 1 + pnl / 100.0
+    for t in trades:
+        pnl = t.pnl_pct
+        pos_pct = getattr(t, "position_pct", 1.0) or 1.0
+        equity *= 1 + (pnl / 100.0) * pos_pct
         curve.append(equity)
     result.equity_curve = curve
 
@@ -102,25 +106,13 @@ def _calc_metrics(result: ShaofuBacktestResult) -> None:
     result.total_return = (equity / 100.0) - 1.0
 
     # 最大回撤（基于资金曲线）
-    peak = curve[0]
-    max_dd = 0.0
-    for val in curve:
-        if val > peak:
-            peak = val
-        dd = (peak - val) / peak if peak > 0 else 0.0
-        if dd > max_dd:
-            max_dd = dd
+    max_dd, _ = compute_drawdown(curve)
     result.max_drawdown = max_dd
 
     # 夏普比率（用每笔交易收益率，按交易频率年化）
     if len(pnl_list) >= 3:
-        avg_ret = sum(pnl_list) / len(pnl_list)
-        variance = sum((r - avg_ret) ** 2 for r in pnl_list) / (len(pnl_list) - 1)
-        std = math.sqrt(variance) if variance > 0 else 0.0
-        if std > 0.1:
-            avg_hold = result.avg_holding_days if result.avg_holding_days > 0 else 10.0
-            annualization = math.sqrt(252.0 / avg_hold)
-            result.sharpe_ratio = (avg_ret / std) * annualization
+        avg_hold = result.avg_holding_days if result.avg_holding_days > 0 else 10.0
+        result.sharpe_ratio = compute_sharpe(pnl_list, periods_per_year=TRADING_DAYS_PER_YEAR / avg_hold)
 
 
 def backtest_shaofu_single(
@@ -142,8 +134,7 @@ def backtest_shaofu_single(
         ShaofuBacktestResult with all metrics
     """
     # 取消代理（与 backtest.py 保持一致）
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
 
     # 1. 获取 K 线数据
     if klines is None:
@@ -198,8 +189,7 @@ def backtest_shaofu_portfolio(
         }
     """
     # 取消代理
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
 
     # 1. 逐股回测
     results: list[ShaofuBacktestResult] = []
@@ -242,14 +232,7 @@ def backtest_shaofu_portfolio(
         merged_curve.append(val)
 
     # 4. 从合并曲线计算组合级回撤
-    peak = merged_curve[0]
-    max_dd = 0.0
-    for val in merged_curve:
-        if val > peak:
-            peak = val
-        dd = (peak - val) / peak if peak > 0 else 0.0
-        if dd > max_dd:
-            max_dd = dd
+    max_dd, _ = compute_drawdown(merged_curve)
 
     # 5. 组合级收益率和夏普
     total_return = (merged_curve[-1] / 100.0) - 1.0 if merged_curve else 0.0
@@ -257,16 +240,8 @@ def backtest_shaofu_portfolio(
     # 夏普比率：用每日（逐点）收益率
     sharpe = 0.0
     if len(merged_curve) > 1:
-        daily_rets = []
-        for i in range(1, len(merged_curve)):
-            if merged_curve[i - 1] > 0:
-                daily_rets.append((merged_curve[i] - merged_curve[i - 1]) / merged_curve[i - 1])
-        if daily_rets:
-            avg_r = sum(daily_rets) / len(daily_rets)
-            var = sum((r - avg_r) ** 2 for r in daily_rets) / (len(daily_rets) - 1)
-            std = math.sqrt(var) if var > 0 else 0.0
-            if std > 0:
-                sharpe = (avg_r / std) * math.sqrt(252)
+        daily_rets = daily_returns(merged_curve)
+        sharpe = compute_sharpe(daily_rets)
 
     return {
         "results": results,
@@ -364,19 +339,16 @@ def backtest_shaofu_with_validation(
         # 样本量太小，无法有效检验（至少需要5笔交易）
         return result
 
-    daily_returns = []
-    for i in range(1, len(equity_curve)):
-        if equity_curve[i - 1] > 0:
-            daily_returns.append((equity_curve[i] - equity_curve[i - 1]) / equity_curve[i - 1])
+    daily_rets = daily_returns(equity_curve)
 
-    if len(daily_returns) < 5:
+    if len(daily_rets) < 5:
         return result
 
     # 3. 夏普 t 检验 + Bootstrap CI
-    sharpe_test = sharpe_t_test(daily_returns)
+    sharpe_test = sharpe_t_test(daily_rets)
 
     # 4. Monte Carlo 置换检验
-    mc_test = monte_carlo_permutation_test(daily_returns, n_permutations=1000)
+    mc_test = monte_carlo_permutation_test(daily_rets, n_permutations=1000)
 
     # 5. 子周期分析（如果提供了市场环境数据）
     sub_period = None
@@ -475,8 +447,7 @@ def backtest_shaofu_portfolio_integrated(
         }
     """
     # 取消代理
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
 
     cfg = base_config or LoopConfig()
 
@@ -798,28 +769,13 @@ def backtest_shaofu_portfolio_integrated(
         portfolio_result.total_return = (equities[-1] / initial_capital - 1.0) if initial_capital > 0 else 0.0
 
         # 最大回撤
-        peak = equities[0]
-        max_dd = 0.0
-        for eq in equities:
-            if eq > peak:
-                peak = eq
-            dd = (peak - eq) / peak if peak > 0 else 0.0
-            if dd > max_dd:
-                max_dd = dd
+        max_dd, _ = compute_drawdown(equities)
         portfolio_result.max_drawdown = max_dd
 
         # 夏普比率（基于每日收益率）
         if len(equities) >= 3:
-            daily_rets = []
-            for i in range(1, len(equities)):
-                if equities[i - 1] > 0:
-                    daily_rets.append((equities[i] - equities[i - 1]) / equities[i - 1])
-            if len(daily_rets) >= 2:
-                avg_r = sum(daily_rets) / len(daily_rets)
-                var_r = sum((r - avg_r) ** 2 for r in daily_rets) / (len(daily_rets) - 1)
-                std_r = math.sqrt(var_r) if var_r > 0 else 0.0
-                if std_r > 0:
-                    portfolio_result.sharpe_ratio = (avg_r / std_r) * math.sqrt(252)
+            daily_rets = daily_returns(equities)
+            portfolio_result.sharpe_ratio = compute_sharpe(daily_rets)
 
     return {
         "result": portfolio_result,

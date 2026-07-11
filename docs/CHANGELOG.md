@@ -2,6 +2,212 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v3.9.0 (2026-07-11)
+
+### 技术债务清理（地基工程）
+
+> **「v3.9.0：大规模技术债务清理 —— 统一核心类型、提取公共函数、消除重复代码、修复架构问题，为后续功能迭代打下坚实地基。」**
+
+#### 类型与枚举统一
+
+- **统一 `PerformanceMetrics` 为 20 字段**：`modules/core/metrics.py` 定义标准结构，`modules/simulator/metrics.py` 变为薄包装层，消除 simulator/verify/backtest 三处的字段不一致。
+- **统一 `MarketRegime` 枚举**：simulator 不再自定义枚举，改为从 `modules/core/market_context.py` 导入，全项目单一来源。
+- **统一 `annual_return` → `annualized_return`**：消除命名歧义，全项目统一使用 `annualized_return`。
+- **统一 `equity_curve` 类型为 `list[float]`**：消除 `list[float]` / `list[dict]` / `pd.Series` 混用问题。
+
+#### 常量与公共函数提取
+
+- **提取 `TRADING_DAYS_PER_YEAR` 常量**：新增 `modules/core/paths.py`，消除全项目 252/250 混用问题。
+- **提取公共计算函数**：`compute_sharpe` / `compute_drawdown` / `daily_returns` 提取到 `modules/core/metrics.py`，各模块统一调用。
+- **新增 `core/net.py`**：`disable_proxy()` 公共函数，消除多处重复的代理禁用逻辑。
+- **新增 `core/paths.py`**：`DATA_DIR` / `REGISTRY_DIR` / `REPORTS_DIR` 路径常量，统一硬编码路径。
+
+#### 数据层统一
+
+- **统一 dict/daily 转换函数到 `datasource.py`**：`_dict_to_daily` / `_daily_to_dict` 等转换函数收归 `datasource.py`，消除散落各处的重复实现。
+- **统一 KDJ/BBI 指标计算到 `indicators/core.py`**：消除 `indicators/` 与 `screener/` 之间的重复计算逻辑。
+
+#### 架构修复
+
+- **修复 `backtest/__init__.py` 名称覆盖问题**：`__init__.py` 中的导入不再覆盖子模块名称。
+- **修复 `backtest/portfolio.py` 分层违反**：业务逻辑不再直接依赖底层实现细节。
+- **迁移 `WFSplit` → `WalkForwardSplit`**：命名规范化，与项目其他 Split 类保持一致。
+
+#### 代码清理
+
+- 清理注释代码和 TODO 标记
+- 消除 simulator/verify/backtest 之间的重复代码
+
+#### 验证
+
+- 全量测试：`1097 passed, 15 skipped`（从 v3.8.2 的 1011 增加 86 个）
+- ruff 检查通过
+
+## v3.8.2 (2026-07-11)
+
+### 数据层架构改造：统一 DB 优先读取
+
+> **「v3.8.2：所有数据获取统一走 DB 优先策略，DB 没有数据时才调 API 并缓存到 DB，解决数据不一致和重复拉取问题。」**
+
+#### 改造
+
+- **`modules/database.py`**：
+  - 新增 `save_klines()` 方法，批量保存 K 线数据到 `daily_kline` 表。
+- **`modules/datasource.py`**：
+  - `CompositeDataSource.get_kline_dicts()` 改造为 DB 优先策略：
+    - 先查 DB（`daily_kline` 表）
+    - DB 没有时调 API 并写入 DB 缓存
+    - 返回数据
+  - 导入 `save_klines` 方法。
+
+#### 效果
+
+- **性能提升**：第一次查询某股票时调 API 并缓存，后续查询直接从 DB 读取（快）。
+- **数据一致**：所有模块统一走 DB，避免 API 返回不同结果。
+- **离线支持**：只要 DB 有数据，无需网络即可使用。
+- **架构清晰**：数据流统一为 `用户请求 → 业务模块 → DB → API（仅 DB 没有时）`。
+
+#### 验证
+
+- 所有测试通过：`1011 passed, 15 skipped`。
+- DB 有数据时直接返回，不调用 API。
+- DB 没有数据时调用 API 并缓存。
+- 不存在的股票不会被缓存。
+
+## v3.8.1 (2026-07-11)
+
+### 接入 Indevs Tushare Replay API 数据源
+
+> **「v3.8.1：新增 IndevsDataSource，支持通过 `ai-tool.indevs.in` 的 X-API-Key 方式获取 Tushare Pro 数据，作为现有 Tushare/Bridge/SQLite 之外的第四种数据源。」**
+
+#### 新增
+
+- **`modules/indevs_client.py`**：
+  - `IndevsClient`：基于 `requests` 的 REST 客户端，调用 `https://ai-tool.indevs.in/tushare/pro/<api_name>`。
+  - 自动 DNS fallback（`ai-tool.indevs.in` / `tushare.indevs.in` → `172.67.197.91`）。
+  - 请求失败时自动重试 3 次。
+  - 字段标准化：`pre_close` → `prev_close`，去除 `change`，避免 `DailyData` 构造失败。
+  - 支持 `daily / index_daily / stock_basic / trade_cal / stk_factor / daily_basic / moneyflow / rt_k`。
+- **`modules/datasource.py`**：
+  - 新增 `IndevsDataSource`，实现 `DataSource` 协议。
+  - `CompositeDataSource` 在 `auto` 模式下优先使用 Indevs（当 `INDEVS_API_KEY` 配置时）。
+  - `get_datasource()` 支持 `preferred="indevs"`，并在 `auto` 时自动检测 `INDEVS_API_KEY`。
+- **`modules/data_sync/syncer.py`**：
+  - `DataSyncer` 默认数据源选择逻辑：若配置了 `INDEVS_API_KEY`，优先使用 `IndevsDataSource`。
+- **`.env.example`**：新增 `INDEVS_API_KEY` / `INDEVS_API_URL` 配置项。
+
+#### 验证
+
+- `IndevsClient` 单接口连通性：`stock_basic`、`daily`、`index_daily`、`stk_factor` 均返回数据。
+- 数据同步：`DataSyncer.sync_daily_kline('000001.SZ', start_date='20250701', end_date='20260710')` 成功写入 250 条。
+- 市场环境：`precompute_market_contexts(['20260708', '20260709', '20260710'])` 正常输出 STRONG/NEUTRAL/WEAK。
+- 完整端到端：`python scripts/optimize_for_v10_verify.py --rounds 1 --stocks 30 --adaptive-regime --no-screener-pool` 在 `INDEVS_API_KEY=huanghanchi` 下跑通全链路。
+- 全量测试：`1011 passed / 15 skipped`
+- ruff 检查通过
+
+## v3.8.0 (2026-07-11)
+
+### 市场环境自适应择时（最小可用版）
+
+> **「v3.8.0：PortfolioBacktestEngine 根据上一交易日的市场环境（STRONG/NEUTRAL/WEAK）动态调整 max_positions、position_pct、max_entries_per_day，弱势日默认禁止新开仓。」**
+
+#### 新增
+
+- **`modules/verify/portfolio_engine.py`**：
+  - 新增 `MarketAdaptiveConfig` dataclass，支持按市场环境分别设置 `max_positions / position_pct / max_entries_per_day` 的乘数，以及 `weak_no_new_entries` 开关。
+  - `PortfolioConfig` 增加 `adaptive: MarketAdaptiveConfig` 字段。
+  - `run_with_data()` 在 `adaptive.enabled` 时批量预计算 `MarketContext`，买入决策使用**上一交易日**的 context，避免偷看当天。
+  - `_scan_and_buy()` 增加 `prev_context` 参数，调用 `_resolve_adaptive()` 解析当日有效仓位参数。
+- **`modules/verify/scorer.py`**：
+  - `V10VerifyScorer.__init__` 新增 `portfolio_config` 参数，透传给 `verify_v10_pipeline`。
+- **`scripts/optimize_for_v10_verify.py`**：
+  - 新增 `--adaptive-regime` / `--adaptive-weak-off` 参数，寻优时可开关市场环境自适应。
+
+#### 测试
+
+- `tests/test_verify_portfolio_engine.py` 新增 3 个测试：
+  - `test_adaptive_weak_no_new_entries`：验证 WEAK 环境下参数收缩并禁止新开仓。
+  - `test_adaptive_disabled_unchanged`：验证 `enabled=False` 时保持原配置。
+  - `test_adaptive_lag_uses_previous_day_context`：验证使用上一交易日环境做决策。
+- `tests/test_verify_pipeline.py` 新增 `test_pipeline_passes_portfolio_config_to_engine`：验证 pipeline 将 portfolio_config 透传给组合引擎。
+
+#### 验证
+
+- 全量测试：`1009 passed / 12 skipped`
+- Smoke：`python scripts/optimize_for_v10_verify.py --smoke --adaptive-regime` 通过
+- ruff 检查通过
+
+## v3.7.7 (2026-07-11)
+
+### 少妇战法 v1.0 验收 — 组合级 Walk-forward 真切片
+
+> **「v3.7.7：OOS/IS 比率不再复用单股回测的平均 Sharpe，而是基于 PortfolioBacktestEngine 的组合净值序列做真切片。」**
+
+#### 新增
+
+- **`modules/verify/portfolio_walk_forward.py`** 新建组合级 walk-forward：
+  - `portfolio_walk_forward_verify()`：加载一次全量数据，按交易日索引生成 IS/OOS 切片。
+  - 每段分别跑 `PortfolioBacktestEngine.run_with_data(IS/OOS 日期窗口)`。
+  - 聚合各段 `PortfolioBacktestResult`，计算 OOS/IS 比率。
+  - 切片数 < 3 时降级。
+
+#### 改造
+
+- **`modules/verify/portfolio_engine.py`**：
+  - 新增 `load_data()`：只加载一次 K 线与交易日索引。
+  - 新增 `run_with_data()`：在已加载数据上跑组合回测，支持 `start_date` / `end_date` 日期窗口切片。
+  - `run()` 改为调用 `load_data()` + `run_with_data()`。
+  - `_build_result()` 年化收益改用 `len(net_values)`（实际交易天数），避免窗口截断后失真。
+- **`modules/verify/pipeline.py`**：
+  - 组合引擎分支 walk-forward 改为调用 `portfolio_walk_forward_verify()`。
+  - 修复 `LoopTrade` 未导入导致的 ruff F821。
+
+#### 测试
+
+- `tests/test_verify_portfolio_engine.py` 新增 3 个测试：日期窗口切片、开放结束窗口、年化天数。
+- `tests/test_verify_portfolio_walk_forward.py` 新增 6 个测试：降级、IS/OOS 差异、段聚合、低交易段过滤、空聚合、基础聚合。
+
+#### 验证
+
+- 全量测试：`1005 passed / 12 skipped`
+- Smoke：`python scripts/optimize_for_v10_verify.py --smoke` 通过
+- ruff 检查通过
+
+## v3.7.6 (2026-07-11)
+
+### 少妇战法 v1.0 验收 — 多指标分组选股池 + 组合回测引擎
+
+> **「v3.7.6：选股池不再只是流动性/趋势过滤，而是把 B1 / 超级B1 / 长安 / 建仓波 / 吸筹 / 牛绳 / 沙漏等指标按风格分组编排后接入组合回测。」**
+
+#### 新增
+
+- **`modules/verify/pool.py`** 新增多指标分组选股：
+  - `CRITERIA_GROUPS`：把 14 个 screener criteria 分为 4 组
+    - `left_pullback`：左侧低吸（B1 / 超级B1 / 长安 / 牛绳 / 沙漏完美）
+    - `right_breakout`：右侧突破（B2 / B3 / 突破 / 量比战法）
+    - `stage_accumulation`：中周期位置（建仓波 / 吸筹 / 安全）
+    - `quality_confirm`：质量确认（完美图形）
+  - `load_v10_stock_pool_multi_criteria()`：先基础质量过滤，再按分组运行 criteria，union/intersection 合并，最后按综合评分取 Top N。
+  - 默认分组 `left_pullback + stage_accumulation`，与当前 B1-only 组合引擎对齐。
+- **`scripts/optimize_for_v10_verify.py`** 新增 CLI 参数：
+  - `--pool-groups`：选股分组，逗号分隔
+  - `--pool-mode union|intersection`：分组合并模式
+  - `--pool-criteria`：直接指定 criteria 列表（绕过分组）
+  - `--no-screener-pool`：回退到旧版流动性/趋势池
+- **`tests/test_verify_pool.py`** 新增 14 个测试：分组解析、union/intersection 合并、mock 多指标选股、脚本参数路由。
+
+#### 修复
+
+- **`modules/screener/data.py`** `_dict_to_daily()` 增加防御性处理：
+  - 已是 `DailyData` 时直接返回，避免 criteria 内部二次转换失败。
+  - 对 dict 数值字段做 `float()` / `str()` 转换，兼容不同数据源返回类型。
+- **`modules/verify/pipeline.py`** `verify_v10_pipeline()` 在 `LoopConfig.from_registry()` 返回 `None` 时，自动回退到 `LoopConfig()` 默认值，避免组合引擎分支读到 `None.position_pct` 报错。
+
+#### 验证
+
+- 全量测试：`996 passed / 12 skipped`
+- Smoke：`python scripts/optimize_for_v10_verify.py --smoke` 通过
+
 ## v3.7.3 (2026-07-11)
 
 ### 少妇战法 v1.0 验收 — walk_forward 真切片

@@ -383,12 +383,24 @@ def calculate_slope(values: list[float], period: int) -> float:
     return slope
 
 
-def calculate_kdj(klines: list[DailyData], period: int = 9, k_ma: int = 3, d_ma: int = 3) -> tuple[float, float, float]:
+def _normalize_klines(klines: list) -> list[DailyData]:
+    """将 list[dict] 或 list[DailyData] 统一为 list[DailyData]。"""
+    if not klines:
+        return []
+    if isinstance(klines[0], DailyData):
+        return klines
+    # lazy import 避免循环依赖
+    from modules.datasource import dict_to_daily
+
+    return dict_to_daily(klines)
+
+
+def calculate_kdj(klines: list, period: int = 9, k_ma: int = 3, d_ma: int = 3) -> tuple[float, float, float]:
     """
     计算 KDJ 指标
 
     Args:
-        klines: K线数据（需要至少 period 天）
+        klines: K线数据（list[DailyData] 或 list[dict]，需要至少 period 天）
         period: RSV 周期，默认9
         k_ma: K 线的 MA 周期
         d_ma: D 线的 MA 周期
@@ -396,6 +408,7 @@ def calculate_kdj(klines: list[DailyData], period: int = 9, k_ma: int = 3, d_ma:
     Returns:
         (K, D, J) 值
     """
+    klines = _normalize_klines(klines)
     if len(klines) < period:
         return 50, 50, 50  # 默认值
 
@@ -566,11 +579,15 @@ def calculate_macd(
     return dif_list, dea_list, macd_list
 
 
-def calculate_bbi(klines: list[DailyData]) -> float:
+def calculate_bbi(klines: list) -> float:
     """
     计算 BBI 多空指标
     BBI = (MA3 + MA6 + MA12 + MA24) / 4
+
+    Args:
+        klines: K线数据（list[DailyData] 或 list[dict]）
     """
+    klines = _normalize_klines(klines)
     if len(klines) < 24:
         return 0
 

@@ -31,9 +31,9 @@ def _make_failed_gates() -> dict[str, GateResult]:
     }
 
 
-def _make_mock_result(gates: dict[str, GateResult], annual_return: float = 0.10) -> MagicMock:
+def _make_mock_result(gates: dict[str, GateResult], annualized_return: float = 0.10) -> MagicMock:
     """构造带 aggregate 的 VerifyResult mock"""
-    mock_aggregate = AggregateMetrics(annual_return_pct=annual_return)
+    mock_aggregate = AggregateMetrics(annualized_return=annualized_return)
     mock_result = MagicMock(spec=VerifyResult)
     mock_result.gates = gates
     mock_result.aggregate = mock_aggregate
@@ -45,7 +45,7 @@ def test_score_with_all_gates_passed_returns_high_fit():
     pool = ["600487.SH"]
     scorer = V10VerifyScorer(stock_pool=pool, days=240)
 
-    mock_result = _make_mock_result(_make_passed_gates(), annual_return=0.10)
+    mock_result = _make_mock_result(_make_passed_gates(), annualized_return=0.10)
 
     with patch("modules.verify.scorer.verify_v10_pipeline", return_value=mock_result):
         out = scorer.score({"j_threshold": 8})
@@ -56,16 +56,16 @@ def test_score_with_all_gates_passed_returns_high_fit():
     # fit = 10*5 + 2*1.2 + 5*0.8 + 20*0.10 = 50 + 2.4 + 4.0 + 2.0 = 58.4
     assert abs(out.fit - 58.4) < 1e-6
     assert out.calmar == 0.8
-    assert out.annual_return == 0.10
+    assert out.annualized_return == 0.10
     assert out.error == ""
 
 
 def test_score_with_all_gates_failed_returns_low_fit():
-    """0/5 通过 + 全部负值 → fit ≥ 0（calmar/annual_return 取 max(0, …)）"""
+    """0/5 通过 + 全部负值 → fit ≥ 0（calmar/annualized_return 取 max(0, …)）"""
     pool = ["600487.SH"]
     scorer = V10VerifyScorer(stock_pool=pool, days=240)
 
-    mock_result = _make_mock_result(_make_failed_gates(), annual_return=-0.05)
+    mock_result = _make_mock_result(_make_failed_gates(), annualized_return=-0.05)
 
     with patch("modules.verify.scorer.verify_v10_pipeline", return_value=mock_result):
         out = scorer.score({"stop_loss_pct": -0.07})
@@ -91,6 +91,34 @@ def test_score_handles_pipeline_exception_without_crashing():
     assert out.fit == 0.0
 
 
+def test_scorer_passes_use_portfolio_engine_to_pipeline():
+    """V10VerifyScorer 默认把 use_portfolio_engine=True 传给 pipeline"""
+    pool = ["600487.SH"]
+    scorer = V10VerifyScorer(stock_pool=pool, days=240)
+
+    mock_result = _make_mock_result(_make_passed_gates())
+
+    with patch("modules.verify.scorer.verify_v10_pipeline", return_value=mock_result) as mock_pipe:
+        scorer.score({"j_threshold": 12})
+
+    call_kwargs = mock_pipe.call_args.kwargs
+    assert call_kwargs.get("use_portfolio_engine") is True
+
+
+def test_scorer_can_disable_portfolio_engine():
+    """关闭组合引擎时传给 pipeline False"""
+    pool = ["600487.SH"]
+    scorer = V10VerifyScorer(stock_pool=pool, days=240, use_portfolio_engine=False)
+
+    mock_result = _make_mock_result(_make_passed_gates())
+
+    with patch("modules.verify.scorer.verify_v10_pipeline", return_value=mock_result) as mock_pipe:
+        scorer.score({"j_threshold": 12})
+
+    call_kwargs = mock_pipe.call_args.kwargs
+    assert call_kwargs.get("use_portfolio_engine") is False
+
+
 def test_score_emits_partial_pass_count():
     """1/5 通过（max_drawdown）→ passed_count=1, 其余负值，fit = 10*1 + 0 + 0 + 0 = 10"""
     pool = ["600487.SH"]
@@ -105,9 +133,9 @@ def test_score_emits_partial_pass_count():
     gates["win_rate"].value = 0.2
     gates["oos_is_ratio"].passed = False
     gates["oos_is_ratio"].value = 0.1
-    # 只留 max_drawdown 通过；annual_return 设成 -0.02（负值）
+    # 只留 max_drawdown 通过；annualized_return 设成 -0.02（负值）
 
-    mock_result = _make_mock_result(gates, annual_return=-0.02)
+    mock_result = _make_mock_result(gates, annualized_return=-0.02)
 
     with patch("modules.verify.scorer.verify_v10_pipeline", return_value=mock_result):
         out = scorer.score({"j_threshold": 12})

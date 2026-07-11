@@ -31,7 +31,7 @@ def _make_full_result() -> VerifyResult:
             total_trades=100,
             win_rate=0.45,
             total_return_pct=23.0,
-            annual_return_pct=18.0,
+            annualized_return=18.0,
             sharpe=0.73,
             calmar=0.61,
             max_drawdown=0.28,

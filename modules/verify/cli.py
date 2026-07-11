@@ -11,6 +11,7 @@ import logging
 
 from .pipeline import VerifyResult, verify_v10_pipeline
 from .report import write_report
+from modules.core.paths import REPORTS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +84,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=str,
-        default="data/reports",
-        help="报告输出目录（默认 data/reports）",
+        default=str(REPORTS_DIR),
+        help=f"报告输出目录（默认 {REPORTS_DIR}）",
     )
     return parser
 
@@ -119,7 +120,7 @@ def run_verify_v10(
     wf_test_days: int = 60,
     config: object | None = None,
     write_markdown: bool = True,
-    output_dir: str = "data/reports",
+    output_dir: str | None = None,
 ) -> VerifyResult:
     """CLI 入口函数（也可被 Python API 直接调用）"""
     result = verify_v10_pipeline(

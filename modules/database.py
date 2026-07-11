@@ -966,5 +966,48 @@ def get_llm_response_stats(request_date: str | None = None) -> dict:
         }
 
 
+def save_klines(klines: list[dict[str, Any]]) -> int:
+    """批量保存 K 线数据到 daily_kline 表
+
+    Args:
+        klines: K 线数据列表，每个元素是 dict，包含 ts_code, trade_date, open, high, low, close, vol, amount, pct_chg 等字段
+
+    Returns:
+        保存的记录数
+    """
+    if not klines:
+        return 0
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        saved = 0
+        for kline in klines:
+            try:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO daily_kline
+                    (ts_code, trade_date, open, high, low, close, vol, amount, pct_chg)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        kline.get("ts_code"),
+                        kline.get("trade_date"),
+                        kline.get("open"),
+                        kline.get("high"),
+                        kline.get("low"),
+                        kline.get("close"),
+                        kline.get("vol"),
+                        kline.get("amount"),
+                        kline.get("pct_chg"),
+                    ),
+                )
+                saved += 1
+            except Exception as e:
+                logger.warning(f"保存 K 线失败: {kline.get('ts_code')} {kline.get('trade_date')}: {e}")
+                continue
+        conn.commit()
+    return saved
+
+
 if __name__ == "__main__":
     init_database()

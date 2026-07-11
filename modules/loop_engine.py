@@ -604,6 +604,7 @@ class ShaofuLoopEngine:
                         entry_price=entry_price,
                         entry_reason=signal.get("reason", "B1信号"),
                         stop_loss_price=stop_loss,
+                        position_pct=self.config.position_pct,
                     )
             else:
                 current_trade, completed = self._apply_exit_checks(klines, day_idx, current_trade)
@@ -646,6 +647,7 @@ class ShaofuLoopEngine:
                     entry_price=entry_price,
                     entry_reason=signal.get("reason", "B1信号"),
                     stop_loss_price=stop_loss,
+                    position_pct=self.config.position_pct,
                 )
                 return new_trade, None
             return None, None

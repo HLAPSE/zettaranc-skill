@@ -19,6 +19,8 @@ import random
 from dataclasses import dataclass
 from typing import Optional
 
+from ..core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown
+
 
 @dataclass
 class SharpeTestResult:
@@ -61,7 +63,7 @@ def _calculate_sharpe(returns: list[float], rf: float = 0.0) -> float:
 
     n = len(returns)
     mean_ret = sum(returns) / n
-    daily_rf = rf / 252.0  # 日无风险利率
+    daily_rf = rf / TRADING_DAYS_PER_YEAR  # 日无风险利率
 
     # 样本标准差（除以 n-1）
     variance = sum((r - mean_ret) ** 2 for r in returns) / (n - 1)
@@ -74,7 +76,7 @@ def _calculate_sharpe(returns: list[float], rf: float = 0.0) -> float:
 
     # 日夏普 × √252 = 年化夏普
     daily_sharpe = (mean_ret - daily_rf) / std_ret
-    return daily_sharpe * math.sqrt(252.0)
+    return daily_sharpe * math.sqrt(TRADING_DAYS_PER_YEAR)
 
 
 def sharpe_t_test(
@@ -460,13 +462,5 @@ def _calc_max_drawdown_from_returns(returns: list[float]) -> float:
         equity.append(equity[-1] * (1 + r))
 
     # 计算最大回撤
-    peak = equity[0]
-    max_dd = 0.0
-    for val in equity:
-        if val > peak:
-            peak = val
-        dd = (peak - val) / peak if peak > 0 else 0.0
-        if dd > max_dd:
-            max_dd = dd
-
+    max_dd, _ = compute_drawdown(equity)
     return max_dd

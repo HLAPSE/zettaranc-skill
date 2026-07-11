@@ -385,7 +385,8 @@ class TestSimulatorCore:
         state = MagicMock()
         state.equity = config.initial_capital
         state.trades = []
-        state.equity_curve = [{"date": "20260101", "equity": config.initial_capital}]
+        state.equity_curve = [config.initial_capital]
+        state.equity_details = [{"date": "20260101", "equity": config.initial_capital}]
         state.positions = []
         result = _build_result(state, config)
         assert result.total_return == 0
@@ -409,6 +410,10 @@ class TestSimulatorCore:
             ),
         ]
         state.equity_curve = [
+            config.initial_capital,
+            config.initial_capital * 1.1,
+        ]
+        state.equity_details = [
             {"date": "20260101", "equity": config.initial_capital},
             {"date": "20260105", "equity": config.initial_capital * 1.1},
         ]
@@ -669,7 +674,8 @@ class TestConstraintsIntegration:
         state = MagicMock()
         state.equity = config.initial_capital
         state.trades = []
-        state.equity_curve = [{"date": "20260101", "equity": config.initial_capital}]
+        state.equity_curve = [config.initial_capital]
+        state.equity_details = [{"date": "20260101", "equity": config.initial_capital}]
         state.positions = []
         state.benchmark_curve = [{"date": "20260101", "close": 100}]
         state.rejected_entries = [{"date": "20260101", "ts_code": "600519.SH", "reason": "涨停"}]
@@ -947,8 +953,8 @@ def test_run_simulation_with_explicit_date_range():
     assert result is not None
     assert len(result.equity_curve) > 0
 
-    # 验证日期范围在指定范围内
-    dates = [point["date"] for point in result.equity_curve]
+    # 验证日期范围在指定范围内（使用 equity_details 获取日期）
+    dates = [point["date"] for point in result.equity_details]
     assert all(start_date <= d <= end_date for d in dates)
 
 

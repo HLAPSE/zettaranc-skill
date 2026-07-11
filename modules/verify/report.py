@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .pipeline import VerifyResult
+from modules.core.paths import REPORTS_DIR
 
 
 @dataclass
@@ -99,7 +100,7 @@ def render_markdown(result: VerifyResult) -> str:
             "",
             f"- 总交易：{agg.total_trades}",
             f"- 总收益：{agg.total_return_pct:+.1f}%",
-            f"- 年化收益：{agg.annual_return_pct:+.1f}%",
+            f"- 年化收益：{agg.annualized_return:+.1f}%",
             f"- 最大回撤：{agg.max_drawdown:.1%}",
             f"- 索提诺：{agg.sortino:.2f}",
             "",
@@ -111,12 +112,12 @@ def render_markdown(result: VerifyResult) -> str:
 
 def write_report(
     result: VerifyResult,
-    output_dir: Path | str = "data/reports",
+    output_dir: Path | str = None,
     base_name: str | None = None,
     write_markdown: bool = True,
 ) -> ReportPaths:
     """写 JSON + Markdown 文件，返回路径"""
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir) if output_dir is not None else REPORTS_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

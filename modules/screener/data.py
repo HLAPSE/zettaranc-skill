@@ -1,8 +1,11 @@
 """选股数据获取层（支持 DataSource 注入）。"""
 
 from ..database import get_db_connection
-from ..datasource import DataSource, get_datasource
+from ..datasource import DataSource, dict_to_daily, get_datasource
 from ..indicators import DailyData
+
+# 向后兼容别名
+_dict_to_daily = dict_to_daily
 
 
 def get_all_stocks(datasource: DataSource | None = None) -> list[dict]:
@@ -49,23 +52,4 @@ def get_recent_klines(ts_code: str, days: int = 60, datasource: DataSource | Non
     return _dict_to_daily(rows)
 
 
-def _dict_to_daily(klines: list[dict]) -> list[DailyData]:
-    """将 dict 格式 K 线转为 DailyData 列表"""
-    result = []
-    for i, row in enumerate(klines):
-        prev_close = klines[i - 1]["close"] if i > 0 else row["close"]
-        result.append(
-            DailyData(
-                ts_code=row["ts_code"],
-                trade_date=row["trade_date"],
-                open=row["open"],
-                high=row["high"],
-                low=row["low"],
-                close=row["close"],
-                vol=row["vol"],
-                amount=row.get("amount", row["close"] * row["vol"]),
-                pct_chg=row.get("pct_chg", 0.0),
-                prev_close=prev_close,
-            )
-        )
-    return result
+

@@ -12,16 +12,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TYPE_CHECKING
 
+from ..core.market_context import MarketRegime
+
 if TYPE_CHECKING:
     from .walk_forward import WalkForwardConfig
-
-
-class MarketRegime(Enum):
-    """市场环境状态"""
-
-    STRONG = "强势"  # 大盘趋势向上，可积极开仓
-    NEUTRAL = "震荡"  # 无明确方向，控制仓位
-    WEAK = "弱势"  # 趋势向下，空仓或轻仓
 
 
 class SignalVerdict(Enum):
@@ -197,7 +191,8 @@ class SimulationResult:
 
     config: SimulationConfig
     trades: list[TradeRecord] = field(default_factory=list)
-    equity_curve: list[dict[str, Any]] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)  # 资金曲线（仅数值，用于指标计算）
+    equity_details: list[dict[str, Any]] = field(default_factory=list)  # 每日详细数据（含日期、现金、持仓数等，用于绘图/API）
     positions: list[Position] = field(default_factory=list)  # 最终未平仓
     initial_capital: float = 0
     final_value: float = 0

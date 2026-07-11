@@ -6,8 +6,11 @@ import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from ..database import get_db_connection
-from ..datasource import DataSource
+from ..datasource import DataSource, daily_to_dict
 from ..indicators import DailyData
+
+# 向后兼容别名
+_daily_to_dict = daily_to_dict
 from .criteria import _CRITERIA_REGISTRY, _check_centipede, _check_sandglass_min
 from .data import get_all_stocks, get_recent_klines
 from .models import StockScore
@@ -141,36 +144,6 @@ def analyze_stock(
     )
 
     return score
-
-
-def _daily_to_dict(klines: list[DailyData]) -> list[dict]:
-    """将 DailyData 列表转为符合战法检测需要的 dict 格式列表"""
-    result = []
-    for i, k in enumerate(klines):
-        prev_close = klines[i - 1].close if i > 0 else k.close
-        prev_vol = klines[i - 1].vol if i > 0 else k.vol
-
-        result.append(
-            {
-                "ts_code": k.ts_code,
-                "trade_date": k.trade_date,
-                "open": k.open,
-                "high": k.high,
-                "low": k.low,
-                "close": k.close,
-                "vol": k.vol,
-                "amount": k.amount,
-                "pct_chg": k.pct_chg,
-                "prev_close": prev_close,
-                "prev_vol": prev_vol,
-                "is_rise": k.close > prev_close,
-                "is_beidou": k.vol >= prev_vol * 2,
-                "is_suoliang": k.vol <= prev_vol * 0.5 if prev_vol > 0 else False,
-                "is_yinxian": k.close < prev_close,
-                "is_fangliang_yinxian": k.close < prev_close and k.vol > prev_vol * 1.5,
-            }
-        )
-    return result
 
 
 def _analyze_worker(

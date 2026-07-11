@@ -14,13 +14,9 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-# dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
-# try:
-#     from modules.strategies import detect_all_strategies, get_kline_data, Priority
-# except ImportError:
-#     from strategies import detect_all_strategies, get_kline_data, Priority
-
-from modules.strategies import detect_all_strategies, get_kline_data
+from ..core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown, compute_sharpe, daily_returns
+from ..core.net import disable_proxy
+from ..strategies import detect_all_strategies, get_kline_data
 
 
 @dataclass
@@ -201,15 +197,13 @@ def backtest_signals(
         result.avg_return = sum(t.pnl_pct for t in result.trades) / result.total_trades
         result.avg_hold_days = sum(t.hold_days for t in result.trades) / result.total_trades
 
-        # 最大回撤
-        peak = 0.0
-        drawdown = 0.0
+        # 最大回撤（基于累计收益序列）
         cumulative = 0.0
+        cumulative_values: list[float] = []
         for t in result.trades:
             cumulative += t.pnl_pct
-            peak = max(peak, cumulative)
-            drawdown = max(drawdown, peak - cumulative)
-        result.max_drawdown = drawdown
+            cumulative_values.append(cumulative)
+        result.max_drawdown, _ = compute_drawdown(cumulative_values)
 
         # 总收益率（复利）
         result.total_return = 1.0
@@ -239,8 +233,7 @@ def backtest_strategy(
         BacktestResult
     """
     # 取消代理
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
 
     try:
         from modules.self_optimizer.param_registry import get_active_param
@@ -265,7 +258,7 @@ def backtest_strategy(
 
 
 @dataclass
-class Position:
+class SinglePosition:
     """持仓记录"""
 
     ts_code: str
@@ -291,7 +284,7 @@ class Position:
 
 
 @dataclass
-class PortfolioBacktestResult:
+class MultiStrategyBacktestResult:
     """组合回测结果（含资金曲线）"""
 
     initial_capital: float = 100000.0
@@ -303,7 +296,9 @@ class PortfolioBacktestResult:
     win_rate: float = 0.0
     profit_factor: float = 0.0
     total_trades: int = 0
-    equity_curve: list[tuple[str, float]] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)
+    equity_dates: list[str] = field(default_factory=list)
+    net_values: list[float] = field(default_factory=list)
     trades: list[Trade] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -391,54 +386,37 @@ def _take_profit_price(entry_price: float, take_profit_pct: float) -> float:
     return entry_price * (1 + take_profit_pct)
 
 
-def _calc_stats(result: PortfolioBacktestResult, trading_days: int = 0):
+def _calc_stats(result: MultiStrategyBacktestResult, trading_days: int = 0):
     """计算组合回测统计指标"""
-    if not result.equity_curve:
+    # 兼容旧接口：若未提供 net_values，从 equity_curve 提取
+    equity_curve = getattr(result, "equity_curve", [])
+    if not result.net_values and equity_curve:
+        result.net_values = list(equity_curve)
+
+    if not result.net_values:
         return
 
     # 总收益率
-    result.final_value = result.equity_curve[-1][1]
-    result.total_return = (result.final_value - result.initial_capital) / result.initial_capital
+    result.total_return = (result.net_values[-1] - result.net_values[0]) / result.net_values[0]
 
     # 年化收益（按252个交易日/年）
     if trading_days > 0:
-        result.annualized_return = (1 + result.total_return) ** (252 / trading_days) - 1
+        result.annualized_return = (1 + result.total_return) ** (TRADING_DAYS_PER_YEAR / trading_days) - 1
 
-    # 最大回撤 & 日收益率序列
-    peak = result.initial_capital
-    drawdown = 0.0
-    daily_returns = []
+    # 最大回撤
+    result.max_drawdown, _ = compute_drawdown(result.net_values)
 
-    for i, (date, value) in enumerate(result.equity_curve):
-        if value > peak:
-            peak = value
-        dd = (peak - value) / peak
-        drawdown = max(drawdown, dd)
+    # 日收益率序列
+    daily_rets = daily_returns(result.net_values)
 
-        if i > 0:
-            prev_value = result.equity_curve[i - 1][1]
-            if prev_value > 0:
-                daily_returns.append((value - prev_value) / prev_value)
-
-    result.max_drawdown = drawdown
-
-    # 夏普比率（假设无风险利率为0）
-    if daily_returns:
-        avg_return = sum(daily_returns) / len(daily_returns)
-        variance = sum((r - avg_return) ** 2 for r in daily_returns) / len(daily_returns)
-        std = variance**0.5
-        if std > 0:
-            result.sharpe_ratio = (avg_return / std) * (252**0.5)
+    # 夏普比率（sample std，不减无风险利率）
+    result.sharpe_ratio = compute_sharpe(daily_rets)
 
     # 交易统计
     if result.trades:
         result.total_trades = len(result.trades)
-        win_trades = sum(1 for t in result.trades if t.pnl > 0)
+        win_trades = sum(1 for t in result.trades if t.pnl_pct > 0)
         result.win_rate = win_trades / result.total_trades
-
-        total_profit = sum(t.pnl for t in result.trades if t.pnl > 0)
-        total_loss = abs(sum(t.pnl for t in result.trades if t.pnl < 0))
-        result.profit_factor = total_profit / total_loss if total_loss > 0 else float("inf")
 
 
 def backtest_multi_strategy(
@@ -448,7 +426,7 @@ def backtest_multi_strategy(
     position_pct: float = 0.3,
     stop_loss_pct: float = 0.07,
     take_profit_pct: float = 0.15,
-) -> PortfolioBacktestResult:
+) -> MultiStrategyBacktestResult:
     """
     单股票多策略融合回测
 
@@ -466,15 +444,14 @@ def backtest_multi_strategy(
         take_profit_pct: 止盈比例
 
     Returns:
-        PortfolioBacktestResult
+        MultiStrategyBacktestResult
     """
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
 
     klines = get_kline_data(ts_code, days)
     signals = detect_all_strategies(ts_code, days)
 
-    result = PortfolioBacktestResult(initial_capital=initial_capital)
+    result = MultiStrategyBacktestResult(initial_capital=initial_capital)
 
     if not klines:
         return result
@@ -485,7 +462,7 @@ def backtest_multi_strategy(
         signal_map.setdefault(sig.trade_date, []).append(sig)
 
     cash = initial_capital
-    position: Position | None = None
+    position: SinglePosition | None = None
 
     # 按日期升序遍历
     for k in klines:
@@ -513,7 +490,8 @@ def backtest_multi_strategy(
                 )
                 result.trades.append(trade)
                 position = None
-                result.equity_curve.append((date, cash))
+                result.equity_curve.append(cash)
+                result.equity_dates.append(date)
                 continue
 
             # 止盈
@@ -531,7 +509,8 @@ def backtest_multi_strategy(
                 )
                 result.trades.append(trade)
                 position = None
-                result.equity_curve.append((date, cash))
+                result.equity_curve.append(cash)
+                result.equity_dates.append(date)
                 continue
 
         # 处理当天信号
@@ -539,7 +518,8 @@ def backtest_multi_strategy(
         if not day_signals:
             # 无信号，记录当前资产
             total_value = cash + (position.current_value if position else 0)
-            result.equity_curve.append((date, total_value))
+            result.equity_curve.append(total_value)
+            result.equity_dates.append(date)
             continue
 
         # 按优先级排序（数值越小优先级越高：CRITICAL=1, OPPORTUNITY=2, OBSERVE=3）
@@ -555,7 +535,7 @@ def backtest_multi_strategy(
             if shares >= 100:
                 cost = shares * price
                 cash -= cost
-                position = Position(
+                position = SinglePosition(
                     ts_code=ts_code,
                     entry_date=date,
                     entry_price=price,
@@ -582,7 +562,8 @@ def backtest_multi_strategy(
             position = None
 
         total_value = cash + (position.current_value if position else 0)
-        result.equity_curve.append((date, total_value))
+        result.equity_curve.append(total_value)
+        result.equity_dates.append(date)
 
     # 数据末尾强制平仓
     if position is not None and klines:
@@ -600,7 +581,7 @@ def backtest_multi_strategy(
         )
         result.trades.append(trade)
         position = None
-        result.equity_curve[-1] = (last["trade_date"], cash)
+        result.equity_curve[-1] = cash
 
     _calc_stats(result, trading_days=len(klines))
     return result
@@ -613,7 +594,7 @@ def backtest_portfolio(
     position_pct: float = 0.2,
     stop_loss_pct: float = 0.07,
     take_profit_pct: float = 0.15,
-) -> PortfolioBacktestResult:
+) -> MultiStrategyBacktestResult:
     """
     多股票组合回测
 
@@ -626,12 +607,11 @@ def backtest_portfolio(
         take_profit_pct: 止盈比例
 
     Returns:
-        PortfolioBacktestResult
+        MultiStrategyBacktestResult
     """
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
 
-    result = PortfolioBacktestResult(initial_capital=initial_capital)
+    result = MultiStrategyBacktestResult(initial_capital=initial_capital)
 
     # 为每只股票获取数据和信号
     stock_data = {}
@@ -743,7 +723,7 @@ def backtest_portfolio(
                 if shares >= 100:
                     cost = shares * price
                     cash -= cost
-                    data["position"] = Position(
+                    data["position"] = SinglePosition(
                         ts_code=ts_code,
                         entry_date=date,
                         entry_price=price,
@@ -771,7 +751,8 @@ def backtest_portfolio(
 
         # 3. 记录当日总资产
         positions_value = sum((p.current_value if p else 0) for p in [s["position"] for s in stock_data.values()])
-        result.equity_curve.append((date, cash + positions_value))
+        result.equity_curve.append(cash + positions_value)
+        result.equity_dates.append(date)
 
     # 强制平仓所有持仓
     for ts_code, data in stock_data.items():
@@ -799,7 +780,7 @@ def backtest_portfolio(
         data["position"] = None
 
     if result.equity_curve:
-        result.equity_curve[-1] = (result.equity_curve[-1][0], cash)
+        result.equity_curve[-1] = cash
 
     _calc_stats(result, trading_days=len(sorted_dates))
     return result
@@ -830,7 +811,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "single":
-        result: BacktestResult | PortfolioBacktestResult = backtest_strategy(
+        result: BacktestResult | MultiStrategyBacktestResult = backtest_strategy(
             args.ts_code,
             days=args.days,
             stop_loss_pct=args.stop_loss,

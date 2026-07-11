@@ -8,6 +8,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, Any
 
+from modules.core.metrics import compute_drawdown
 from modules.database import get_connection
 from modules.improvement_logger import ImprovementLogger
 
@@ -137,13 +138,8 @@ class ReviewGenerator:
                 prices: list[float] = [float(r["close"]) for r in records if r.get("close")]
 
                 if len(prices) >= 2:
-                    peak = prices[0]
-                    for price in prices:
-                        if price > peak:
-                            peak = price
-                        drawdown = (peak - price) / peak * 100
-                        if drawdown > max_drawdown:
-                            max_drawdown = drawdown
+                    max_drawdown, _ = compute_drawdown(prices)
+                    max_drawdown *= 100  # 转为百分比
 
                     trough = prices[0]
                     for price in prices:

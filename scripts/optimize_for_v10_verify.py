@@ -23,8 +23,8 @@ from pathlib import Path
 # 让 `python -m scripts.optimize_for_v10_verify` 能跑（项目根目录加 sys.path）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modules.database import get_all_stock_codes  # noqa: E402
 from modules.loop_engine import LoopConfig  # noqa: E402
+from modules.verify.portfolio_engine import PortfolioConfig, MarketAdaptiveConfig  # noqa: E402
 from modules.verify.registry_writer import (  # noqa: E402
     write_optimization_to_registry,
 )
@@ -67,10 +67,33 @@ def _mutate(base: dict, rng: random.Random, n_mutations: int = 2) -> dict:
     return new
 
 
-def _load_pool(stocks_arg: int | None) -> list[str]:
-    """加载股票池：默认从 stock_basic 取前 N 只"""
+def _load_pool(args: argparse.Namespace, stocks_arg: int | None) -> list[str]:
+    """加载股票池：默认使用多指标分组选股池，可回退到旧版流动性/趋势池"""
+    from modules.verify.pool import (
+        load_v10_stock_pool,
+        load_v10_stock_pool_multi_criteria,
+    )
+
     limit = stocks_arg or 100
-    return get_all_stock_codes(limit=limit)
+
+    if getattr(args, "no_screener_pool", False):
+        return load_v10_stock_pool(limit=limit)
+
+    pool_criteria = getattr(args, "pool_criteria", None)
+    if pool_criteria:
+        criteria_list = [c.strip() for c in pool_criteria.split(",") if c.strip()]
+        return load_v10_stock_pool_multi_criteria(
+            groups={"custom": criteria_list},
+            limit=limit,
+            mode=args.pool_mode,
+        )
+
+    groups = [g.strip() for g in args.pool_groups.split(",") if g.strip()]
+    return load_v10_stock_pool_multi_criteria(
+        groups=groups,
+        limit=limit,
+        mode=args.pool_mode,
+    )
 
 
 def run_hillclimb(
@@ -96,7 +119,7 @@ def run_hillclimb(
         current_result.total_count,
         getattr(current_result, "sharpe", 0.0),
         getattr(current_result, "calmar", 0.0),
-        getattr(current_result, "annual_return", 0.0),
+        getattr(current_result, "annualized_return", 0.0),
     )
 
     best = current
@@ -134,7 +157,7 @@ def run_hillclimb(
             candidate_result.total_count,
             getattr(candidate_result, "sharpe", 0.0),
             getattr(candidate_result, "calmar", 0.0),
-            getattr(candidate_result, "annual_return", 0.0),
+            getattr(candidate_result, "annualized_return", 0.0),
             best_result.fit, best_result.passed_count,
             best_result.total_count,
         )
@@ -149,24 +172,77 @@ def run_hillclimb(
 def main() -> int:
     parser = argparse.ArgumentParser(description="v1.0 验收参数寻优")
     parser.add_argument("--rounds", type=int, default=5, help="爬山轮数（默认 5）")
-    parser.add_argument("--stocks", type=int, default=100, help="股票池大小（默认 100）")
+    parser.add_argument("--stocks", type=int, default=200, help="股票池大小（默认 200）")
     parser.add_argument("--days", type=int, default=240, help="回测天数（默认 240）")
     parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--smoke", action="store_true", help="冒烟模式：1 轮 × 5 股")
     parser.add_argument("--extras", type=int, default=0, help="额外补充轮数")
+    parser.add_argument(
+        "--single-stock-mode",
+        action="store_true",
+        help="使用单股独立回测模式（对照用，默认关闭）",
+    )
+    parser.add_argument(
+        "--pool-groups",
+        type=str,
+        default="left_pullback,stage_accumulation",
+        help="选股分组，逗号分隔（默认：left_pullback,stage_accumulation）",
+    )
+    parser.add_argument(
+        "--pool-mode",
+        type=str,
+        default="union",
+        choices=["union", "intersection"],
+        help="分组合并模式：union=并集（默认），intersection=交集",
+    )
+    parser.add_argument(
+        "--no-screener-pool",
+        action="store_true",
+        help="禁用 screener 多指标选股池，回退到旧版流动性/趋势池",
+    )
+    parser.add_argument(
+        "--pool-criteria",
+        type=str,
+        default=None,
+        help="直接指定 criteria 列表，逗号分隔（绕过分组，例如 b1,super_b1）",
+    )
+    parser.add_argument(
+        "--adaptive-regime",
+        action="store_true",
+        help="开启市场环境自适应仓位控制（v3.8.0）",
+    )
+    parser.add_argument(
+        "--adaptive-weak-off",
+        action="store_true",
+        help="弱势日允许轻仓开新仓（默认禁止新买入）",
+    )
     args = parser.parse_args()
 
     if args.smoke:
         args.rounds = 1
         args.stocks = 5
+        # smoke 以快速验证为主，默认关闭 screener 多指标选股池，避免无数据时分析 500 只股票超时
+        args.no_screener_pool = True
 
     rng = random.Random(args.seed)
 
-    pool = _load_pool(args.stocks)
+    pool = _load_pool(args, args.stocks)
     if not pool:
         logger.error("无法加载股票池（数据库可能未初始化）")
         return 1
     logger.info("股票池: %d 只", len(pool))
+
+    portfolio_config = None
+    if args.adaptive_regime:
+        portfolio_config = PortfolioConfig(
+            initial_capital=1_000_000.0,
+            max_positions=5,
+            position_pct=LoopConfig().position_pct,
+            adaptive=MarketAdaptiveConfig(
+                enabled=True,
+                weak_no_new_entries=not args.adaptive_weak_off,
+            ),
+        )
 
     scorer = V10VerifyScorer(
         stock_pool=pool,
@@ -174,6 +250,8 @@ def main() -> int:
         walk_forward=True,
         wf_train_days=120,
         wf_test_days=60,
+        use_portfolio_engine=not getattr(args, "single_stock_mode", False),
+        portfolio_config=portfolio_config,
     )
 
     baseline_params = {
@@ -227,7 +305,7 @@ def main() -> int:
         best_result.passed_count,
         best_result.total_count,
         getattr(best_result, "calmar", 0.0),
-        getattr(best_result, "annual_return", 0.0),
+        getattr(best_result, "annualized_return", 0.0),
     )
 
     print(f"PASSED: {best_result.passed_count}/{best_result.total_count}")

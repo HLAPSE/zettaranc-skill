@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from ..database import get_connection, get_db_path
-from ..datasource import DataSource, TushareDataSource
+from ..datasource import DataSource, IndevsDataSource, TushareDataSource, get_datasource
 from .rate_limiter import _rate_limit_global, _MAX_SYNC_WORKERS
 from .indicator_cache import (
     _get_indicator_funcs,
@@ -39,11 +39,13 @@ class DataSyncer:
     def __init__(self, token: str | None = None, datasource: DataSource | None = None):
         self.token = token or os.environ.get("TUSHARE_TOKEN")
 
-        # 依赖注入 DataSource；默认使用 Tushare 数据源以保持向后兼容
+        # 依赖注入 DataSource；默认按环境变量选择数据源
         if datasource is None:
-            # 仅在构造默认 Tushare 数据源时检查 JNB 模式环境配置
             data_mode = os.getenv("DATA_MODE", "websearch")
-            if data_mode == "jnb":
+            # 优先 Indevs Replay API
+            if os.environ.get("INDEVS_API_KEY"):
+                datasource = IndevsDataSource()
+            elif data_mode == "jnb":
                 if not self.token:
                     raise ValueError("JNB 模式下未设置 TUSHARE_TOKEN，请检查 .env 文件。")
                 if not TUSHARE_API_URL:
@@ -51,7 +53,9 @@ class DataSyncer:
                         "JNB 模式下未设置 TUSHARE_API_URL，请在 .env 中配置中转 API 地址。\n"
                         "示例：TUSHARE_API_URL=https://tt.xiaodefa.cn"
                     )
-            datasource = TushareDataSource(token=self.token)
+                datasource = TushareDataSource(token=self.token)
+            else:
+                datasource = TushareDataSource(token=self.token)
         self._datasource = datasource
         self._fetcher = DataFetcher(self._datasource)
 

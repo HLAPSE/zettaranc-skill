@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from modules.data_sync import DataSyncer
 from modules.watchlist import scan_watchlist, generate_daily_report, get_watchlist
 from modules.notifier import notify_all
+from modules.core.paths import REPORTS_DIR
 
 logger = logging.getLogger("zettaranc-monitor")
 
@@ -50,7 +51,7 @@ def run_watchlist_monitor(sync_days: int = 30, enable_push: bool = True) -> dict
     # 4. 生成文本报告并保存到工作区
     report_text = generate_daily_report()
 
-    report_dir = Path("data/reports")
+    report_dir = REPORTS_DIR
     report_dir.mkdir(parents=True, exist_ok=True)
     report_file = report_dir / "monitor_alert.md"
 
@@ -75,7 +76,7 @@ def run_watchlist_monitor(sync_days: int = 30, enable_push: bool = True) -> dict
         summary_msg = f"共发现 {len(alerts)} 个自选股警报！\n"
         summary_msg += "\n".join(alert_msgs)
         if len(alerts) > 5:
-            summary_msg += f"\n...等共 {len(alerts)} 条，详情请看 data/reports/monitor_alert.md"
+            summary_msg += f"\n...等共 {len(alerts)} 条，详情请看 {REPORTS_DIR}/monitor_alert.md"
 
         title = "Z哥交易风险警报" if (criticals or warnings) else "Z哥盘后机会扫描"
 

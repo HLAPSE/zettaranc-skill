@@ -103,16 +103,25 @@ def _result_to_response(result) -> dict:
     if result.metrics:
         metrics = dataclasses.asdict(result.metrics)
 
-    equity_curve = [
-        {
-            "date": p.get("date", ""),
-            "equity": round(p.get("equity", 0), 2),
-            "cash": round(p.get("cash", 0), 2),
-            "positions": p.get("positions", 0),
-            "regime": p.get("regime", ""),
-        }
-        for p in result.equity_curve
-    ]
+    # 优先使用 equity_details（含完整信息），否则从 equity_curve 构建
+    equity_details = getattr(result, "equity_details", [])
+    if equity_details:
+        equity_curve = [
+            {
+                "date": p.get("date", ""),
+                "equity": round(p.get("equity", 0), 2),
+                "cash": round(p.get("cash", 0), 2),
+                "positions": p.get("positions", 0),
+                "regime": p.get("regime", ""),
+            }
+            for p in equity_details
+        ]
+    else:
+        # 兼容旧格式：只有 equity_curve（list[float]）
+        equity_curve = [
+            {"date": "", "equity": round(v, 2), "cash": 0, "positions": 0, "regime": ""}
+            for v in result.equity_curve
+        ]
 
     benchmark_curve = []
     for p in result.benchmark_curve:

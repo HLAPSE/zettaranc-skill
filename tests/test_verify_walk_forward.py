@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from modules.core.walk_forward import WalkForwardSplit
 from modules.verify.walk_forward import (
     WFResult,
-    WFSplit,
     _make_splits,
     walk_forward_verify,
 )
@@ -22,7 +22,7 @@ class FakeMetrics:
 
 
 def test_wf_split_dataclass_importable():
-    assert WFSplit is not None
+    assert WalkForwardSplit is not None
     assert WFResult is not None
 
 

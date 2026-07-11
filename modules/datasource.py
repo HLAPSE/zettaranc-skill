@@ -1,9 +1,10 @@
 """
 统一数据源抽象层
 
-定义 DataSource Protocol，并封装 Tushare、Bridge、SQLite 以及自动回退的 Composite 数据源。
+定义 DataSource Protocol，并封装 Tushare、Bridge、SQLite、Indevs 以及自动回退的 Composite 数据源。
 """
 
+import os
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
@@ -15,7 +16,8 @@ from .bridge_client import (
     is_bridge_available,
     set_bridge_config,
 )
-from .database import get_connection
+from .database import get_connection, save_klines
+from .indevs_client import IndevsClient
 from .tushare_client import TushareClient
 
 
@@ -127,6 +129,58 @@ class TushareDataSource:
         if not start_date and days > 0:
             records = records[-days:]
         return records
+
+
+class IndevsDataSource:
+    """Indevs Tushare Replay API 数据源封装。"""
+
+    def __init__(self, api_key: str | None = None, base_url: str | None = None):
+        self._client = IndevsClient(api_key, base_url)
+
+    @property
+    def name(self) -> str:
+        return "indevs"
+
+    def health_check(self) -> bool:
+        return self._client.health_check()
+
+    def get_daily(
+        self, ts_code: str, start_date: str | None = None, end_date: str | None = None
+    ) -> pd.DataFrame | None:
+        return self._client.get_daily(ts_code, start_date, end_date)
+
+    def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+        return self._client.get_index_daily(ts_code, start_date, end_date)
+
+    def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
+        return self._client.get_realtime_quote(ts_codes)
+
+    def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
+        return self._client.get_moneyflow(ts_code, trade_date)
+
+    def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+        return self._client.get_daily_basic(ts_code, start_date, end_date)
+
+    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+        return self._client.get_stk_factor(ts_code, start_date, end_date)
+
+    def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
+        return self._client.get_stock_basic(ts_code, name)
+
+    def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
+        return self._client.get_trade_cal(exchange, start_date, end_date)
+
+    def get_stock_list(self, exchange: str | None = None) -> list[dict]:
+        return self._client.get_stock_list(exchange)
+
+    def get_kline_dicts(
+        self,
+        ts_code: str,
+        days: int = 60,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]:
+        return self._client.get_kline_dicts(ts_code, days, start_date, end_date)
 
 
 class BridgeDataSource:
@@ -268,11 +322,9 @@ class SqliteDataSource:
 class CompositeDataSource:
     """组合数据源：按配置优先级自动回退。
 
-    当前实现中，bridge / SQLite 仅提供 ``get_stock_list`` 与 ``get_kline_dicts``
-    两个接口的完整回退；其余 DataSource 方法（如 ``get_daily``、
-    ``get_stk_factor``、``get_moneyflow`` 等）仅在 ``preferred="tushare"``
-    时生效，其他 preferred 模式下返回 ``None``。这是由底层 bridge/SQLite
-    能力范围决定的，后续如需完整 Composite 可在此扩展。
+    当前实现中，indevs / bridge / SQLite 提供 ``get_stock_list`` 与
+    ``get_kline_dicts`` 两个接口的回退；其余 DataSource 方法仅在
+    ``preferred="tushare"`` 或 ``preferred="indevs"`` 时生效。
     """
 
     def __init__(self, preferred: str = "auto"):
@@ -280,12 +332,19 @@ class CompositeDataSource:
         self._bridge = BridgeDataSource()
         self._sqlite = SqliteDataSource()
         self._tushare: TushareDataSource | None = None
+        self._indevs: IndevsDataSource | None = None
 
     @property
     def _tushare_source(self) -> TushareDataSource:
         if self._tushare is None:
             self._tushare = TushareDataSource()
         return self._tushare
+
+    @property
+    def _indevs_source(self) -> IndevsDataSource:
+        if self._indevs is None:
+            self._indevs = IndevsDataSource()
+        return self._indevs
 
     @property
     def name(self) -> str:
@@ -298,58 +357,78 @@ class CompositeDataSource:
             return self._sqlite.health_check()
         if self._preferred == "tushare":
             return self._tushare_source.health_check()
-        return self._bridge.health_check() or self._sqlite.health_check()
+        if self._preferred == "indevs":
+            return self._indevs_source.health_check()
+        return self._indevs_source.health_check() or self._bridge.health_check() or self._sqlite.health_check()
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_daily(ts_code, start_date, end_date)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_daily(ts_code, start_date, end_date)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_daily(ts_code, start_date, end_date)
         return None
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_index_daily(ts_code, start_date, end_date)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_index_daily(ts_code, start_date, end_date)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_index_daily(ts_code, start_date, end_date)
         return None
 
     def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_realtime_quote(ts_codes)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_realtime_quote(ts_codes)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_realtime_quote(ts_codes)
         return None
 
     def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_moneyflow(ts_code, trade_date)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_moneyflow(ts_code, trade_date)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_moneyflow(ts_code, trade_date)
         return None
 
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_daily_basic(ts_code, start_date, end_date)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_daily_basic(ts_code, start_date, end_date)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_daily_basic(ts_code, start_date, end_date)
         return None
 
     def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_stk_factor(ts_code, start_date, end_date)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_stk_factor(ts_code, start_date, end_date)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_stk_factor(ts_code, start_date, end_date)
         return None
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_stock_basic(ts_code, name)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_stock_basic(ts_code, name)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_stock_basic(ts_code, name)
         return None
 
     def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        if self._preferred == "tushare":
-            return self._tushare_source.get_trade_cal(exchange, start_date, end_date)
+        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
+            return self._indevs_source.get_trade_cal(exchange, start_date, end_date)
+        if self._preferred in ("tushare", "indevs"):
+            return self._indevs_source.get_trade_cal(exchange, start_date, end_date)
         return None
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
         sources: list[DataSource] = []
         if self._preferred == "auto":
-            sources = [self._bridge, self._sqlite]
+            sources = [self._indevs_source, self._bridge, self._sqlite]
         elif self._preferred == "bridge":
             sources = [self._bridge]
         elif self._preferred == "sqlite":
             sources = [self._sqlite]
         elif self._preferred == "tushare":
             sources = [self._tushare_source]
+        elif self._preferred == "indevs":
+            sources = [self._indevs_source]
 
         for source in sources:
             try:
@@ -367,24 +446,148 @@ class CompositeDataSource:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> list[dict]:
+        """获取 K 线数据，优先从 DB 读取，DB 没有时调 API 并缓存"""
+        # 1. 先查 DB
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            sql = """
+                SELECT ts_code, trade_date, open, high, low, close, vol, amount, pct_chg
+                FROM daily_kline
+                WHERE ts_code = ?
+            """
+            params: list = [ts_code]
+            
+            if start_date:
+                sql += " AND trade_date >= ?"
+                params.append(start_date)
+            if end_date:
+                sql += " AND trade_date <= ?"
+                params.append(end_date)
+            
+            sql += " ORDER BY trade_date DESC"
+            
+            if not start_date and not end_date and days > 0:
+                sql += " LIMIT ?"
+                params.append(days)
+            
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+        
+        if rows:
+            # DB 有数据，直接返回
+            records = [dict(row) for row in rows]
+            records.reverse()  # 因为查询时是 DESC，需要反转为 ASC
+            return records
+        
+        # 2. DB 没有数据，调 API
         sources: list[DataSource] = []
         if self._preferred == "auto":
-            sources = [self._bridge, self._sqlite]
+            sources = [self._indevs_source, self._bridge, self._sqlite]
         elif self._preferred == "bridge":
             sources = [self._bridge]
         elif self._preferred == "sqlite":
             sources = [self._sqlite]
         elif self._preferred == "tushare":
             sources = [self._tushare_source]
-
+        elif self._preferred == "indevs":
+            sources = [self._indevs_source]
+        
         for source in sources:
             try:
                 data = source.get_kline_dicts(ts_code, days=days, start_date=start_date, end_date=end_date)
                 if data:
+                    # 3. 写入 DB 缓存
+                    save_klines(data)
                     return data
             except Exception:
                 continue
         return []
+
+
+# ---------------------------------------------------------------------------
+# dict ↔ DailyData 转换工具
+# ---------------------------------------------------------------------------
+
+
+def dict_to_daily(klines: list[dict] | list) -> list:
+    """将 dict 格式 K 线列表转换为 ``DailyData`` 列表。
+
+    若输入已是 ``DailyData`` 列表则直接返回副本。
+    同时映射基础字段与派生形态字段（is_rise / is_beidou 等），
+    供 strategies / screener / portfolio_diagnosis 等模块统一使用。
+    """
+    from .indicators import DailyData
+
+    if not klines:
+        return []
+    if isinstance(klines[0], DailyData):
+        return list(klines)
+
+    result = []
+    for i, row in enumerate(klines):
+        prev_close = float(klines[i - 1]["close"]) if i > 0 else float(row["close"])
+        close = float(row["close"])
+        vol = float(row["vol"])
+        prev_vol = float(klines[i - 1]["vol"]) if i > 0 else vol
+        result.append(
+            DailyData(
+                ts_code=str(row["ts_code"]),
+                trade_date=str(row["trade_date"]),
+                open=float(row["open"]),
+                high=float(row["high"]),
+                low=float(row["low"]),
+                close=close,
+                vol=vol,
+                amount=float(row.get("amount", close * vol)),
+                pct_chg=float(row.get("pct_chg", 0.0)),
+                prev_close=prev_close,
+                is_rise=row.get("is_rise", close > prev_close),
+                is_beidou=row.get("is_beidou", vol >= prev_vol * 2 if prev_vol > 0 else False),
+                is_suoliang=row.get("is_suoliang", vol <= prev_vol * 0.5 if prev_vol > 0 else False),
+                is_jiayin=row.get("is_jiayin", close < float(row["open"]) and close > prev_close),
+                is_yinxian=row.get("is_yinxian", close < prev_close),
+                is_fangliang_yinxian=row.get(
+                    "is_fangliang_yinxian",
+                    close < prev_close and vol > prev_vol * 1.5 if prev_vol > 0 else False,
+                ),
+            )
+        )
+    return result
+
+
+def daily_to_dict(klines: list) -> list[dict]:
+    """将 ``DailyData`` 列表转为符合战法检测需要的 dict 格式列表。
+
+    自动计算派生字段：prev_close / prev_vol / is_rise / is_beidou /
+    is_suoliang / is_jiayin / is_yinxian / is_fangliang_yinxian。
+    """
+    result = []
+    for i, k in enumerate(klines):
+        prev_close = klines[i - 1].close if i > 0 else k.close
+        prev_vol = klines[i - 1].vol if i > 0 else k.vol
+
+        result.append(
+            {
+                "ts_code": k.ts_code,
+                "trade_date": k.trade_date,
+                "open": k.open,
+                "high": k.high,
+                "low": k.low,
+                "close": k.close,
+                "vol": k.vol,
+                "amount": k.amount,
+                "pct_chg": k.pct_chg,
+                "prev_close": prev_close,
+                "prev_vol": prev_vol,
+                "is_rise": k.close > prev_close,
+                "is_beidou": k.vol >= prev_vol * 2 if prev_vol > 0 else False,
+                "is_suoliang": k.vol <= prev_vol * 0.5 if prev_vol > 0 else False,
+                "is_jiayin": k.close < k.open and k.close > prev_close,
+                "is_yinxian": k.close < prev_close,
+                "is_fangliang_yinxian": k.close < prev_close and k.vol > prev_vol * 1.5 if prev_vol > 0 else False,
+            }
+        )
+    return result
 
 
 def get_datasource(preferred: str = "auto") -> DataSource:
@@ -395,4 +598,8 @@ def get_datasource(preferred: str = "auto") -> DataSource:
         return BridgeDataSource()
     if preferred == "sqlite":
         return SqliteDataSource()
+    if preferred == "indevs":
+        return IndevsDataSource()
+    if os.environ.get("INDEVS_API_KEY"):
+        return CompositeDataSource("auto")
     return CompositeDataSource("auto")

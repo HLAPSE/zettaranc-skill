@@ -43,6 +43,7 @@ from .market_context import get_market_context, max_positions_allowed, precomput
 from .position_sizer import build_position
 from .signal_filter import filter_signals, evaluate_stock
 from .metrics import calculate_metrics
+from ..core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown, compute_sharpe, daily_returns
 
 
 @dataclass
@@ -53,7 +54,8 @@ class _SimulatorState:
     equity: float
     positions: list[Position] = field(default_factory=list)
     trades: list[TradeRecord] = field(default_factory=list)
-    equity_curve: list[dict[str, Any]] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)  # 资金曲线（仅数值）
+    equity_details: list[dict[str, Any]] = field(default_factory=list)  # 每日详细数据
     benchmark_curve: list[dict[str, Any]] = field(default_factory=list)
     rejected_entries: list[dict[str, Any]] = field(default_factory=list)
     resonance_scores: list[ResonanceScore] = field(default_factory=list)
@@ -338,7 +340,8 @@ def run_simulation(
 
         # 记录资金曲线
         state.equity = _portfolio_value(state, date, klines_map)
-        state.equity_curve.append(
+        state.equity_curve.append(round(state.equity, 2))
+        state.equity_details.append(
             {
                 "date": date,
                 "equity": round(state.equity, 2),
@@ -357,6 +360,7 @@ def _build_result(state: _SimulatorState, config: SimulationConfig) -> Simulatio
         config=config,
         trades=state.trades,
         equity_curve=state.equity_curve,
+        equity_details=state.equity_details,
         positions=state.positions,
         initial_capital=config.initial_capital,
         final_value=round(state.equity, 2),
@@ -369,31 +373,13 @@ def _build_result(state: _SimulatorState, config: SimulationConfig) -> Simulatio
     result.total_return = (result.final_value / config.initial_capital) - 1.0
 
     # 最大回撤
-    peak = result.equity_curve[0]["equity"]
-    max_dd = 0.0
-    for point in result.equity_curve:
-        val = point["equity"]
-        if val > peak:
-            peak = val
-        dd = (peak - val) / peak if peak > 0 else 0.0
-        if dd > max_dd:
-            max_dd = dd
+    max_dd, _ = compute_drawdown(result.equity_curve)
     result.max_drawdown = max_dd
 
     # 夏普比率（用每日收益率）
     if len(result.equity_curve) > 1:
-        rets = []
-        for i in range(1, len(result.equity_curve)):
-            prev = result.equity_curve[i - 1]["equity"]
-            cur = result.equity_curve[i]["equity"]
-            if prev > 0:
-                rets.append((cur - prev) / prev)
-        if len(rets) > 1:
-            avg_r = sum(rets) / len(rets)
-            var = sum((r - avg_r) ** 2 for r in rets) / (len(rets) - 1)
-            std = math.sqrt(var) if var > 0 else 0.0
-            if std > 0:
-                result.sharpe_ratio = (avg_r / std) * math.sqrt(252)
+        rets = daily_returns(result.equity_curve)
+        result.sharpe_ratio = compute_sharpe(rets)
 
     # 交易统计
     sells = [t for t in result.trades if t.action == "SELL"]
@@ -426,7 +412,8 @@ def _build_result(state: _SimulatorState, config: SimulationConfig) -> Simulatio
         benchmark_curve = []
     result.benchmark_curve = benchmark_curve
     result.rejected_entries = getattr(state, "rejected_entries", None) or []
-    result.metrics = calculate_metrics(result.equity_curve, benchmark_curve, result.trades)
+    # calculate_metrics 需要 dict 格式，使用 equity_details
+    result.metrics = calculate_metrics(result.equity_details, benchmark_curve, result.trades)
 
     # 战法共振统计摘要
     resonance_scores = getattr(state, "resonance_scores", None)

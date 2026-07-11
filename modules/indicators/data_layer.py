@@ -751,9 +751,7 @@ def format_result(result: IndicatorResult) -> str:
         macd_lines.append("  !!! 底背离，反转建仓")
 
     if result.macd_veto:
-        macd_lines.append("  XXX MACD一票否决：不能买！")
-    else:
-        macd_lines.append("  MACD未否决")
+        macd_lines.append("  MACD一票否决：不能买！")
 
     lines.append("\n".join(macd_lines))
     lines.append("")

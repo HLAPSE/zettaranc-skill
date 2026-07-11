@@ -18,6 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..core.walk_forward import WalkForwardSplit, make_walk_forward_splits
 from .pipeline import (
     AggregateMetrics,
     StockResult,
@@ -27,20 +28,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class WFSplit:
-    """单段 IS/OOS 切片（按 K-line 索引）"""
-
-    train_start: int
-    train_end: int
-    test_start: int
-    test_end: int
-
-
-@dataclass
 class WFResult:
     """Walk-forward 验证结果"""
 
-    splits: list[WFSplit] = field(default_factory=list)
+    splits: list[WalkForwardSplit] = field(default_factory=list)
     is_metrics: AggregateMetrics | None = None
     oos_metrics: AggregateMetrics | None = None
     oos_is_ratio: float = 0.0
@@ -51,34 +42,17 @@ def _make_splits(
     total_days: int,
     train_days: int,
     test_days: int,
-) -> list[WFSplit]:
+) -> list[WalkForwardSplit]:
     """滚动窗口切片，步长 = test_days（让 OOS 段不重叠）
 
     最后一段允许部分覆盖（test_end 截断到 total_days）以保留更多切片。
     """
-    splits: list[WFSplit] = []
-    train_start = 0
-    while True:
-        train_end = train_start + train_days
-        test_start = train_end
-        test_end = test_start + test_days
-        if test_start >= total_days:
-            break
-        # 允许最后一段 OOS 部分覆盖（截断到 total_days）
-        effective_test_end = min(test_end, total_days)
-        splits.append(
-            WFSplit(
-                train_start=train_start,
-                train_end=train_end,
-                test_start=test_start,
-                test_end=effective_test_end,
-            )
-        )
-        if test_end <= total_days:
-            train_start += test_days  # 步长 = OOS 长度
-        else:
-            break
-    return splits
+    return make_walk_forward_splits(
+        total_days=total_days,
+        train_days=train_days,
+        test_days=test_days,
+        allow_partial_last=True,
+    )
 
 
 # ============================================================
@@ -262,7 +236,6 @@ def _aggregate(per_stock: list[StockResult]) -> AggregateMetrics:
 
 
 __all__ = [
-    "WFSplit",
     "WFResult",
     "_make_splits",
     "walk_forward_verify",

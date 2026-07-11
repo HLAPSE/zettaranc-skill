@@ -15,6 +15,7 @@ from . import SimulationConfig, SimulationResult
 from .param_space import ParamDimension, generate_grid, DEFAULT_PARAM_SPACE
 from .simulator import run_simulation, _available_dates
 from .metrics import PerformanceMetrics, calculate_metrics
+from ..core.walk_forward import make_walk_forward_splits
 from ..datasource import DataSource, get_datasource
 
 
@@ -68,22 +69,26 @@ def _split_windows(
     Returns:
         [(is_start_idx, oos_start_idx, oos_end_idx), ...]
     """
+    total_days = len(dates)
+    if not anchored:
+        # 使用 core 模块的公共切分逻辑
+        core_splits = make_walk_forward_splits(
+            total_days=total_days,
+            train_days=train_days,
+            test_days=test_days,
+            allow_partial_last=False,
+        )
+        return [
+            (s.train_start, s.test_start, s.test_end)
+            for s in core_splits
+        ]
+
+    # anchored 模式：训练窗口从起点固定增长
     windows = []
     step = test_days
-
-    for oos_end_idx in range(train_days + test_days, len(dates) + 1, step):
+    for oos_end_idx in range(train_days + test_days, total_days + 1, step):
         oos_start_idx = oos_end_idx - test_days
-
-        if anchored:
-            is_start_idx = 0
-        else:
-            is_start_idx = oos_start_idx - train_days
-
-        if is_start_idx < 0:
-            break
-
-        windows.append((is_start_idx, oos_start_idx, oos_end_idx))
-
+        windows.append((0, oos_start_idx, oos_end_idx))
     return windows
 
 
@@ -216,8 +221,9 @@ def run_walk_forward(
             )
         )
 
-        # 拼接 OOS 资金曲线
-        all_oos_curves.extend(oos_result.equity_curve)
+        # 拼接 OOS 资金曲线（使用 equity_details 以保持 dict 格式供 calculate_metrics 使用）
+        oos_details = getattr(oos_result, "equity_details", [])
+        all_oos_curves.extend(oos_details if oos_details else [{"equity": v} for v in oos_result.equity_curve])
         is_scores.append(best_score)
         oos_scores.append(oos_score)
 

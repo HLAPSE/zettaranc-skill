@@ -26,12 +26,10 @@ import sys
 import os
 from pathlib import Path
 
+from .core.net import disable_proxy
+from .cli_commands import _json_output
+
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
-
-
-def _json_output(data):
-    """Print data as JSON and exit."""
-    print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
 # CLI 中文别名 → screener 英文 criteria 的统一映射
@@ -868,6 +866,5 @@ def main():
 
 if __name__ == "__main__":
     # 取消代理，避免 Tushare 连接问题（仅脚本直调时，不影响库导入）
-    os.environ["HTTP_PROXY"] = ""
-    os.environ["HTTPS_PROXY"] = ""
+    disable_proxy()
     main()

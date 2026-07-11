@@ -59,9 +59,13 @@ Thumbs.db
 .claude
 CLAUDE.md
 CLAUDE.md.bak
+GEMINI.md
 .omc/
 .omo/
 .kimi/
+
+# 根目录空 lockfile（真正的在 frontend/ 目录）
+/package-lock.json
 
 # 对话实录（临时文件，不入库）
 对话实录*.md

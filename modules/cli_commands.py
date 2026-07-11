@@ -21,6 +21,8 @@ import sys
 from datetime import datetime
 from typing import Any, NoReturn
 
+from modules.core.paths import REPORTS_DIR
+
 logger = logging.getLogger(__name__)
 
 
@@ -672,7 +674,7 @@ def cmd_monitor(args):
     else:
         # 非 JSON 输出时已经在 run_watchlist_monitor 内部写入了 Markdown 报告，打印简易提示
         print(f"自选股主动扫描监控完成。状态: {res['status']}, 警报总数: {res.get('alerts_count', 0)}")
-        print("详细警报分析已输出至 data/reports/monitor_alert.md")
+        print(f"详细警报分析已输出至 {REPORTS_DIR}/monitor_alert.md")
 
 
 def _simulate_narrate_text(result: Any, wf_payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -883,7 +885,7 @@ def cmd_verify_v10(args) -> int:
         argv.extend(["--wf-test", str(args.wf_test)])
     if getattr(args, "ts_codes", None):
         argv.extend(["--ts-codes", args.ts_codes])
-    if getattr(args, "output", None) and args.output != "data/reports":
+    if getattr(args, "output", None) and args.output != str(REPORTS_DIR):
         argv.extend(["--output", args.output])
     if getattr(args, "json", False):
         argv.append("--json")
@@ -902,7 +904,7 @@ def add_verify_v10_parser(subparsers) -> None:
     p_verify.add_argument("--wf-train", type=int, default=120)
     p_verify.add_argument("--wf-test", type=int, default=60)
     p_verify.add_argument("--ts-codes", type=str, default=None, help="指定股票列表（逗号分隔）")
-    p_verify.add_argument("--output", type=str, default="data/reports", help="报告输出目录")
+    p_verify.add_argument("--output", type=str, default=str(REPORTS_DIR), help="报告输出目录")
     p_verify.add_argument("--json", action="store_true")
     p_verify.add_argument("--no-markdown", action="store_true")
     p_verify.set_defaults(func=cmd_verify_v10)

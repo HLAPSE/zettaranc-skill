@@ -119,7 +119,8 @@ def test_cli_resonance_details_keys(capsys):
     mock_result.avg_holding_days = 5.0
     mock_result.positions = []
     mock_result.trades = []
-    mock_result.equity_curve = [{"date": "20260101", "equity": 1_000_000.0}]
+    mock_result.equity_curve = [1_000_000.0]
+    mock_result.equity_details = [{"date": "20260101", "equity": 1_000_000.0}]
     mock_result.metrics = None
     mock_result.benchmark_curve = []
     mock_result.config.strategy_mode = "resonance"

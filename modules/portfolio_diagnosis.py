@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
 
+from .datasource import daily_to_dict
 from .indicators import (
     analyze_stock,
     get_kline_data,
@@ -27,6 +28,9 @@ from .indicators import (
     detect_kirin_stage,
 )
 from .strategies import detect_all_strategies, StrategyType
+
+# 向后兼容别名
+_daily_to_dict = daily_to_dict
 
 
 @dataclass
@@ -198,36 +202,6 @@ def get_stock_info_db(ts_code: str) -> dict[str, Any] | None:
             return dict(row) if row else None
     except Exception:
         return None
-
-
-def _daily_to_dict(klines: list[DailyData]) -> list[dict[str, Any]]:
-    """将 DailyData 列表转为 strategies 模块需要的 dict 列表"""
-    result = []
-    for i, k in enumerate(klines):
-        prev_close = klines[i - 1].close if i > 0 else k.close
-        prev_vol = klines[i - 1].vol if i > 0 else k.vol
-        result.append(
-            {
-                "ts_code": k.ts_code,
-                "trade_date": k.trade_date,
-                "open": k.open,
-                "high": k.high,
-                "low": k.low,
-                "close": k.close,
-                "vol": k.vol,
-                "amount": k.amount,
-                "pct_chg": k.pct_chg,
-                "prev_close": prev_close,
-                "prev_vol": prev_vol,
-                "is_rise": k.close > prev_close,
-                "is_beidou": k.vol >= prev_vol * 2 if prev_vol > 0 else False,
-                "is_suoliang": k.vol <= prev_vol * 0.5 if prev_vol > 0 else False,
-                "is_jiayin": k.close < k.open and k.close > prev_close,
-                "is_yinxian": k.close < prev_close,
-                "is_fangliang_yinxian": k.close < prev_close and k.vol > prev_vol * 1.5 if prev_vol > 0 else False,
-            }
-        )
-    return result
 
 
 def _judge_price_position(ind: IndicatorResult, price: float = 0) -> str:

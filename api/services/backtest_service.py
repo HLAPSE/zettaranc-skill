@@ -109,7 +109,10 @@ def _portfolio_to_response(ts_code: str, result) -> dict:
 
     # 资金曲线
     equity_curve = []
-    for date, value in getattr(result, "equity_curve", []):
+    equity_dates = getattr(result, "equity_dates", [])
+    values = getattr(result, "equity_curve", [])
+    for i, value in enumerate(values):
+        date = equity_dates[i] if i < len(equity_dates) else ""
         equity_curve.append([date, round(value, 2)])
 
     return {

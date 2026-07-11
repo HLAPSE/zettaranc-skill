@@ -7,7 +7,11 @@ from enum import Enum
 from modules.database import get_db_connection
 
 
+from ..datasource import dict_to_daily
 from ..indicators import DailyData
+
+# 向后兼容别名
+_dict_to_daily = dict_to_daily
 
 
 def _klines_dict_to_daily(klines: list[dict]) -> list[DailyData]:
@@ -183,50 +187,21 @@ def get_kline_data(ts_code: str, days: int = 120) -> list[dict]:
     return data_list
 
 
-def _dict_to_daily(klines: list[dict]) -> list[DailyData]:
-    """将 Dict K 线列表转换为 indicators.DailyData，完整映射形态特征属性"""
-    from ..indicators import DailyData
 
-    result = []
-    for i, k in enumerate(klines):
-        prev_close = klines[i - 1]["close"] if i > 0 else k["close"]
-        result.append(
-            DailyData(
-                ts_code=k["ts_code"],
-                trade_date=k["trade_date"],
-                open=k["open"],
-                high=k["high"],
-                low=k["low"],
-                close=k["close"],
-                vol=k["vol"],
-                amount=k.get("amount", k["close"] * k["vol"]),
-                pct_chg=k.get("pct_chg", 0),
-                prev_close=prev_close,
-                is_rise=k.get("is_rise", False),
-                is_beidou=k.get("is_beidou", False),
-                is_suoliang=k.get("is_suoliang", False),
-                is_jiayin=k.get("is_jiayin", False),
-                is_yinxian=k.get("is_yinxian", False),
-                is_fangliang_yinxian=k.get("is_fangliang_yinxian", False),
-            )
-        )
-    return result
 
 
 def _calc_kdj(klines: list[dict]) -> tuple[float, float, float]:
-    """通过 indicators.py 计算 KDJ (遗留调用向后兼容)"""
+    """计算 KDJ（委托到 indicators.calculate_kdj，支持 dict 输入）"""
     from ..indicators import calculate_kdj
 
-    daily = _dict_to_daily(klines)
-    return calculate_kdj(daily)
+    return calculate_kdj(klines)
 
 
 def _calc_bbi(klines: list[dict]) -> float:
-    """通过 indicators.py 计算 BBI (遗留调用向后兼容)"""
+    """计算 BBI（委托到 indicators.calculate_bbi，支持 dict 输入）"""
     from ..indicators import calculate_bbi
 
-    daily = _dict_to_daily(klines)
-    return calculate_bbi(daily)
+    return calculate_bbi(klines)
 
 
 def _get_kdj(klines: list[DailyData], index: int) -> tuple[float, float, float]:

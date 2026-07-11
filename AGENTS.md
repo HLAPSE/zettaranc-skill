@@ -1,4 +1,3 @@
-<!-- From: /Users/chenlei/005_skill/skills/zettaranc-skill/AGENTS.md -->
 # zettaranc-skill · Agent 指南
 
 > 本文件面向 AI 编程 Agent。阅读前请确认你已通读本文件，再操作代码或文档。
@@ -16,7 +15,7 @@
 - **Web 看板**：`api/`（FastAPI 后端）+ `frontend/`（React + Vite + Tailwind 前端），可选
 - **语料基础**：约 467 篇直播/付费课整理文章（~200 万字）+ 13 个 ztalk 视频 transcript（~12.7 万字）+ 9 篇交易心理系列（~3.3 万字）+ 后续新增文章
 - **许可证**：MIT
-- **版本**：`docs/CHANGELOG.md` 最新版本为 **v3.6.0**；`pyproject.toml` 中的 `version` 字段已同步为 `3.6.0`。
+- **版本**：`docs/CHANGELOG.md` 与 `pyproject.toml` 当前版本为 **v3.9.0**。
 
 ### 双模式架构
 
@@ -33,8 +32,9 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
 ├─ tushare_client.py     Tushare API 封装    ├─ Agentic Protocol（编排/分流逻辑）
 ├─ bridge_client.py      tushare-data-bridge ├─ 9 个核心心智模型
 │                         HTTP 客户端        ├─ 决策启发式
-├─ database.py           SQLite 管理         ├─ 表达 DNA
-├─ data_sync.py          兼容 shim          └─ 诚实边界
+├─ indevs_client.py      indevs 数据客户端   ├─ 表达 DNA
+├─ database.py           SQLite 管理         └─ 诚实边界
+├─ data_sync.py          兼容 shim
 ├─ data_sync/            数据同步子包
 │   ├─ rate_limiter.py     120次/分限流器
 │   ├─ indicator_cache.py  指标缓存写入
@@ -83,14 +83,43 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
 │   ├─ environment_weights   环境权重动态调整
 │   ├─ param_space.py        参数空间与网格生成
 │   ├─ walk_forward.py       滚动窗口 OOS 验证
-│   └─ optimizer_report.py   walk-forward 报告输出
+│   ├─ optimizer_report.py   walk-forward 报告输出
+│   └─ narrator.py           Z 哥风格回测叙事
 ├─ strategies/           30+ 战法识别（5 子模块）
-├─ backtest.py           策略组合回测
+│   ├─ core.py               核心战法/B1/B2/B3/长安等
+│   ├─ base_strategies.py    基础战法
+│   ├─ compound_strategies.py 复合战法
+│   ├─ sell_signals.py       卖出信号
+│   └─ vectorized.py         向量化识别
+├─ statistics/           统计检验框架
+│   ├─ __init__.py           核心统计检验
+│   ├─ criteria.py           达标规则引擎
+│   ├─ sensitivity.py        参数敏感性分析
+│   └─ ensemble.py           策略集成模块
+├─ core/                 公共模块（v3.8+）
+│   ├─ metrics.py            通用绩效指标
+│   ├─ walk_forward.py       通用滚动窗口验证
+│   ├─ market_context.py     通用市场环境
+│   └─ net.py                网络相关公共函数（disable_proxy()）
+├─ verify/               少妇战法 v1.0 验收工程化（v3.7.0+）
+│   ├─ pipeline.py           统一回测管线
+│   ├─ gates.py              五项硬指标自动判定
+│   ├─ walk_forward.py       真切片 WF 验证
+│   ├─ scorer.py             达尔文友好评分器
+│   ├─ registry_writer.py    寻优结果写回 param_registry
+│   ├─ report.py             JSON + Markdown 报告
+│   ├─ portfolio_engine.py   组合回测引擎
+│   ├─ portfolio_walk_forward.py 组合 WF 验证
+│   └─ cli.py                zt verify v1.0 CLI
+├─ backtest/             回测子包（v3.8+）
+│   ├─ single.py             单策略回测
+│   └─ portfolio.py          组合回测
 ├─ backtest_six_step.py  少妇战法六步闭环
 ├─ loop_engine.py        六步闭环状态机
+├─ loop_engine_enhanced.py 增强版多策略共振闭环
 ├─ portfolio_diagnosis.py 持股检查
 ├─ watchlist.py          自选股观察池
-├─ cli.py / cli_commands.py 命令行工具
+├─ cli.py / cli_commands.py 命令行统一入口
 ├─ trade_parser.py       口语化输入解析
 ├─ trade_manager.py      交易记录 CRUD
 ├─ trade_reviewer.py     交割单数据准备层
@@ -105,6 +134,10 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
 ├─ monitor.py / notifier.py 自选股监控与推送
 ├─ tracking_manager.py / tracking_syncer.py 自我改进跟踪池
 ├─ improvement_logger.py / harness_updater.py 改进日志与 Harness 更新
+├─ dynamic_config.py     动态配置管理
+├─ market_regime.py      市场状态机
+├─ position_manager.py   仓位管理
+├─ industry_filter.py    行业过滤
 └─ self_optimizer/       Darwin 自优化管线
     ├─ param_registry.py 参数注册表
     ├─ mutator.py        参数变异
@@ -113,7 +146,7 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
     ├─ reflex_blacklist.py 反射黑名单
     └─ phase1_baseline.py / phase2_hillclimb.py / phase3_report.py 三阶段管线
 
-knowledge/（知识文件，29 篇交易体系）
+knowledge/（知识文件，33 篇交易体系）
 ├─ trading-core.md       短线交易核心
 ├─ indicators.md         技术指标
 ├─ sell-discipline.md    卖出纪律
@@ -132,19 +165,32 @@ knowledge/（知识文件，29 篇交易体系）
 ├─ four-rhythms.md       四大节奏
 ├─ six-tracks-2026.md    2026 赛道
 ├─ life-decision.md      人生决策框架
+├─ life-decision-research.md 人生决策调研
 ├─ career-development.md 职业发展框架
 ├─ business-judgment.md  创业/商业判断框架
+├─ business-judgment-research.md 商业判断调研
 ├─ heuristics.md         决策启发式
 ├─ framework-extraction.md 框架萃取方法
 ├─ workflow.md           回答工作流 SOP
 ├─ harness.md            Harness 六大部分
 ├─ improvement-system.md 改进系统闭环
-└─ ... 其他研究与数据字典文件
+├─ data_dictionary.md    数据字典
+├─ signal_dictionary.md  信号字典
+└─ ... 其他研究与专题文件
 
 rules/
 ├─ intent_rules.yaml     意图匹配规则
 ├─ career_prompt.md      职业决策框架
 └─ life_prompt.md        人生决策框架
+
+references/research/（11 份调研提炼文件）
+├─ 01-writings.md
+├─ 02-conversations.md
+├─ 03-expression-dna.md
+├─ 04-external-views.md
+├─ 05-decisions.md
+├─ 06-timeline.md
+└─ 07-11-*.md（小菜鸟、大富翁、tangoo、复盘、课代表等系列）
 ```
 
 **关键设计原则**：Python 层只负责 **数据准备**，所有点评、分析话术由 LLM 用 Z 哥角色生成，避免“AI 味”。宿主通过 CLI `--json` 或 Web API 获取结构化数据。
@@ -152,7 +198,8 @@ rules/
 **自优化双管线说明**：
 - `self_optimizer/`（Darwin 管线）：LLM 驱动的参数自优化，通过变异 + 评分 + 反射黑名单迭代策略参数组合。
 - `simulator/walk_forward`：滚动窗口样本内训练 + 样本外验证的参数寻优。
-- 两者**互补** —— Darwin 做探索性优化（发现新参数组合），walk-forward 做验证性优化（防止过拟合）。典型流程：Darwin 产出候选参数集 → walk-forward 验证其样本外稳定性 → 通过者写回 `param_registry`。
+- `verify/`（v3.7.0+）：少妇战法 v1.0 验收工程化，提供一键 `zt verify v1.0` 与五项硬指标判定。
+- 三者**互补** —— Darwin 做探索性优化，walk-forward / verify 做验证性优化，防止过拟合。典型流程：Darwin 产出候选参数集 → walk-forward / verify 验证其样本外稳定性 → 通过者写回 `param_registry`。
 
 ---
 
@@ -163,13 +210,13 @@ rules/
 | 层级 | 技术 |
 |------|------|
 | 数据管道 | Python 3.10+（标准库 + `sqlite3`、`pathlib`、`dataclasses`、`enum`） |
-| 外部数据 | `tushare`（Pro API，支持中转 URL）、`pandas`、`requests` |
+| 外部数据 | `tushare`（Pro API，支持中转 URL）、`pandas`、`requests`、`httpx`、`pyyaml` |
 | 环境配置 | `python-dotenv`（`.env` 文件） |
 | 数据库 | SQLite（本地文件，15 张核心表 + 4 张自我改进跟踪表） |
 | 接口协议 | CLI（`zt` 入口）、可选 FastAPI Web 服务（`zt-web`） |
 | 前端看板 | React 19 + Vite 8 + TypeScript 6 + Tailwind CSS 4 + ECharts 6 |
 | 状态管理 | Zustand + TanStack React Query |
-| 测试框架 | `pytest`（892 用例 passed，11 skipped） |
+| 测试框架 | `pytest`（962 用例 passed，12 skipped） |
 | 代码质量 | `ruff`（lint + format）、`mypy`、pre-commit |
 | 视频下载 | `yt-dlp`（语料采集，可选） |
 | 语音转写 | `faster-whisper`（语料采集，可选） |
@@ -180,14 +227,14 @@ rules/
 
 | 文件 | 作用 |
 |------|------|
-| `pyproject.toml` | 包定义、`zt` 等命令入口、pytest/ruff/mypy 配置、可选依赖分组 |
+| `pyproject.toml` | 包定义、`zt` / `zt-web` / `zt-monitor` 命令入口、pytest/ruff/mypy/coverage 配置、可选依赖分组 |
 | `requirements.txt` | 核心 Python 依赖（含 `pyyaml`、`httpx`） |
-| `.env.example` | 环境变量模板（.env 不入库） |
+| `.env.example` | 环境变量模板（`.env` 不入库） |
 | `frontend/package.json` | 前端依赖与脚本 |
 | `frontend/vite.config.ts` | Vite 配置（端口 5173，代理 `/api` 到 localhost:8000） |
 | `.editorconfig` | 编辑器格式统一配置 |
-| `.pre-commit-config.yaml` | 提交前 ruff、部分 mypy、SKILL.md 质量门 |
-| `.github/workflows/test.yml` | CI：测试、lint、质量门、真实数据回归、pre-commit |
+| `.pre-commit-config.yaml` | 提交前 ruff、部分 mypy、SKILL.md 12 项质量门、双轴评审（手动）、merge/yaml/行尾空白检查 |
+| `.github/workflows/test.yml` | CI：测试、lint、类型检查、质量门、真实数据回归、pre-commit |
 | `.github/workflows/e2e-cron.yml` | 每周一真实数据回归 cron |
 
 ### 环境变量说明（`.env.example`）
@@ -196,6 +243,7 @@ rules/
 DATA_MODE=jnb                       # jnb(真实数据) 或 websearch(纯对话)
 TUSHARE_TOKEN=你的56位token
 TUSHARE_API_URL=                    # 中转 API 地址（JNB 模式必填）
+# TUSHARE_VERIFY_TOKEN_URL=***      # 可选，实时行情验证地址
 DATA_DIR=data
 DB_PATH=data/stock_data.db
 LLM_API_KEY=***                     # 可选，LLM 回答生成
@@ -211,7 +259,7 @@ IM_PUSH_WEBHOOK=                    # 可选，飞书 webhook
 
 ```
 zettaranc-skill/
-├── SKILL.md                    # 核心 Skill 文件（LLM 角色扮演协议）
+├── SKILL.md                    # 核心 Skill 文件（LLM 角色扮演协议，Skill-Schema-V2 合规）
 ├── README.md                   # 面向人类用户的项目介绍
 ├── AGENTS.md                   # 本文件（AI Agent 开发指南）
 ├── LICENSE                     # MIT
@@ -219,47 +267,43 @@ zettaranc-skill/
 ├── .env / .env.example         # 本地配置（.env 不入库）
 ├── .gitignore                  # Git 忽略规则
 ├── .editorconfig               # 编辑器格式统一配置
+├── .pre-commit-config.yaml     # 提交前质量门
 ├── requirements.txt            # Python 依赖
 ├── data/                       # 本地 SQLite 数据库与报告（不入库）
 │   ├── stock_data.db           # 主数据库
-│   └── reports/                # 自动生成的监控/评估报告
+│   ├── registry/               # 参数注册表持久化（如 shaofu_v1.json）
+│   └── reports/                # 自动生成的监控/评估/验收报告
 ├── docs/                       # 项目说明文档
-│   ├── CHANGELOG.md            # 版本变更日志（当前 v3.6.0）
+│   ├── CHANGELOG.md            # 版本变更日志（当前 v3.9.0）
+│   ├── CHANGELOG-v3.0.md       # v3.0 专题变更日志
 │   ├── TODO.md                 # 待办与路线图
 │   ├── CONTRIBUTING.md         # 贡献指南
 │   ├── USER_GUIDE.md           # 详细使用手册
 │   ├── CONFIG_GUIDE.md         # 配置指南
-│   └── intent-router-design.md # 意图路由设计文档
+│   ├── STATISTICS_VALIDATION.md # 统计检验说明
+│   ├── IMPROVEMENT_SYSTEM_SUMMARY.md
+│   ├── intent-router-design.md # 意图路由设计文档
+│   └── luban-reports/          # 鲁班评审报告归档
 ├── modules/                    # Python 数据层与业务逻辑
 │   ├── datasource.py           # 统一数据源协议（DataSource Protocol + TushareDataSource / BridgeDataSource / SqliteDataSource / CompositeDataSource + get_datasource() 工厂）
 │   ├── database.py             # SQLite 15+ 张表、事务上下文、CRUD 助手
 │   ├── data_sync.py            # 向后兼容 shim → 实际逻辑在 modules/data_sync/
 │   ├── data_sync/              # 数据同步子包（增量/全量，限流 120 次/分）
-│   │   ├── rate_limiter.py
-│   │   ├── indicator_cache.py
-│   │   ├── fetcher.py
-│   │   ├── syncer.py
-│   │   ├── cli.py
-│   │   └── __main__.py
 │   ├── tushare_client.py       # Tushare Pro API 封装
 │   ├── bridge_client.py        # tushare-data-bridge HTTP 客户端
-│   ├── indicators/             # 60+ 技术指标（6 子模块）
+│   ├── indevs_client.py        # indevs 数据客户端
+│   ├── indicators/             # 60+ 技术指标（含 price_patterns 子包）
 │   ├── strategies/             # 30+ 战法识别引擎（5 子模块）
 │   ├── screener.py             # 向后兼容 shim → 实际逻辑在 modules/screener/
-│   ├── screener/               # 选股评分子包（含蜈蚣图/沙漏/牛绳过滤）
-│   │   ├── models.py
-│   │   ├── data.py
-│   │   ├── criteria.py
-│   │   ├── scoring.py
-│   │   ├── engine.py
-│   │   ├── market.py
-│   │   ├── format.py
-│   │   ├── workflow.py
-│   │   └── cli.py
-│   ├── simulator/              # 少女/少妇模拟器（v3.4-v3.6）：A 股真实约束、成本模型、动态滑点、ATR 仓位、战法共振评分、Walk-forward 参数寻优
-│   ├── backtest.py             # 多策略融合/组合回测
+│   ├── screener/               # 选股评分子包
+│   ├── simulator/              # 少女/少妇模拟器
+│   ├── statistics/             # 统计检验框架
+│   ├── core/                   # 公共模块（metrics/walk_forward/market_context/net）
+│   ├── verify/                 # 少妇战法 v1.0 验收工程化（v3.7.0+，含 portfolio_engine/portfolio_walk_forward）
+│   ├── backtest/               # 回测子包（single.py + portfolio.py）
 │   ├── backtest_six_step.py    # 少妇战法六步闭环回测
 │   ├── loop_engine.py          # 六步闭环状态机
+│   ├── loop_engine_enhanced.py # 增强版多策略共振闭环
 │   ├── portfolio_diagnosis.py  # 持股检查端到端
 │   ├── watchlist.py            # 自选股观察池
 │   ├── cli.py / cli_commands.py # 命令行统一入口
@@ -277,6 +321,10 @@ zettaranc-skill/
 │   ├── monitor.py / notifier.py # 自选股监控与预警推送
 │   ├── tracking_manager.py / tracking_syncer.py # 自我改进跟踪池
 │   ├── improvement_logger.py / harness_updater.py
+│   ├── dynamic_config.py       # 动态配置管理
+│   ├── market_regime.py        # 市场状态机
+│   ├── position_manager.py     # 仓位管理
+│   ├── industry_filter.py      # 行业过滤
 │   └── self_optimizer/         # Darwin 自优化管线
 ├── api/                        # FastAPI REST API（可选）
 │   ├── main.py                 # 服务入口
@@ -289,17 +337,24 @@ zettaranc-skill/
 │   ├── src/                    # 页面与组件
 │   ├── package.json
 │   └── vite.config.ts
-├── knowledge/                  # 29 篇交易体系知识文档
-├── tests/                      # pytest 测试（52 个文件，892 passed / 11 skipped）
+├── knowledge/                  # 33 篇交易体系知识文档
+├── tests/                      # pytest 测试（61 个文件，962 passed / 12 skipped）
 ├── scripts/                    # 薄壳工具脚本（业务逻辑在 modules/）
 │   ├── _common.py
 │   ├── sync_watchlist.py
 │   ├── sync_and_compute.py
 │   ├── batch_compute_indicators.py
 │   ├── generate_report.py
-│   └── e2e_data_integrity.py
+│   ├── e2e_data_integrity.py
+│   ├── verify_v10.py
+│   ├── optimize_for_v10_verify.py
+│   ├── optimization_*.py
+│   ├── test_enhanced_engine.py
+│   ├── demo_validation.py
+│   └── ...
 ├── corpus/                     # 语料采集与质检工具
 │   ├── quality_check.py        # SKILL.md 12 项质量检查
+│   ├── dual_axis_review.py     # SKILL.md 双轴评审
 │   ├── batch_download_bilibili.py
 │   ├── batch_transcribe.py
 │   ├── srt_to_transcript.py
@@ -352,7 +407,7 @@ zettaranc-skill/
 ```bash
 # 核心 Python 依赖
 pip install -r requirements.txt
-# 或安装为本地可编辑包（推荐，会注册 zt 命令）
+# 或安装为本地可编辑包（推荐，会注册 zt / zt-web / zt-monitor 命令）
 pip install -e .
 
 # 语料处理可选依赖
@@ -369,12 +424,13 @@ zt analyze 600487.SH
 zt screen --strategy B1 --limit 20
 zt watchlist scan
 zt backtest shaofu 600487.SH --days 250
+zt verify v1.0 --limit 50 --days 300 --walk-forward
 ```
 
 ### 运行测试
 
 ```bash
-# 全部测试（验证结果：892 passed, 11 skipped）
+# 全部测试（验证结果：962 passed, 12 skipped）
 python -m pytest tests/ -v
 
 # 单文件测试
@@ -382,6 +438,9 @@ python -m pytest tests/test_indicators.py -v
 
 # 慢速端到端测试（默认不跑）
 python -m pytest tests/ -m slow -v
+
+# 真实数据回归（需 TUSHARE_TOKEN + TUSHARE_API_URL）
+python -m pytest tests/test_indicators_realdata.py -v
 ```
 
 > `test_indicators_realdata.py` 等真实数据测试会在无 `TUSHARE_TOKEN` 时自动 skip。
@@ -391,41 +450,51 @@ python -m pytest tests/ -m slow -v
 ```bash
 # 初始化数据库（创建 15+ 张表）
 python -m modules.database
+# 或
+zt sync init
 
 # 同步股票基本信息（全量 5525 只）
 python -m modules.data_sync sync
+# 或
+zt sync sync
 
 # 同步单只股票 K 线 + 指标缓存
 python -m modules.data_sync sync --ts_code 600487.SH --days 365 --indicators
+# 或
+zt sync sync --ts_code 600487.SH --days 365 --indicators
 
 # 查看同步状态
-python -m modules.data_sync status
+zt sync status
 
 # 同步 Tushare 官方指标（diff 验证）
-python -m modules.data_sync stk-factor --ts_code 600487.SH --days 365
+zt sync stk-factor --ts_code 600487.SH --days 365
 ```
 
 ### CLI 主要命令
 
 ```bash
 zt analyze <ts_code> [--days N] [--json]          # 分析单只股票
-zt screen --strategy <策略> [--limit N] [--json]   # 批量选股
+zt screen --strategy <策略> [--limit N] [--json]   # 批量选股（11 种策略别名）
 zt score <ts_code> [--json]                        # 综合评分
 zt diagnose <ts_code> [--days N] [--json]          # 持仓诊断
+zt workflow                                          # 每日五步工作流
 zt watchlist add <ts_code> --tags <标签>           # 添加自选股
 zt watchlist list                                  # 查看观察池
 zt watchlist scan [--json]                         # 批量扫描信号
+zt watchlist remove <ts_code>                      # 移除自选股
 zt backtest shaofu <ts_code> [--days N] [--json]   # 少妇战法回测
 zt backtest multi <ts_code> [--days N] [--json]    # 多策略融合回测
 zt backtest portfolio <c1,c2,...> [--days N]       # 组合回测
 zt simulate [codes] --days N --capital N --max-positions N --risk R --score S --signals N --json  # 交易模拟器
 zt simulate [codes] --strategy-mode resonance --strategy-lookback N --min-resonance-score S --json  # 战法共振模式
 zt simulate [codes] --walk-forward --wf-train-days N --wf-test-days N --wf-objective calmar --json  # Walk-forward 寻优
+zt verify v1.0 [--limit N] [--days N] [--walk-forward] [--json]  # 少妇战法 v1.0 五项硬指标验收
 zt trade add "口语化交易描述"                       # 记录交易
 zt trade list / review / stats                     # 交易记录管理
 zt daily [--json]                                  # 每日五步工作流
 zt monitor [--json] [--no-push]                    # 自选股主动监控
-zt self-optimize ...                               # Darwin 自优化
+zt track add/list/info/status/stats                # 自我改进跟踪池
+zt self-optimize run/status/reset                  # Darwin 自优化
 zt sync init/sync/status/stk-factor                # 数据同步
 ```
 
@@ -456,6 +525,9 @@ python corpus/quality_check.py SKILL.md
 
 # strict 模式（任一不通过则 exit 1）
 python corpus/quality_check.py SKILL.md --strict
+
+# 双轴评审（轴 A 确定性 + 轴 B LLM 深度，--skip-llm 可跳过 LLM）
+python corpus/dual_axis_review.py SKILL.md --skip-llm
 ```
 
 ### 语料采集脚本
@@ -508,7 +580,7 @@ python corpus/quality_check.py SKILL.md --strict
   - 测试文件额外忽略 `F811`
   - format：`quote-style = "double"`，`indent-style = "space"`
 - **mypy**：`ignore_missing_imports = true`，仅对关键路径做类型检查
-- **pre-commit**：每次 commit 自动跑 ruff、部分 mypy、SKILL.md 12 项质量门、merge/yaml/行尾空白检查
+- **pre-commit**：每次 commit 自动跑 ruff、部分 mypy、SKILL.md 12 项质量门、merge/yaml/行尾空白检查；双轴评审钩子为手动触发
 
 ### 版本规则
 
@@ -517,8 +589,8 @@ python corpus/quality_check.py SKILL.md --strict
 | 位 | 含义 | 示例 |
 |----|------|------|
 | MAJOR | 心智模型级别的重构 | v1.3.0：将 6 个心智模型重组为 5 个 |
-| MINOR | 新增战术/启发式/语料/模块 | v2.0.0：新增 Tushare 数据层和 8 个 Python 模块 |
-| PATCH | 排版修正、安全修复、数字更新 | v2.1.1：移除 URL 硬编码 |
+| MINOR | 新增战术/启发式/语料/模块 | v2.0.0：新增 Tushare 数据层和 8 个 Python 模块；v3.7.0：新增 verify 验收工程化 |
+| PATCH | 排版修正、安全修复、数字更新、关键 bug 修复 | v2.1.1：移除 URL 硬编码；v3.7.3：修 walk_forward 假切片 bug |
 
 ---
 
@@ -528,7 +600,9 @@ python corpus/quality_check.py SKILL.md --strict
 
 - **框架**：pytest
 - **配置**：`pyproject.toml` 中 `testpaths = ["tests"]`，默认 `-v --tb=short`
-- **标记**：`@pytest.mark.slow` 用于慢速端到端测试（如 self_optimizer 多轮），默认不跑
+- **标记**：
+  - `@pytest.mark.slow` 用于慢速端到端测试（如 self_optimizer 多轮），默认不跑
+  - `@pytest.mark.realdata` 用于真实数据回归测试（需 `TUSHARE_TOKEN` + `RUN_REALDATA=true`），默认 skip
 - **Fixture**：`tests/conftest.py` 提供
   - `mock_env_for_tests`：自动将环境变量 mock 到临时目录
   - `temp_db`：初始化好的临时数据库
@@ -536,36 +610,40 @@ python corpus/quality_check.py SKILL.md --strict
 - **数据工厂**：`make_kline_row()`、`make_daily_data()`、`generate_uptrend_klines()`、`generate_downtrend_klines()`、`generate_b1_scenario()` 等
 - **数据库隔离**：所有测试使用临时 SQLite 文件，互不干扰
 
-### 测试覆盖范围（当前 52 个测试文件）
+### 测试覆盖范围（当前 61 个测试文件）
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
 | `test_database.py` | 路径解析、连接上下文、事务回滚、表初始化、幂等性 |
 | `test_indicators.py` | 60+ 指标计算（MA/EMA/KDJ/MACD/背离/BBI/RSI/WR/布林带/量比/双线/单针/砖形图/B1B2/呼吸结构/SB1/沙漏/牛绳/蜈蚣图等） |
 | `test_strategies.py` | B1/B2/B3/SB1/长安/四分之三阴量/娜娜/异动地量/出货五式等 |
-| `test_screener.py` / `test_screener_p3.py` | 选股评分、P3 指标接入评分 |
-| `test_backtest.py` / `test_loop_engine.py` / `test_backtest_six_step.py` | 回测框架与六步闭环 |
+| `test_screener.py` / `test_screener_p3.py` / `test_screener_data.py` | 选股评分、P3 指标接入评分、数据层 |
+| `test_backtest.py` / `test_loop_engine.py` / `test_backtest_six_step.py` / `test_backtest_scorer.py` | 回测框架与六步闭环 |
 | `test_portfolio_diagnosis.py` | 持股检查、防卖飞、出货信号、战法匹配 |
 | `test_watchlist.py` | 观察池增删改查、批量扫描 |
 | `test_wave_theory.py` | 三波理论识别 |
 | `test_kirin_detector.py` | 麒麟会四阶段 |
-| `test_cli_screen.py` / `test_cli_subparser.py` | CLI 子命令分发与参数解析 |
-| `test_data_e2e.py` / `test_data_sync_extensions.py` | 数据层端到端与同步扩展 |
+| `test_cli_screen.py` / `test_cli_subparser.py` / `test_cli_simulate.py` | CLI 子命令分发与参数解析 |
+| `test_data_e2e.py` / `test_data_sync.py` / `test_data_sync_extensions.py` / `test_datasource.py` / `test_indicator_cache.py` | 数据层端到端、同步、数据源、指标缓存 |
 | `test_trade_manager.py` / `test_trade_parser.py` | 交易记录 CRUD、口语化解析 |
 | `test_intent_router.py` | 意图路由规则匹配 |
 | `test_quality_check.py` | SKILL.md 12 项质量检查 |
 | `test_rate_limiter.py` | 120次/分钟限流器 |
-| `test_bridge_client.py` | tushare-data-bridge HTTP 客户端与降级网关 |
+| `test_bridge_client.py` / `test_tushare_client.py` | Tushare 客户端与 bridge 降级网关 |
 | `test_monitor.py` / `test_notifier.py` | 自选股监控与推送 |
 | `test_tracking_system.py` | 自我改进跟踪池 |
 | `test_self_optimizer_*.py` / `test_param_registry.py` / `test_mutator.py` / `test_scorer.py` / `test_break_signal.py` / `test_reflex_blacklist.py` / `test_backtest_scorer.py` | Darwin 自优化管线 |
+| `test_setup_wizard.py` / `test_report.py` / `test_exam_rules.py` | 初始化向导、报告、考试规则 |
+| `test_simulator*.py`（11 个文件） | 模拟器约束、成本、环境权重、指标、参数空间、共振、strategy_adapter、仓位、walk_forward、optimizer_report、narrator |
+| `test_statistics.py` | 统计检验框架 |
+| `test_verify_*.py`（7 个文件） | v1.0 验收 CLI / gates / pipeline / registry_writer / report / scorer / walk_forward |
 | `test_indicators_realdata.py` | 真实 Tushare 数据指标回归（无 token 时 skip） |
 
 ### 运行预期
 
 ```bash
 $ python -m pytest tests/ -v
-# 验证结果：892 passed, 11 skipped
+# 验证结果：962 passed, 12 skipped
 ```
 
 ---
@@ -624,13 +702,15 @@ $ python -m pytest tests/ -v
 | 更新心智模型或交易规则 | 先查 `references/research/01-writings.md` 和 `05-decisions.md` → 修改 `SKILL.md` 与对应 `knowledge/*.md` → 运行 `corpus/quality_check.py SKILL.md` |
 | 补充新语料 | 将新文章放入 `references/sources/articles/` → 更新对应 `references/research/*.md` → **不要**将原始语料加入 git |
 | 新增 B 站视频 transcript | `python corpus/batch_download_bilibili.py && python corpus/batch_transcribe.py` |
-| 发布新版本 | 更新 `SKILL.md` → 更新 `docs/CHANGELOG.md` → 同步 `README.md` 版本 badge → 考虑同步 `pyproject.toml` 版本号 → 打 git tag |
+| 发布新版本 | 更新 `SKILL.md` → 更新 `docs/CHANGELOG.md` → 同步 `README.md` 版本 badge → 同步 `pyproject.toml` 版本号 → 打 git tag |
 | 验证风格一致性 | 对照「风格验证清单」逐项检查 |
 | 修复数据层 bug | 修改 `modules/*.py` → 补充/更新 `tests/test_*.py` → `pytest tests/ -v` |
 | 接入新 Tushare 接口 | 修改 `modules/tushare_client.py` 或 `modules/data_sync.py` → 确认 `modules/database.py` 表结构支持 → 补充保存逻辑与测试 |
 | 初始化全新环境 | `cp .env.example .env` → 填入 Token → `python -m modules.database` → `python -m modules.data_sync sync` → `pytest tests/ -v` |
 | 运行 Web 看板 | 安装 `fastapi uvicorn pydantic-settings` → `zt-web` → `cd frontend && npm install && npm run dev` |
-| 跑 Darwin 自优化 | `zt self-optimize --target trading --rounds 3`（默认 dry_run） |
+| 跑 Darwin 自优化 | `zt self-optimize run --target trading --rounds 3` |
+| 跑少妇战法 v1.0 验收 | `zt verify v1.0 --limit 50 --days 300 --walk-forward` |
+| 跑参数寻优（v1.0） | `python scripts/optimize_for_v10_verify.py --rounds 5 --stocks 100 --days 300` |
 
 ---
 

@@ -29,6 +29,8 @@ import json as _json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path as _Path
+
+from modules.core.paths import REGISTRY_DIR as _REGISTRY_DIR
 from typing import Any, Literal
 from collections.abc import Iterator
 
@@ -683,7 +685,6 @@ def using_params(params: dict[str, dict[str, Any]]) -> Iterator[None]:
 # v3.7.1 持久化层：data/registry/<strategy>.json
 # ──────────────────────────────────────────────
 
-_REGISTRY_DIR = _Path("data/registry")
 _REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
 
 

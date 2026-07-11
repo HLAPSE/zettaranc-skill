@@ -1,30 +1,13 @@
 """选股评分函数。"""
 
 from ..indicators import calculate_ma
+from ..indicators import calculate_kdj, calculate_bbi  # noqa: F401  re-export
 from .data import _dict_to_daily
 
 
 def calculate_vol_ma(vols: list[float], period: int) -> float:
     """计算量能均线（复用 calculate_ma 逻辑）"""
     return calculate_ma(vols, period)
-
-
-def calculate_kdj(klines: list, period: int = 9) -> tuple[float, float, float]:
-    """计算 KDJ 指标，支持 DailyData 列表或 dict 列表"""
-    from ..indicators import calculate_kdj as canonical_kdj
-
-    if klines and isinstance(klines[0], dict):
-        klines = _dict_to_daily(klines)
-    return canonical_kdj(klines, period)
-
-
-def calculate_bbi(klines: list) -> float:
-    """计算 BBI 指标，支持 DailyData 列表或 dict 列表"""
-    from ..indicators import calculate_bbi as canonical_bbi
-
-    if klines and isinstance(klines[0], dict):
-        klines = _dict_to_daily(klines)
-    return canonical_bbi(klines)
 
 
 def is_perfect_pattern(klines: list) -> tuple[bool, list[str]]:

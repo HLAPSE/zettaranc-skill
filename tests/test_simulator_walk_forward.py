@@ -122,7 +122,8 @@ def test_run_walk_forward_with_mock():
         metrics = PerformanceMetrics(calmar_ratio=calmar, sharpe_ratio=calmar * 0.5)
         return SimulationResult(
             config=config,
-            equity_curve=[{"date": f"2024010{i}", "equity": 1000000 + call_count * 1000} for i in range(1, days + 1)],
+            equity_curve=[1000000 + call_count * 1000 for i in range(1, days + 1)],
+            equity_details=[{"date": f"2024010{i}", "equity": 1000000 + call_count * 1000} for i in range(1, days + 1)],
             metrics=metrics,
         )
 
