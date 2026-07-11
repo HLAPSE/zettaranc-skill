@@ -584,13 +584,20 @@ python corpus/dual_axis_review.py SKILL.md --skip-llm
 
 ### 版本规则
 
-采用语义化版本，但含义针对本项目定制：
+严格遵循语义化版本（Semantic Versioning）：`MAJOR.MINOR.PATCH`
 
 | 位 | 含义 | 示例 |
 |----|------|------|
-| MAJOR | 心智模型级别的重构 | v1.3.0：将 6 个心智模型重组为 5 个 |
-| MINOR | 新增战术/启发式/语料/模块 | v2.0.0：新增 Tushare 数据层和 8 个 Python 模块；v3.7.0：新增 verify 验收工程化 |
-| PATCH | 排版修正、安全修复、数字更新、关键 bug 修复 | v2.1.1：移除 URL 硬编码；v3.7.3：修 walk_forward 假切片 bug |
+| MAJOR | 不兼容的 API 变更 | SKILL.md 心智模型重构、CLI API 不兼容变更 |
+| MINOR | 向后兼容的功能新增 | 新增战法/指标、新增 CLI 子命令、新增数据源 |
+| PATCH | 向后兼容的 bug 修复和内部重构 | bug 修复、性能优化、技术债清理、文档更新 |
+
+**版本发布策略**：
+- **PATCH**：随时发布（bug 修复、小改进）
+- **MINOR**：功能积累到一定程度后发布（每月/每季度）
+- **MAJOR**：重大架构变更时发布（每年/每两年）
+
+**注意**：技术债清理、内部重构属于 PATCH，不是 MINOR。避免版本号增长过快。
 
 ---
 
