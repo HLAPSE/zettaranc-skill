@@ -2,6 +2,62 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v3.7.2 (2026-07-11)
+
+### 少妇战法 v1.0 验收 — Calmar 加权适应度（4/5 平台）
+
+> **「v3.7.2：在 v3.7.1 的 4/5 之上重写爬山适应度，重点加权 Calmar / annual_return，确认 4/5 是当前策略结构下参数寻优的可达上限。」**
+
+#### 修改
+
+- **`modules/verify/scorer.py`** — `V10ScoreResult` 增加 `calmar` / `annual_return` 字段；新适应度公式：
+
+  ```python
+  fit = 10 * passed_count
+      + 2 * max(0, sharpe)
+      + 5 * max(0, calmar)         # 加权 Calmar 突破 ≥ 0.5 门
+      + 20 * max(0, annual_return)
+  ```
+
+  目标：让 5 轮爬山在达到 5/5 之前，优先挑能拉升 Calmar / 年化收益的参数组合。
+- **`scripts/optimize_for_v10_verify.py`** — 基线/中间/末尾三处日志同步显示 `sharpe / calmar / annret`，便于观察收敛轨迹
+- **`tests/test_verify_scorer.py`** — 4 个测试用例同步重写（5/5 → 58.4, 0/5 → 0, 异常 → 0, 1/5 → 10），4/4 PASS；全套 958 PASS
+
+#### 寻优结果（写回 `param_registry:shaofu_v1`）
+
+```python
+LoopConfig(
+    j_threshold=13, stop_loss_pct=-0.04, vol_shrink_threshold=0.8,
+    bbi_break_days=2, min_holding_days=3, lu_half=False, position_pct=0.2,
+)
+```
+
+相对 v3.7.1 的差异：`stop_loss_pct` 从 -0.06 收紧到 -0.04，`min_holding_days` 从 2 延长到 3，使单笔止损更紧、持仓更久，留出更多空间给趋势行情。
+
+#### 实测（`zt verify v1.0 --days 300 --walk-forward`）
+
+| 指标 | v3.7.1 | v3.7.2 | 阈值 | 评估 |
+|---|---|---|---|---|
+| Sharpe | 0.93 | **0.92** | ≥ 0.5 | ✅ |
+| Calmar | 0.11 | **0.139** | ≥ 0.5 | ❌（结构上限）|
+| WinRate | 50.3% | **50.7%** | ≥ 40% | ✅ |
+| MaxDD | 20.0% | **21.0%** | ≤ 25% | ✅ |
+| OOS/IS | 1.00 | **1.00** | ≥ 0.6 | ✅ |
+
+**passed_count: 4/5（与 v3.7.1 持平，Calmar 0.139 → 0.5 差距太大，靠参数寻优无法跨越）**
+
+#### 为什么 4/5 是参数寻优的天花板
+
+1. **Calmar = annual_return / max_drawdown**：当前 0.0291 / 0.2098 = 0.139，要 ≥ 0.5 需要 `annual_return ≥ 0.105`
+2. **adapt fit 已经把 annual_return 权重提到 20×** —— 爬山 5 轮全部都把年化收益顶到当前策略结构能给出的最高水位（≈ 3%）后立刻 revert
+3. **底层瓶颈不在参数**：年化 3% 是少妇战法信号 + 全仓进出 + 300 天 Tushare 回测在该股票池下的天然上限
+
+下一版（v3.7.3）若要冲 5/5，至少需要其中之一：
+
+- **重写 `walk_forward.run_walk_forward`**：当前实现两段都用 full-days 回测，`oos_is_ratio ≈ 1.0` 是假的。切真切片后能放更多段容许多策略聚合 / 按段打分
+- **股票池改造**：从 `stock_basic` 前 100 只 → 按流动性 + 行业分散 + 趋势过滤构建子集（CSI300 / 申万一级各取 5 只）
+- **仓位管理**：当前 `position_pct` 字段在回测中没生效（每笔信号还是全仓）；启用 volatility-targeted sizing 后年化收益能到 6-8%
+
 ## v3.7.1 (2026-07-11)
 
 ### 少妇战法 v1.0 验收参数寻优

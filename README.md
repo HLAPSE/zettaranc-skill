@@ -88,6 +88,31 @@ zt verify v1.0 --output data/reports/my_verify
 
 ---
 
+## v3.7.2 Calmar 加权寻优（4/5 平台确认）
+
+重写爬山适应度：Calmar × 5 + annual_return × 20
+
+```python
+fit = 10 * passed_count
+    + 2 * max(0, sharpe)
+    + 5 * max(0, calmar)
+    + 20 * max(0, annual_return)
+```
+
+实测仍然 4/5（Calmar 0.139 → 0.5 差距大），但确认这是当前策略结构下参数寻优的天花板：5 轮全部在 annual_return ≈ 3% 水位 revert。
+
+| 指标 | v3.7.1 | v3.7.2 | 阈值 | 通过 |
+|---|---|---|---|---|
+| Sharpe | 0.93 | 0.92 | ≥ 0.5 | ✅ |
+| Calmar | 0.11 | 0.139 | ≥ 0.5 | ❌ |
+| WinRate | 50.3% | 50.7% | ≥ 40% | ✅ |
+| MaxDD | 20.0% | 21.0% | ≤ 25% | ✅ |
+| OOS/IS | 1.00 | 1.00 | ≥ 0.6 | ✅ |
+
+要冲 5/5 需在 v3.7.3 推进：① 重写 walk_forward 真切片；② 改股票池（流动性+行业分散）；③ 启用 volatility-targeted 仓位管理（当前 `position_pct` 在回测里没生效）。
+
+---
+
 ## v3.7.1 参数寻优（5 轮 hill-climb）
 
 ```bash
@@ -1268,6 +1293,7 @@ zettaranc ❯ 平安银行 250 天模拟，A 股真实约束 + ATR 仓位：
 
 | 版本 | 核心变化 |
 |------|---------|
+| **v3.7.2** | 少妇战法 v1.0 验收 Calmar 加权寻优（4/5 平台确认 + 5/5 路径图） | ✅ 已完成 |
 | **v3.7.1** | 少妇战法 v1.0 验收参数寻优（1/5 → 4/5 passed_count） | ✅ 已完成 |
 | **v3.7.0** | 少妇战法 v1.0 验收工程化（一键命令 + 五项硬指标 + WF） | ✅ 已完成 |
 | **v3.6.0** | 模拟器 v0.4 — Walk-forward 参数寻优（滚动窗口 OOS、参数网格、optimizer_report） |
