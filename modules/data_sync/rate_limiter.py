@@ -6,6 +6,8 @@ import logging
 import collections
 import multiprocessing
 
+from ..constants import RATE_LIMITER_WINDOW_BUFFER_S
+
 logger = logging.getLogger(__name__)
 
 # 并发同步线程数（4 个 sync_* 方法共用）
@@ -43,7 +45,7 @@ class _RateLimiter:
                 self._window.popleft()
             if len(self._window) >= self._max:
                 # 等待最老一项出窗口
-                sleep_for = 60 - (now - self._window[0]) + 0.05  # +0.05s 缓冲
+                sleep_for = 60 - (now - self._window[0]) + RATE_LIMITER_WINDOW_BUFFER_S  # 缓冲秒数
                 logger.debug(f"限流：等 {sleep_for:.2f}s（窗口已满 {self._max} req）")
                 time.sleep(sleep_for)
                 # 重新弹出（防止极端情况）
