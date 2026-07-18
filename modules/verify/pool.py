@@ -12,6 +12,7 @@ from typing import Any
 from ..database import get_connection
 from ..datasource import DataSource, get_datasource
 from modules.core.errors import ErrorCode, ZettarancError
+from ..constants import POOL_DEFAULT_TOP_RETURN_PCT
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ def load_v10_stock_pool(
     min_avg_amount: float = DEFAULT_MIN_AVG_AMOUNT,
     min_list_days: int = DEFAULT_MIN_LIST_DAYS,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-    top_return_pct: float | None = 0.30,
+    top_return_pct: float | None = POOL_DEFAULT_TOP_RETURN_PCT,
     exclude_st: bool = True,
     exclude_markets: set[str] | None = None,
 ) -> list[str]:
@@ -445,7 +446,7 @@ def load_v10_stock_pool_via_screener(
     min_avg_amount: float = DEFAULT_MIN_AVG_AMOUNT,
     min_list_days: int = DEFAULT_MIN_LIST_DAYS,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-    top_return_pct: float | None = 0.30,
+    top_return_pct: float | None = POOL_DEFAULT_TOP_RETURN_PCT,
     datasource: DataSource | None = None,
 ) -> list[str]:
     """通过 screener 预选后再做质量过滤（较慢，可选）

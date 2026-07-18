@@ -23,6 +23,15 @@ from typing import Any
 
 from ..loop_engine import LoopConfig
 from ..simulator.param_space import ParamDimension, generate_grid
+from ..constants import (
+    BACKTEST_BULL_POSITION_PCT,
+    BACKTEST_DEFAULT_MAX_POSITION_PCT,
+    BACKTEST_DEFAULT_STOP_LOSS_PCT,
+    BACKTEST_HIGH_VOL_STOP_LOSS_PCT,
+    BACKTEST_HIGH_VOLUME_POSITION_PCT,
+    BACKTEST_TIGHT_STOP_LOSS_PCT,
+    BACKTEST_VERY_HIGH_POSITION_PCT,
+)
 from .pipeline import AggregateMetrics
 from .portfolio_engine import PortfolioBacktestEngine, PortfolioBacktestResult, PortfolioConfig
 from .walk_forward import WFResult, _make_splits
@@ -183,10 +192,10 @@ class GridSearchReport:
 DEFAULT_PORTFOLIO_PARAM_SPACE: list[ParamDimension] = [
     # J 值阈值（B1 入场）：负值更激进，12 是默认
     ParamDimension("j_threshold", "choice", choices=[6, 12, 18]),
-    # 单笔仓位比例（0.20 / 0.30 / 0.40）
-    ParamDimension("position_pct", "choice", choices=[0.20, 0.30, 0.40]),
-    # 止损比例（-0.03 / -0.05 / -0.07 → 宽到紧）
-    ParamDimension("stop_loss_pct", "choice", choices=[-0.03, -0.05, -0.07]),
+    # 单笔仓位比例（default / bull / very_high）
+    ParamDimension("position_pct", "choice", choices=[BACKTEST_DEFAULT_MAX_POSITION_PCT, BACKTEST_BULL_POSITION_PCT, BACKTEST_VERY_HIGH_POSITION_PCT]),
+    # 止损比例（tight / default / high_vol → 宽到紧）
+    ParamDimension("stop_loss_pct", "choice", choices=[BACKTEST_TIGHT_STOP_LOSS_PCT, BACKTEST_DEFAULT_STOP_LOSS_PCT, BACKTEST_HIGH_VOL_STOP_LOSS_PCT]),
     # ATR 止损距离倍数（1.5 / 2.0 / 3.0）
     ParamDimension("atr_stop_multiplier", "choice", choices=[1.5, 2.0, 3.0]),
 ]
