@@ -44,7 +44,7 @@ def portfolio_walk_forward_verify(
     days: int = 250,
     wf_train_days: int = 120,
     wf_test_days: int = 60,
-    config: object | None = None,
+    config: LoopConfig | None = None,
     portfolio_config: PortfolioConfig | None = None,
 ) -> WFResult:
     """组合级 Walk-forward 验证

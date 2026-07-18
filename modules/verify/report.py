@@ -112,7 +112,7 @@ def render_markdown(result: VerifyResult) -> str:
 
 def write_report(
     result: VerifyResult,
-    output_dir: Path | str = None,
+    output_dir: Path | str | None = None,
     base_name: str | None = None,
     write_markdown: bool = True,
 ) -> ReportPaths:

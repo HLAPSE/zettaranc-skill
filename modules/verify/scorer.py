@@ -86,8 +86,12 @@ class V10VerifyScorer:
             if verify_v10_pipeline is None:
                 from modules.verify.pipeline import verify_v10_pipeline
 
+            # after lazy import, verify_v10_pipeline 必定非 None
+            assert verify_v10_pipeline is not None
+            pipeline: Any = verify_v10_pipeline
+
             config = LoopConfig(**{k: v for k, v in params.items() if k in LOOP_CONFIG_FIELDS})
-            result = verify_v10_pipeline(
+            result = pipeline(
                 ts_codes=self.stock_pool,
                 days=self.days,
                 config=config,

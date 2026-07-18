@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from . import (
     MarketRegime,
@@ -330,8 +330,10 @@ def run_simulation(
 
     # 预加载所有 K 线（数据源支持批量接口时共享连接批量查询，否则逐股循环兜底）
     klines_map: dict[str, list[DailyData]] = {}
+    # 运行时特性检测：ds 类型在编译时为 DataSource，但子类型（如 PostgresDataSource）才有此方法
     if getattr(type(ds), "get_kline_dicts_batch", None) is not None:
-        for code, rows in ds.get_kline_dicts_batch(ts_codes, days + 60).items():
+        batch_fn = cast(Any, ds).get_kline_dicts_batch
+        for code, rows in batch_fn(ts_codes, days + 60).items():
             if rows:
                 klines_map[code] = dict_to_daily(rows)
     else:

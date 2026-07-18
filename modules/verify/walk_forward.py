@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.walk_forward import WalkForwardSplit, make_walk_forward_splits
+from ..loop_engine import LoopConfig
 from .pipeline import (
     AggregateMetrics,
     StockResult,
@@ -96,7 +97,7 @@ def _load_windowed_klines(ts_code: str, days: int) -> list[Any]:
 def _backtest_with_window(
     ts_code: str,
     klines: list[Any],
-    config: object | None,
+    config: LoopConfig | None,
 ) -> Any:
     """对一段 K 线窗口跑回测。
 
@@ -142,7 +143,7 @@ def walk_forward_verify(
     days: int = 250,
     wf_train_days: int = 120,
     wf_test_days: int = 60,
-    config: object | None = None,
+    config: LoopConfig | None = None,
 ) -> WFResult:
     """
     Walk-forward 验证（v3.7.3 真切片版）。

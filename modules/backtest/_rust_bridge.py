@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from modules.core._rust_compat import compute_func as _rust_compat_compute_func
 
@@ -42,9 +42,11 @@ def try_call(name: str, *args: Any, **kwargs: Any) -> Any:
     返回：Rust 调用返回值，或 None（不可用 / 抛错）。
     用法：业务层 `result = try_call(...) or python_fallback(...)`。
     """
-    fn = compute_func(name)
-    if fn is None:
+    fn_obj = compute_func(name)
+    if fn_obj is None:
         return None
+    # compute_func 返回 object | None；强制标为 Callable 让调用通过 mypy
+    fn = cast(Callable[..., Any], fn_obj)
     try:
         return fn(*args, **kwargs)
     except Exception as e:
@@ -237,8 +239,10 @@ def bridge_shaofu_single(
     # is_rust_available() 内部捕获 RuntimeError（impl=rust 但模块缺失时），
     # 保证 silent fallback；否则直接走 compute_func 会在 rust 模式下抛 RuntimeError
     if is_rust_available():
-        fn = compute_func("run_single_strategy_backtest_py")
-        if fn is not None:
+        fn_obj = compute_func("run_single_strategy_backtest_py")
+        if fn_obj is not None:
+            # compute_func 返回 object | None；强制标为 Callable 让调用通过 mypy
+            fn = cast(Callable[..., Any], fn_obj)
             try:
                 # 懒加载 K 线（CLI 调用方通常不传 klines，节省 Python 路径的二次拉取）
                 if not klines:
@@ -287,9 +291,11 @@ def bridge_grid_search(
     Returns:
         `{all_results, best_params, best_score, n_results}` 或 None
     """
-    fn = compute_func("run_grid_search_py")
-    if fn is None:
+    fn_obj = compute_func("run_grid_search_py")
+    if fn_obj is None:
         return None
+    # compute_func 返回 object | None；强制标为 Callable 让调用通过 mypy
+    fn = cast(Callable[..., Any], fn_obj)
 
     try:
         # K 线转 dict

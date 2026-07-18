@@ -320,6 +320,7 @@ class TrackingSyncer:
             low = kline_data.get("low") if kline_data else None
             pct_chg = kline_data.get("pct_chg") if kline_data else None
             vol = kline_data.get("vol") if kline_data else None
+            ts_code = kline_data.get("ts_code", "") if kline_data else ""
 
             # 获取前一日 K 线数据
             prev_close = prev_kline_data.get("close") if prev_kline_data else None

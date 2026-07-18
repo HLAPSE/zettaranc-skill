@@ -61,7 +61,7 @@ def get_compute_module() -> ModuleType | None:
         return None
 
     try:
-        import _core_compute  # type: ignore[import-not-found]
+        import _core_compute  # noqa: F401
 
         _cached_module = _core_compute
         _cached_resolved = True
