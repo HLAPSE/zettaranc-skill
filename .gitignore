@@ -102,3 +102,4 @@ design-demos/
 # Rust build artifacts (added 2026-07-18)
 rust/target/
 
+.venv312/

@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 
 from .pipeline import VerifyResult, verify_v10_pipeline
 from .report import write_report
 from modules.core.paths import REPORTS_DIR
 from modules.core.errors import ErrorCode, ZettarancError
+from modules.loop_engine import LoopConfig
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +122,9 @@ def run_verify_v10(
     walk_forward: bool = False,
     wf_train_days: int = 120,
     wf_test_days: int = 60,
-    config: object | None = None,
+    config: LoopConfig | None = None,
     write_markdown: bool = True,
-    output_dir: str | None = None,
+    output_dir: Path | str | None = None,
 ) -> VerifyResult:
     """CLI 入口函数（也可被 Python API 直接调用）"""
     result = verify_v10_pipeline(

@@ -73,6 +73,27 @@
 - 类型注解覆盖率：**89.1% → 100%**（603/603 public/dunder 函数）
 - `except Exception` 收窄：**93 → 0**（外加 v4.0.2 已处理的 5 hot file）
 
+### CI Fixes（v4.0.3 follow-up）
+
+- 修复 **21 处 mypy error**让 CI type-check job 转绿（原 M5 subagent 声称"不阻塞"，实际 CI 阻塞）：
+  - `verify/pipeline.py` (5)：`cast(Callable[..., dict])` + `meta: dict[str, Any]` + `PortfolioConfig | None` forward-ref
+  - `verify/cli.py` (2)：`config: LoopConfig | None` + `output_dir: Path | str | None` PEP 484 显式 Optional
+  - `verify/walk_forward.py` (2)：`_backtest_with_window` + `walk_forward_verify` 参数 `LoopConfig | None`
+  - `verify/portfolio_walk_forward.py` (1)：`config: LoopConfig | None`
+  - `verify/report.py` (1)：`output_dir: Path | str | None`
+  - `verify/scorer.py` (1)：`verify_v10_pipeline` 懒加载后 `assert ... is not None` + 局部 `pipeline: Any`
+  - `backtest/_rust_bridge.py` (3)：`cast(Callable[..., Any], fn_obj)` 三处 `compute_func()` 调用
+  - `backtest/portfolio.py` (1)：`MarketContext` 改用 `..simulator`（与 `precompute_market_contexts` 返回类型对齐）
+  - `backtest_six_step.py` (1)：删除 unused `# type: ignore[attr-defined]`
+  - `screener/engine.py` (1)：删除不存在的 `BrokenProcessError`（Python 3.12 `concurrent.futures` 已无此异常）
+  - `simulator/simulator.py` (1)：`cast(Any, ds).get_kline_dicts_batch`（运行时特性检测）
+  - `core/_rust_compat.py` (1)：删除 unused `# type: ignore[import-not-found]`（`ignore_missing_imports=true` 已覆盖）
+  - `cli.py` (1)：`stock_info: dict[str, Any] | None` 避免与 line 599 loop 变量冲突
+  - `tracking_syncer.py` (1)：`_detect_signals` 内补 `ts_code = kline_data.get("ts_code", "")`
+- 验证：`mypy modules/ --ignore-missing-imports` → `Success: no issues found in 128 source files`
+- 验证：`pytest tests/ --ignore=tests/test_rust_compat.py --ignore=tests/test_bridge_client.py` → **1300 passed, 15 skipped**
+- 注：`test_bridge_client.py` 的 2 个网络 mock 测试为**预先存在失败**（与本次修复无关）
+
 ---
 
 ## v4.0.3-dev（归档）

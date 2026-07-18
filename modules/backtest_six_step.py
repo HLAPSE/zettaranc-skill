@@ -637,7 +637,7 @@ def backtest_shaofu_portfolio_integrated(
                     shares_equiv = int(pm.cash // trade.entry_price // 100) * 100  # A 股整手
                     if shares_equiv >= 100:
                         pm.record_entry(code, shares_equiv, trade.entry_price, trade.stop_loss_price)
-                        trade.shares_equiv = shares_equiv  # type: ignore[attr-defined]
+                        trade.shares_equiv = shares_equiv  # dynamic attr used elsewhere (572, 734)
                     else:
                         # 资金不足，放弃该 warmup 持仓
                         st["current_trade"] = None

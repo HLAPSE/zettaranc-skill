@@ -11,11 +11,15 @@ import logging
 import math
 import sqlite3
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 from modules.backtest_six_step import backtest_shaofu_single
 from modules.core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown, compute_sharpe, daily_returns
 from modules.datasource import get_datasource
 from modules.loop_engine import LoopConfig, LoopTrade
+
+if TYPE_CHECKING:
+    from .portfolio_engine import PortfolioConfig
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +167,10 @@ def _run_single_stock_backtest(
         # is_rust_available 内部捕获 RuntimeError（impl=rust 但模块缺失时），
         # 这里只关心"能不能走 Rust"，不让 RuntimeError 杀掉整个 verify 流水线。
         if is_rust_available():
-            rust_fn = compute_func("run_single_strategy_backtest_py")
-            if rust_fn is not None:
+            rust_fn_obj = compute_func("run_single_strategy_backtest_py")
+            if rust_fn_obj is not None:
+                # compute_func 返回 object | None；强制标为 Callable 让调用通过 mypy
+                rust_fn = cast(Callable[..., dict[str, Any]], rust_fn_obj)
                 try:
                     # 拉 K 线 → dict，调 Rust，schema 映射回 CLI dict
                     from modules.indicators import get_kline_data
@@ -260,7 +266,7 @@ def verify_v10_pipeline(
     wf_train_days: int = 120,
     wf_test_days: int = 60,
     use_portfolio_engine: bool = False,  # v3.7.6 组合引擎
-    portfolio_config: object | None = None,  # PortfolioConfig
+    portfolio_config: PortfolioConfig | None = None,  # TYPE_CHECKING import 防止循环 import
 ) -> VerifyResult:
     """
     v1.0 验收流水线（完整版）：
@@ -278,7 +284,7 @@ def verify_v10_pipeline(
         walk_forward,
         use_portfolio_engine,
     )
-    meta = {
+    meta: dict[str, Any] = {
         "ts_codes_count": len(ts_codes),
         "days": days,
         "walk_forward": walk_forward,
@@ -362,7 +368,7 @@ def _run_portfolio_engine_branch(
     walk_forward: bool,
     wf_train_days: int,
     wf_test_days: int,
-    portfolio_config: object | None,
+    portfolio_config: PortfolioConfig | None,
     meta: dict,
 ) -> VerifyResult:
     """v3.7.6 组合引擎分支"""

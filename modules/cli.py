@@ -26,6 +26,7 @@ import logging
 import sys
 import os
 from pathlib import Path
+from typing import Any
 
 from .core.net import disable_proxy
 from .cli_commands import _json_output
@@ -607,22 +608,22 @@ def cmd_track(args) -> None:
         if not args.ts_code:
             print("错误：查看股票信息需要指定股票代码")
             return
-        stock = manager.get_stock_info(args.ts_code)
+        stock_info: dict[str, Any] | None = manager.get_stock_info(args.ts_code)
         if args.json:
-            print(json.dumps(stock, ensure_ascii=False, indent=2) if stock else "{}")
+            print(json.dumps(stock_info, ensure_ascii=False, indent=2) if stock_info else "{}")
         else:
-            if not stock:
+            if not stock_info:
                 print(f"股票 {args.ts_code} 不在跟踪池中")
                 return
-            print(f"\n股票信息：{stock['ts_code']}")
+            print(f"\n股票信息：{stock_info['ts_code']}")
             print("-" * 40)
-            print(f"名称：{stock.get('name', '') or ''}")
-            print(f"状态：{stock['status']}")
-            print(f"添加日期：{stock['add_date']}")
-            print(f"移除日期：{stock.get('remove_date', '') or '未移除'}")
-            print(f"策略标签：{stock.get('strategy_tags', '') or ''}")
-            print(f"跟踪原因：{stock.get('track_reason', '') or ''}")
-            print(f"备注：{stock.get('notes', '') or ''}")
+            print(f"名称：{stock_info.get('name', '') or ''}")
+            print(f"状态：{stock_info['status']}")
+            print(f"添加日期：{stock_info['add_date']}")
+            print(f"移除日期：{stock_info.get('remove_date', '') or '未移除'}")
+            print(f"策略标签：{stock_info.get('strategy_tags', '') or ''}")
+            print(f"跟踪原因：{stock_info.get('track_reason', '') or ''}")
+            print(f"备注：{stock_info.get('notes', '') or ''}")
 
     elif action == "status":
         if not args.ts_code:
