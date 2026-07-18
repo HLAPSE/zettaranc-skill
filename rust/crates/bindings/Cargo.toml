@@ -10,4 +10,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 zt_core_types = { path = "../core_types" }
+zt_indicators = { path = "../indicators" }
 pyo3 = { version = "0.22", features = ["extension-module"] }
