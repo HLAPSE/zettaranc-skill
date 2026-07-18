@@ -1,8 +1,9 @@
 //! PyO3 绑定 crate，编译成 `_core_compute` 原生扩展。
 //!
-//! 包含：smoke 测试 + 高层 API（compute_atr）+ 错误映射。
+//! 包含：smoke 测试 + 高层 API（compute_atr / 单策略回测）+ 错误映射。
 #![forbid(unsafe_code)]
 
+mod backtest_bindings;
 mod error;
 
 use pyo3::prelude::*;
@@ -98,5 +99,14 @@ fn _core_compute(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(raise_value_error, m)?)?;
     m.add_function(wrap_pyfunction!(raise_key_error, m)?)?;
     m.add_function(wrap_pyfunction!(compute_atr_py, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        backtest_bindings::run_single_strategy_backtest_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        backtest_bindings::run_portfolio_backtest_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(backtest_bindings::run_grid_search_py, m)?)?;
     Ok(())
 }

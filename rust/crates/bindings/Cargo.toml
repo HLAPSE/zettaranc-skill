@@ -11,7 +11,10 @@ crate-type = ["cdylib"]
 [dependencies]
 zt_core_types = { path = "../core_types" }
 zt_indicators = { path = "../indicators" }
+zt_backtest_engine = { path = "../backtest_engine" }
+zt_grid_search = { path = "../grid_search" }
 pyo3 = { version = "0.22", features = ["extension-module"] }
+serde_json = "1.0"
 
 [dev-dependencies]
 serde_json = "1.0"
