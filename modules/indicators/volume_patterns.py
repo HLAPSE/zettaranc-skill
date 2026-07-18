@@ -321,6 +321,7 @@ def detect_chuhuo_wushi(klines: list[DailyData]) -> dict:
             if abs(h1 - h2) / h1 < 0.05 and abs(h1_idx - h2_idx) >= 3:
                 # 检查每个高点后是否有放量阴线
                 def has_fangliang_yinxian_after(idx):
+                    """检测 idx 之后 3 天内是否出现放量阴线（量 >= 5 日均量 1.3 倍）。"""
                     for j in range(idx + 1, min(idx + 4, len(recent_20))):
                         k = recent_20[j]
                         if k.close < k.open and k.vol >= avg_vol_5 * 1.3:

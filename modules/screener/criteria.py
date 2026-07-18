@@ -18,6 +18,7 @@ def _register(name: str):
     """装饰器：注册筛选条件处理函数"""
 
     def decorator(fn: CriteriaFn) -> CriteriaFn:
+        """内层装饰器：把处理函数注册到 _CRITERIA_REGISTRY 并原样返回。"""
         _CRITERIA_REGISTRY[name] = fn
         return fn
 

@@ -33,6 +33,7 @@ def _bounded_int(min_v: int, max_v: int):
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """构造 zettaranc verify 命令的 argparse 解析器（全部子命令与参数）。"""
     parser = argparse.ArgumentParser(
         prog="zt verify v1.0",
         description="少妇战法 v1.0 验收一键命令",
@@ -138,6 +139,7 @@ def run_verify_v10(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI 入口：解析命令行参数并分派到对应 verify 子命令。"""
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

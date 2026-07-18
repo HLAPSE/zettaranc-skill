@@ -48,6 +48,7 @@ class MutationRecord:
 
     @property
     def delta(self) -> float | int:
+        """变异幅度（新值 - 旧值），可为负。"""
         return self.new_value - self.old_value
 
 
@@ -179,9 +180,11 @@ class ParamMutator:
 
     @property
     def mutation_count(self) -> int:
+        """已记录变异次数。"""
         return len(self.history)
 
     def clear_history(self) -> None:
+        """清空变异历史。"""
         self.history.clear()
 
     # ----------------------------------------------------------------

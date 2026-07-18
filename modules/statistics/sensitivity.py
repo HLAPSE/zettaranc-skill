@@ -241,6 +241,7 @@ def analyze_all_parameters(
     for param_name, scan_range in params_to_analyze:
 
         def evaluate_fn(param_value, _param_name=param_name):
+            """对单个参数值跑回测，返回综合得分（夏普比率）。闭包参数通过默认参数传递。"""
             # 创建新配置
             config_dict = {
                 "j_threshold": base_config.j_threshold,

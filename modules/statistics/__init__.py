@@ -401,6 +401,7 @@ def analyze_sub_periods(
 
     # 计算各子周期指标
     def calc_sub_stats(trade_list):
+        """子周期指标聚合：返回 (sharpe, 累计收益, 胜率) 三元组。"""
         if not trade_list:
             return 0.0, 0.0, 0.0
 

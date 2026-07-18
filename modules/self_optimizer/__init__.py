@@ -119,11 +119,13 @@ class SelfOptimizer:
         return self.phase3_report(history)
 
     def phase1_baseline(self) -> float:
+        """Phase 1：在历史数据上跑 baseline，回测出初始分。"""
         from modules.self_optimizer.phase1_baseline import phase1_baseline
 
         return phase1_baseline(target=self.target, review_months=self.review_months)
 
     def phase3_report(self, history: list[RoundResult]) -> dict:
+        """Phase 3：把完整 history 写成优化报告（TSV + 草稿 + 改进日志）。"""
         from datetime import datetime
 
         from modules.self_optimizer.phase3_report import (

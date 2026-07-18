@@ -240,6 +240,7 @@ def backtest_strategy(
     except ImportError:
 
         def get_active_param(strategy: str, name: str, default: Any = None) -> Any:
+            """无 registry 时的占位实现：永远返回 default。"""
             return default  # fallback
 
     if stop_loss_pct is None:

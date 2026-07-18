@@ -76,6 +76,7 @@ class DailyData:
             raise KeyError(key)
 
     def get(self, key: str, default: Any = None) -> Any:
+        """dict 风格取值：缺失时返回 default。"""
         return getattr(self, key, default)
 
 

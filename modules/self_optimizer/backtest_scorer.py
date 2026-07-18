@@ -39,6 +39,7 @@ class StockScore:
 
     @property
     def has_trades(self) -> bool:
+        """是否有交易记录（total_trades > 0）。"""
         return self.total_trades > 0
 
 
@@ -49,6 +50,7 @@ class ScoringResult:
 
     @property
     def composite_score(self) -> float:
+        """综合得分（所有 StockScore 的算术平均，保留 2 位小数）。"""
         if self._composite != 0.0 and self.scores:
             return self._composite
         if not self.scores:
@@ -58,13 +60,16 @@ class ScoringResult:
 
     @property
     def stock_count(self) -> int:
+        """评分股票总数。"""
         return len(self.scores)
 
     @property
     def traded_count(self) -> int:
+        """有交易的股票数（traded_count）。"""
         return sum(1 for s in self.scores if s.has_trades)
 
     def summary(self) -> str:
+        """生成可读的评分汇总字符串。"""
         lines = [
             f"ScoringResult: {self.composite_score}/100",
             f"  股票池: {self.stock_count} 只",
