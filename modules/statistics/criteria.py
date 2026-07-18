@@ -5,9 +5,9 @@
 定义策略必须达到的硬指标门槛，自动判断战法是否有效。
 
 达标标准（缺一不可）：
-1. 统计显著性：夏普 p-value < 0.05
+1. 统计显著性：夏普 p-value < STATISTICS_SIGNIFICANCE_ALPHA
 2. 置信区间：夏普 95% CI 下界 > 0.3
-3. 防数据挖掘：Monte Carlo 置换检验 p-value < 0.05
+3. 防数据挖掘：Monte Carlo 置换检验 p-value < STATISTICS_SIGNIFICANCE_ALPHA
 4. 稳健性：三个子周期（牛/熊/震荡）都赚钱
 5. 绩效指标：胜率 > 40%，盈亏比 > 1.5，最大回撤 < 25%
 """
@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+from ..constants import STATISTICS_SIGNIFICANCE_ALPHA
 
 
 class CriteriaLevel(Enum):
@@ -158,11 +160,11 @@ def validate_strategy(
             report.add_result(
                 CriteriaResult(
                     name="夏普t检验",
-                    passed=sharpe_test_result.p_value < 0.05,
+                    passed=sharpe_test_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA,
                     actual_value=f"p={sharpe_test_result.p_value:.4f}",
-                    threshold="p<0.05",
+                    threshold=f"p<{STATISTICS_SIGNIFICANCE_ALPHA}",
                     message="夏普比率显著大于0"
-                    if sharpe_test_result.p_value < 0.05
+                    if sharpe_test_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA
                     else "夏普比率不显著，策略可能无效",
                 )
             )
@@ -206,10 +208,10 @@ def validate_strategy(
             report.add_result(
                 CriteriaResult(
                     name="Monte Carlo置换检验",
-                    passed=monte_carlo_result.p_value < 0.05,
+                    passed=monte_carlo_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA,
                     actual_value=f"p={monte_carlo_result.p_value:.4f}",
-                    threshold="p<0.05",
-                    message="策略显著优于随机" if monte_carlo_result.p_value < 0.05 else "策略可能是数据挖掘产物",
+                    threshold=f"p<{STATISTICS_SIGNIFICANCE_ALPHA}",
+                    message="策略显著优于随机" if monte_carlo_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA else "策略可能是数据挖掘产物",
                 )
             )
         else:
