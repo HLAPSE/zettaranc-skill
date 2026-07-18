@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 import logging
+import sqlite3
 import threading
 import concurrent.futures
 from datetime import datetime, timedelta
@@ -82,9 +83,9 @@ class DataSyncer:
             try:
                 self._rate_limit(api_name)
                 return func(*args, **kwargs)
-            except Exception as e:
+            except (ConnectionError, TimeoutError, OSError, RuntimeError, ValueError, KeyError) as e:
                 if attempt == max_retries - 1:
-                    raise e
+                    raise
                 sleep_time = 2**attempt
                 logger.warning(
                     f"[{api_name}] API 调用异常: {e}, 等待 {sleep_time} 秒后重试 ({attempt + 1}/{max_retries})"
@@ -163,7 +164,7 @@ class DataSyncer:
                     if completed % 10 == 0:
                         logger.info(f"进度: {completed}/{total}")
                 return ts_code, count
-            except Exception as e:
+            except (sqlite3.Error, RuntimeError, ValueError, KeyError, OSError) as e:
                 logger.error(f"{task_name}同步失败 {ts_code}: {e}")
                 with progress_lock:
                     completed += 1
@@ -217,7 +218,7 @@ class DataSyncer:
             logger.info(f"股票基本信息同步完成，共 {len(df)} 只")
             return len(df)
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
             logger.error(f"股票基本信息同步失败: {e}")
             self._log_sync("stock_basic", None, "", "failed", str(e))
             return 0
@@ -308,7 +309,7 @@ class DataSyncer:
             logger.info(f"日线数据同步完成: {ts_code}, {len(df)} 条, {start_date}-{latest_date}")
             return len(df)
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
             logger.error(f"日线数据同步失败 {ts_code}: {e}")
             self._log_sync("daily_kline", ts_code, "", "failed", str(e))
             return 0
@@ -419,7 +420,7 @@ class DataSyncer:
             logger.info(f"指标缓存同步完成: {ts_code}, {len(klines)} 条")
             return len(klines)
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
             logger.error(f"指标缓存同步失败 {ts_code}: {e}")
             self._log_sync("indicator_cache", ts_code, "", "failed", str(e))
             return 0
@@ -530,7 +531,7 @@ class DataSyncer:
             logger.info(f"Tushare 指标同步完成: {ts_code}, {len(df)} 条")
             return len(df)
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
             logger.error(f"Tushare 指标同步失败 {ts_code}: {e}")
             self._log_sync("stk_factor", ts_code, "", "failed", str(e))
             return 0
@@ -622,7 +623,7 @@ class DataSyncer:
             self._log_sync("daily_basic", ts_code, end_date, "success")
             return len(df)
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
             logger.error(f"每日估值指标同步失败 {ts_code}: {e}")
             self._log_sync("daily_basic", ts_code, "", "failed", str(e))
             return 0
@@ -695,7 +696,7 @@ class DataSyncer:
             self._log_sync("moneyflow", ts_code, trade_date, "success")
             return len(df)
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
             logger.error(f"资金流向同步失败 {ts_code} {trade_date}: {e}")
             self._log_sync("moneyflow", ts_code, "", "failed", str(e))
             return 0

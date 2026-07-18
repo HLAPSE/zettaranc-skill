@@ -5,10 +5,14 @@
 管理跟踪股票的添加、移除、查询、状态更新
 """
 
+import logging
+import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional, Any
 
 from modules.database import get_connection
+
+logger = logging.getLogger(__name__)
 
 
 class TrackingManager:
@@ -73,8 +77,8 @@ class TrackingManager:
                 print(f"已添加 {ts_code} 到跟踪池")
                 return True
 
-        except Exception as e:
-            print(f"添加股票失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("添加股票 %s 失败: %s", ts_code, e)
             return False
 
     def remove_stock(self, ts_code: str, reason: str | None = None) -> bool:
@@ -114,8 +118,8 @@ class TrackingManager:
                 print(f"已从跟踪池移除 {ts_code}")
                 return True
 
-        except Exception as e:
-            print(f"移除股票失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("移除股票 %s 失败: %s", ts_code, e)
             return False
 
     def list_stocks(self, status: str = "active", strategy_tag: str | None = None) -> list[dict[str, Any]]:
@@ -149,8 +153,8 @@ class TrackingManager:
                 cursor.execute(sql, params)
                 return [dict(row) for row in cursor.fetchall()]
 
-        except Exception as e:
-            print(f"查询跟踪池失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("查询跟踪池失败: %s", e)
             return []
 
     def get_stock_info(self, ts_code: str) -> dict[str, Any] | None:
@@ -180,8 +184,8 @@ class TrackingManager:
                 row = cursor.fetchone()
                 return dict(row) if row else None
 
-        except Exception as e:
-            print(f"查询股票信息失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("查询股票信息 %s 失败: %s", ts_code, e)
             return None
 
     def update_stock_status(self, ts_code: str, status: str, notes: str | None = None) -> bool:
@@ -223,8 +227,8 @@ class TrackingManager:
                 print(f"已更新 {ts_code} 状态为 {status}")
                 return True
 
-        except Exception as e:
-            print(f"更新股票状态失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("更新股票状态 %s 失败: %s", ts_code, e)
             return False
 
     def get_tracking_stats(self) -> dict[str, Any]:
@@ -265,8 +269,8 @@ class TrackingManager:
 
                 return stats
 
-        except Exception as e:
-            print(f"获取统计信息失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("获取统计信息失败: %s", e)
             return {}
 
     def get_strategy_distribution(self) -> dict[str, int]:
@@ -296,8 +300,8 @@ class TrackingManager:
 
                 return distribution
 
-        except Exception as e:
-            print(f"获取策略分布失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("获取策略分布失败: %s", e)
             return {}
 
 

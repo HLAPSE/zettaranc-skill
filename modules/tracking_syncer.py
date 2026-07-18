@@ -5,6 +5,8 @@
 同步跟踪股票的K线、指标、信号数据
 """
 
+import logging
+import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional, Any
 import pandas as pd
@@ -12,6 +14,8 @@ import pandas as pd
 from modules.database import get_connection
 from modules.improvement_logger import ImprovementLogger
 from modules.indicators.data_layer import analyze_stock
+
+logger = logging.getLogger(__name__)
 
 
 class TrackingSyncer:
@@ -180,7 +184,8 @@ class TrackingSyncer:
 
             return {"success": True, "message": f"已同步 {ts_code} 的 {saved_count} 条记录", "saved_count": saved_count}
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
+            logger.warning("同步 %s 失败: %s", ts_code, e)
             return {"success": False, "message": f"同步失败: {str(e)}"}
 
     def sync_all_active(self, days: int = 365) -> dict[str, Any]:
@@ -227,7 +232,8 @@ class TrackingSyncer:
                 "fail_count": fail_count,
             }
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
+            logger.warning("批量同步失败: %s", e)
             return {"success": False, "message": f"批量同步失败: {str(e)}"}
 
     def _get_indicators_for_date(self, ts_code: str, trade_date: str) -> dict[str, Any]:
@@ -273,8 +279,8 @@ class TrackingSyncer:
                     }
                 else:
                     return {}
-        except Exception as e:
-            print(f"获取指标数据失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("获取指标数据 %s %s 失败: %s", ts_code, trade_date, e)
             return {}
 
     def _detect_signal(
@@ -416,8 +422,8 @@ class TrackingSyncer:
                 )
 
             return {"signal_type": signal_type, "signal_score": signal_score, "signal_reason": signal_reason}
-        except Exception as e:
-            print(f"检测信号失败: {e}")
+        except (KeyError, TypeError, ValueError, ZeroDivisionError) as e:
+            logger.warning("检测信号失败 %s: %s", ts_code, e)
             return {"signal_type": "NONE", "signal_score": 0, "signal_reason": ""}
 
     def _detect_patterns(self, indicator_data: dict[str, Any]) -> dict[str, Any]:
@@ -430,11 +436,8 @@ class TrackingSyncer:
         Returns:
             形态信息
         """
-        try:
-            # 这里简化处理，实际实现需要调用砖形图、N型结构等检测函数
-            return {"is_brick_red": 0, "is_brick_green": 0, "brick_count": 0, "is_n_structure": 0, "is_double_gun": 0}
-        except Exception:
-            return {"is_brick_red": 0, "is_brick_green": 0, "brick_count": 0, "is_n_structure": 0, "is_double_gun": 0}
+        # 这里简化处理，实际实现需要调用砖形图、N型结构等检测函数
+        return {"is_brick_red": 0, "is_brick_green": 0, "brick_count": 0, "is_n_structure": 0, "is_double_gun": 0}
 
     def _detect_stage(self, indicator_data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -446,11 +449,8 @@ class TrackingSyncer:
         Returns:
             阶段信息
         """
-        try:
-            # 这里简化处理，实际实现需要调用麒麟会等检测函数
-            return {"stage": None, "stage_confidence": None}
-        except Exception:
-            return {"stage": None, "stage_confidence": None}
+        # 这里简化处理，实际实现需要调用麒麟会等检测函数
+        return {"stage": None, "stage_confidence": None}
 
 
 def main():

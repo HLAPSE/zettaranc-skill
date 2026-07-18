@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -47,7 +48,7 @@ _TARGET_SECTIONS = [
 
 try:
     from modules.trade_reviewer import JARGON_DICT
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     JARGON_DICT = {}
 
 
@@ -133,7 +134,7 @@ def _read_section_text(filepath: str, max_bytes: int = 600) -> str:
         return ""
     try:
         text = path.read_text(encoding="utf-8")
-    except Exception as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         logger.warning("读取知识库失败 %s: %s", filepath, exc)
         return ""
     if len(text.encode("utf-8")) > max_bytes:
@@ -258,7 +259,7 @@ def _build_user_prompt(result: SimulationResult) -> str:
                     f"- 最大连胜/连亏: {metrics.max_consecutive_wins} / {metrics.max_consecutive_losses}",
                 ]
             )
-        except Exception:
+        except AttributeError:
             pass
 
     sections.extend(
@@ -309,7 +310,7 @@ def _build_user_prompt(result: SimulationResult) -> str:
                     sections.append(
                         f"- {t.date} {t.ts_code} {t.action} @ {t.price:.2f} 盈亏 {t.pnl_pct * 100:+.2f}% ({t.reason})"
                     )
-                except Exception:
+                except AttributeError:
                     continue
 
     sections.extend(
@@ -384,8 +385,8 @@ def generate_simulation_narrative(result: SimulationResult) -> dict[str, Any]:
                 success=success,
                 error_message=error_message,
             )
-        except Exception:
-            pass
+        except (ImportError, AttributeError, sqlite3.Error):
+            logger.debug("record_llm_response 调用失败（忽略）", exc_info=True)
 
     # ── 调用 LLM ──
     start_ts = time.perf_counter()
@@ -414,7 +415,7 @@ def generate_simulation_narrative(result: SimulationResult) -> dict[str, Any]:
             "error": "llm_not_configured",
         }
 
-    except Exception as exc:
+    except (ConnectionError, TimeoutError, RuntimeError, OSError, ValueError) as exc:
         elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
         logger.error("LLM 生成失败: %s", exc, exc_info=True)
         _log_response(success=False, elapsed_ms=elapsed_ms, error_message=str(exc))

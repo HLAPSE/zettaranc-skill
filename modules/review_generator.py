@@ -5,12 +5,16 @@
 生成月度复盘报告，分析信号准确率、收益统计、策略表现
 """
 
+import logging
+import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional, Any
 
 from modules.core.metrics import compute_drawdown
 from modules.database import get_connection
 from modules.improvement_logger import ImprovementLogger
+
+logger = logging.getLogger(__name__)
 
 
 class ReviewGenerator:
@@ -83,7 +87,8 @@ class ReviewGenerator:
                 "total_stocks": len(reviews),
             }
 
-        except Exception as e:
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
+            logger.warning("生成复盘报告 %s 失败: %s", review_month, e)
             return {"success": False, "message": f"生成复盘报告失败: {str(e)}"}
 
     def _analyze_stock_performance(self, ts_code: str, review_month: str) -> dict[str, Any] | None:
@@ -217,8 +222,8 @@ class ReviewGenerator:
                     "strategy_adjustments": strategy_adjustments,
                 }
 
-        except Exception as e:
-            print(f"分析 {ts_code} 失败: {e}")
+        except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
+            logger.warning("分析 %s 失败: %s", ts_code, e)
             return None
 
     def _analyze_strategy_performance(self, review_month: str) -> list[dict[str, Any]]:
@@ -284,8 +289,8 @@ class ReviewGenerator:
 
                 return strategy_performance
 
-        except Exception as e:
-            print(f"分析策略表现失败: {e}")
+        except (sqlite3.Error, ValueError, KeyError) as e:
+            logger.warning("分析策略表现 %s 失败: %s", review_month, e)
             return []
 
     # ==================== 文本生成（参数化模板，消除三处同构 if-else） ====================
@@ -419,8 +424,8 @@ class ReviewGenerator:
                 conn.commit()
                 return True
 
-        except Exception as e:
-            print(f"保存复盘数据失败: {e}")
+        except sqlite3.Error as e:
+            logger.warning("保存复盘数据失败: %s", e)
             return False
 
     def save_strategy_performance(self, strategy_data: dict[str, Any]) -> bool:
@@ -468,8 +473,8 @@ class ReviewGenerator:
                 conn.commit()
                 return True
 
-        except Exception as e:
-            print(f"保存策略表现失败: {e}")
+        except sqlite3.Error as e:
+            logger.warning("保存策略表现失败: %s", e)
             return False
 
     def get_historical_reviews(self, limit: int = 12) -> list[dict[str, Any]]:
@@ -498,8 +503,8 @@ class ReviewGenerator:
 
                 return [row["review_month"] for row in cursor.fetchall()]
 
-        except Exception as e:
-            print(f"获取历史复盘失败: {e}")
+        except sqlite3.Error as e:
+            logger.warning("获取历史复盘失败: %s", e)
             return []
 
 
