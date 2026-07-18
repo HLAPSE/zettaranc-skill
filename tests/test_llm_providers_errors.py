@@ -27,8 +27,15 @@ def _make_provider():
     return MiniMaxProvider(api_key="sk-fake-key", base_url="https://example.invalid/v1/chat/completions")
 
 
-def test_generate_missing_api_key_raises_config_missing():
-    """API key 缺失仍抛 CONFIG_MISSING（继承自 v3.10.4 之前的语义）"""
+def test_generate_missing_api_key_raises_config_missing(monkeypatch):
+    """API key 缺失仍抛 CONFIG_MISSING（继承自 v3.10.4 之前的语义）
+
+    隔离：先清掉 .env 自动加载的 LLM_API_KEY / ANTHROPIC_API_KEY，
+    否则本地 .env 里若有 key，provider 会读到，触发不到 raise。
+    """
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
     from modules.llm_providers import MiniMaxProvider
 
     with pytest.raises(ZettarancError) as exc_info:

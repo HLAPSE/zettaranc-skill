@@ -1,7 +1,7 @@
 # 产品路线图
 
 > 最后更新：2026-07-18  
-> 当前版本：v4.0.1（Rust 内核 + PyO3 运行时）
+> 当前版本：v4.0.2（CLI ↔ Rust 桥 + 技术债清扫）
 
 ## 版本号规定
 
@@ -226,6 +226,11 @@
 | ~~D2~~ | 性能优化 | ✅ v3.10.4（`precompute_market_contexts` ~6.3×、`get_kline_dicts_batch` ~2.2–2.4×） |
 | ~~D3~~ | Rust 内核迁移 | ✅ v4.0.0（5 个算法 crate + 22 测试）+ v4.0.1（PyO3 runtime 打通 + 59 测试） |
 | ~~D4~~ | macOS LINKEDIT | ✅ v4.0.1（post-build workaround） |
+| ~~H1~~ | CLI 接 Rust | ✅ v4.0.2（`modules/backtest/_rust_bridge.py` + `compute_func` helper，16 个新测试） |
+| ~~H2~~ | Rust dead-code 清理 | ✅ v4.0.2（`zt_backtest_engine` 8 warnings → 0） |
+| ~~H3~~ | 静默 except 收敛 | ✅ v4.0.2（5 hot files 33+ 处 except narrow + 25 个新测试） |
+| ~~M1~~ | 错误码扩张 | ✅ v4.0.2（5 模块：indevs / llm / screener / simulator / backtest，加 11 个 ErrorCode） |
+| ~~M2~~ | return None 收敛 | ✅ v4.0.2（24 处 raise 化 + 9 处 Optional 保留"已审视"） |
 
 ---
 
