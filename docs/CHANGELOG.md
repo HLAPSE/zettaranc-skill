@@ -2,6 +2,12 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v4.0.3 (TBD) — 收尾技术债
+
+### 变更
+
+- L2: Python 最低版本从 3.10 升到 3.12（classifier + requires-python + CI 矩阵）
+
 ## v4.0.0 (2026-07-18) — Rust 内核
 
 > **「v4.0.0：核心计算链路迁至 Rust（PyO3 + Polars + Rayon）」**
