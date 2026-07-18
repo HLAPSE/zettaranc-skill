@@ -15,6 +15,7 @@ from ..core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown, compute_shar
 from ..core.market_context import MarketRegime
 from ..indicators import DailyData, get_kline_data
 from ..loop_engine import LoopConfig, LoopTrade, ShaofuLoopEngine, _calc_stop_loss_price
+
 # 注意：使用 simulator.MarketContext（precompute_market_contexts 返回值类型）
 # 避免 core.market_context.MarketContext 与 simulator.MarketContext 类型冲突
 from ..simulator import MarketContext
