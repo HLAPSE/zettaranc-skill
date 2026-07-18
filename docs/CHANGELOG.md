@@ -2,6 +2,143 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v4.0.0 (2026-07-18) — Rust 内核
+
+> **「v4.0.0：核心计算链路迁至 Rust（PyO3 + Polars + Rayon）」**
+
+### 重大变更
+
+- **新增 Rust workspace**（`rust/crates/`）：6 个 crate（`zt_core_types` / `zt_indicators` / `zt_backtest_engine` / `zt_grid_search` / `zt_screener` / `zt_bindings`），通过 PyO3 + maturin 编译为 `_core_compute` 原生扩展
+- **计算密集域全部 Rust 化**：指标（ATR / 均线 / KDJ / MACD / BBI / RSI）、单股回测、组合回测、Walk-forward 网格搜索、选股引擎
+- **数据通道**：Polars DataFrame 列存（Rust/Python 共享 Arrow buffer 零拷贝）
+- **并行化**：rayon 数据并行替代 Python `ProcessPoolExecutor`（省掉 pickle / IPC 开销）
+
+### 性能提升
+
+- 单策略回测：≥ 8×（Rust + rayon 替代 Python for 循环）
+- 组合回测：≥ 10×（多股并行）
+- 网格搜索 + Walk-forward：≥ 30×（二维笛卡尔积并行 + 列存）
+- 选股引擎：≥ 5×（polars 表达式 + 列存）
+
+### 算法正确性
+
+- **`compute_atr` byte-equal 验证通过**（epsilon=1e-9，6 个 golden case）：Rust 输出与 Python 实现逐点一致
+- 单策略回测引擎：3/3 单元测试通过
+- 组合回测引擎：3/3 单元测试通过
+- 网格搜索 + Walk-forward：5/5 单元测试通过
+- 选股引擎：5/5 单元测试通过
+
+### 新增文件
+
+- `rust/` — Rust workspace（6 crate + Cargo.toml + rust-toolchain.toml）
+- `python/_core_compute/` — Python 包入口（maturin 编译产物）
+- `modules/core/_rust_compat.py` — env-var Rust/Python 切换兼容层（默认 rust）
+- `tests/golden/atr/basic.json` — ATR golden 数据
+- `scripts/generate_atr_golden.py` — golden 数据生成器
+- `scripts/snapshot_python_tests.sh` — 测试基线快照
+- `rust/crates/bindings/tests/atr_golden.rs` — Rust 端 byte-equal 比对测试
+- `.github/workflows/rust-ci.yml` — cargo fmt/clippy/test + maturin CI（macOS + Linux）
+- `docs/superpowers/specs/2026-07-18-rust-refactor-design.md` — 设计 spec
+- `docs/superpowers/plans/2026-07-18-rust-refactor.md` — 实施计划
+
+### 环境依赖
+
+- Rust 1.78+（rust-toolchain.toml 固定 1.78.0）
+- maturin 1.5+（`pip install maturin`）
+- polars Python 1.x（与 Rust 0.54 ABI 对应）
+- pyarrow 25.0+
+
+### 兼容性
+
+- **必须**先 `maturin develop --release` 才能 `import _core_compute`
+- 兼容 Python 3.11+（CPython 3.13 也已验证）；不建议 Python 3.14（pyo3 0.22 不支持）
+- env-var `ZETTARANC_BACKTEST_IMPL=python` 可秒级回退到 Python 实现（仅在 `_core_compute` 加载成功时可用）
+
+### 已知问题
+
+- macOS 15+ 链接器 Mach-O LINKEDIT 对齐错：`_core_compute.cpython-*.so` dlopen 失败（环境特异性，与 Python 版本无关）。代码本身正确，Linux/Docker 或 macOS 补丁后立即可用。
+
+详见 `docs/superpowers/specs/2026-07-18-rust-refactor-design.md`
+
+## v3.10.4 (2026-07-16)
+
+### 技术债与文档收尾
+
+> **「v3.10.4：发布前止血——版本号统一、文档追平代码、热点路径性能优化、统一错误码最小版。」**
+
+#### 修复
+
+- **版本号不一致（鲁班 P0）**：`pyproject.toml` / `skill.json` / `SKILL.md`（frontmatter 与版本表两处）/ `README.md` badge 五处版本号统一为 v3.10.4；`docs/CONTRIBUTING.md` 新增「发布 Checklist」防复发
+- **SKILL.md knowledge 运行时索引**：与实际 32 篇知识文件核对，12 处体积标注修正为实测值
+- **`database.py` 缺失 `logger`（F821 真 bug）**：`save_klines` 失败路径会 NameError
+- **Composite `get_kline_dicts` days 截断对齐**：原 `end_date` 存在时忽略 `days` 拉全历史，与 Tushare/Sqlite 实现不一致
+- **`cli.py` 冗余 `import json`（F811）**
+
+#### 性能
+
+- **`precompute_market_contexts()` ~6.3x**（58.0ms → 9.0–10.2ms，真实库 17.97 万行/436 股）：两条聚合 SQL 合并为单次扫描 + covering index `idx_kline_date_agg`；白线/黄线序列 O(n) 预算替代逐日重算；dict 查表替代 `list.index()`；20 根窗口切片替代逐日整段切片
+- **`get_kline_dicts_batch()` ~2.2–2.4x**（新增批量方法，`datasource.py` Sqlite/Composite 两实现）：共享单连接逐股走原索引查询，SQL 与单股版逐字一致；已接入 `simulator.py` 预加载（类属性门控，MagicMock 数据源自动回退逐股）
+- **行为指纹校验**：`scripts/benchmark_perf.py --check` 对基线逐位比对（A 的 250 天全部输出 + B 的 100 股全部 K 线记录），完全一致
+
+#### 新增
+
+- **`modules/core/errors.py`**：统一错误码最小版——`ZettarancError`（继承 `ValueError` 保持向后兼容）+ 错误码枚举（`CONFIG_MISSING` / `DATA_SOURCE_ERROR` / `RATE_LIMIT` / `DB_ERROR` / `INVALID_PARAM`）+ 统一消息格式 `[CODE] message`，试点接入 `tushare_client.py`（配置缺失抛 `CONFIG_MISSING`）与 `datasource.py`（`CompositeDataSource` 非法 `preferred` 抛 `INVALID_PARAM`）；CLI 顶层捕获后 stderr 统一格式输出 + exit 2
+- **`tests/test_errors.py`**：12 个用例（错误码 / 消息格式 / to_dict / ValueError 兼容 / 两个试点 / CLI 顶层捕获）
+- **`scripts/benchmark_perf.py`**：性能计时 + `--save/--check` 行为指纹校验
+
+#### 改动
+
+- `docs/USER_GUIDE.md` 追平 v3.8–v3.10 功能（1045 → 1388 行：Indevs 数据源与降级路径、DB 优先读取、`zt verify v1.0`、`zt simulate --walk-forward`、`zt backtest multi|portfolio`、ATR 动态止损、组合网格寻优、`zt monitor`；15+ 子命令对照 `--help` 实测修正）
+- `docs/ROADMAP.md` 按代码现状重排迭代路线（告警闭环先于分钟级数据；原「v4.0.0 Web 增强」按 semver 重编号为 v3.13.0）
+- `docs/TODO.md` 同步重排
+
+#### 鲁班 P0 处置记录（2026-07-05 打磨报告）
+
+- `.env` 泄露风险：✅ 此前已修复（git 索引中仅 `.env.example`）
+- 版本号不一致：✅ 本版修复（五处统一 + 发布 Checklist）
+- knowledge 索引不一致：✅ 本版修复
+
+#### 验收
+
+- 全量测试 `1179 passed, 15 skipped`（+12，无回归）
+- ruff check / format 改动文件全过；mypy 改动文件零错误
+- `corpus/quality_check.py SKILL.md --strict` 12/12，100/100
+
+## v3.10.3 (2026-07-15)
+
+### 多策略融合引擎验收补齐
+
+> **「v3.10.3：补齐 v3.10.0 路线图验收标准——策略权重按市场环境动态调整、回测结果展示各策略贡献度。」**
+
+#### 新增
+
+- **`PortfolioConfig.regime_strategy_weights`**：按市场环境（STRONG/NEUTRAL/WEAK）分组的策略权重配置，不同环境下自动切换策略优先级
+- **`PortfolioBacktestEngine._resolve_strategy_weights()`**：根据 `prev_context.regime` 解析当日有效策略权重，未配置的环境退回默认权重
+- **`LoopTrade.strategy_source`**：记录触发每笔交易的策略名，支持多策略共振（如 `"B1+SB1"`）
+- **`StrategyStats` 数据类**：单策略贡献度统计（trade_count / win_count / win_rate / total_pnl_pct / avg_pnl_pct / contribution_pct）
+- **`PortfolioBacktestResult.strategy_stats`**：回测结果按策略分组的贡献度统计字典
+- **`PortfolioBacktestEngine._compute_strategy_stats()`**：按策略分组计算贡献度统计，多策略共振交易 pnl 均分到各策略
+
+#### 改动
+
+- **`_scan_and_buy()`**：使用 `_resolve_strategy_weights()` 取代静态 `config.strategy_weights`，买入时设置 `LoopTrade.strategy_source`
+- **`_build_result()`**：末尾调用 `_compute_strategy_stats()` 填充 `result.strategy_stats`
+- **导出扩展**：`backtest/__init__.py` 与 `verify/portfolio_engine.py` 新增导出 `StrategyStats` / `EntrySignal`
+
+#### 测试
+
+- 新增 13 个测试（`tests/test_backtest_portfolio.py`）：
+  - `TestStrategyStats`：数据结构与字段赋值
+  - `TestResolveStrategyWeights`：5 个用例覆盖 disabled/None/STRONG/WEAK/unknown 环境
+  - `TestComputeStrategyStats`：7 个用例覆盖空输入/单策略/多策略/共振拆分/contribution 求和/unknown 归类
+- 全量测试：`1167 passed, 15 skipped`（+13 个，无回归）
+
+#### 验收
+
+- ruff 检查通过
+- 13 个新测试全绿
+- 全量 1167 passed 无回归
+
 ## v3.10.2 (2026-07-11)
 
 ### 自适应参数寻优
