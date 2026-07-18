@@ -32,6 +32,7 @@ def test_python_choice_returns_none(monkeypatch):
 
 
 def test_rust_choice_returns_module(monkeypatch):
+    pytest.importorskip("_core_compute", reason="_core_compute not built (run `maturin develop --release`)")
     monkeypatch.setenv("ZETTARANC_BACKTEST_IMPL", "rust")
     from modules.core import _rust_compat
 

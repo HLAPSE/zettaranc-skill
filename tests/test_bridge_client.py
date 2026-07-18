@@ -3,6 +3,8 @@ bridge_client.py 测试
 验证 bridge 客户端的降级网关行为
 """
 
+import urllib.error
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -59,7 +61,7 @@ class TestIsBridgeAvailable:
     @patch("modules.bridge_client._http_get")
     def test_auto_unavailable(self, mock_get):
         set_bridge_config(enabled="auto")
-        mock_get.side_effect = Exception("Connection refused")
+        mock_get.side_effect = urllib.error.URLError("Connection refused")
         assert is_bridge_available() is False
 
 
@@ -92,7 +94,7 @@ class TestGetBridgeDaily:
     @patch("modules.bridge_client._http_get")
     def test_failure_returns_empty(self, mock_get, mock_available):
         mock_available.return_value = True
-        mock_get.side_effect = Exception("Timeout")
+        mock_get.side_effect = TimeoutError("Timeout")
         result = get_bridge_daily("600519.SH", days=30)
         assert result == []
 
