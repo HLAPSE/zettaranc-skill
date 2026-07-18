@@ -1,8 +1,12 @@
 """选股评分函数。"""
 
+import logging
+
 from ..indicators import calculate_ma
 from ..indicators import calculate_kdj, calculate_bbi  # noqa: F401  re-export
 from .data import _dict_to_daily
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_vol_ma(vols: list[float], period: int) -> float:
@@ -153,7 +157,9 @@ def score_b1_opportunity(klines: list) -> tuple[float, list[str]]:
         elif sg_score >= 65:
             score += 5
             reasons.append(f"沙漏良好({sg_score}分)")
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 沙漏因子失败不影响主评分；调用方仍以原 score/reasons 继续。
+        logger.warning("[scoring] 沙漏因子计算失败，跳过加分: %s", e)
         pass
 
     # 风险提示
@@ -221,7 +227,9 @@ def score_trend(klines: list) -> tuple[float, str]:
         elif rope.get("status") == "死叉":
             score = max(0, score - 25)
             direction += " 牛绳死叉"
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 牛绳理论失败不影响趋势评分；调用方仍用基础趋势分数兜底。
+        logger.warning("[scoring] 牛绳理论计算失败，跳过: %s", e)
         pass
 
     return max(0, min(100, score)), direction
@@ -274,7 +282,9 @@ def score_volume_pattern(klines: list) -> tuple[float, list[str]]:
                 reasons.append(f"量比战法·震荡吸筹(量比{vr['vol_ratio']})")
             else:
                 reasons.append("量比战法·观望")
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 量比战法失败 → 降级到简单量比计算；调用方已有降级分支承接。
+        logger.warning("[scoring] 量比战法计算失败，降级到简单量比: %s", e)
         # 降级到简单量比计算
         if vol_ratio >= 2:
             score += 20
@@ -355,7 +365,9 @@ def score_risk(klines: list) -> tuple[float, list[str]]:
             score -= 30
             warnings.append(f"蜈蚣图({centipede['score']:.0f}分)")
             warnings.append("检测到蜈蚣图风险，建议观望")
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 蜈蚣图检测失败不影响基础风险分；调用方仍以基础评分兜底。
+        logger.warning("[scoring] 蜈蚣图检测失败，跳过加分: %s", e)
         pass
 
     return max(0, min(100, score)), warnings

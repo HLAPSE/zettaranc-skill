@@ -174,7 +174,8 @@ class IndevsClient:
                 return payload
             except ZettarancError:
                 raise
-            except Exception as e:  # noqa: BLE001
+            except (requests.RequestException, TimeoutError, ConnectionError, ValueError, KeyError, OSError) as e:
+                # 窄化：仅捕获 HTTP / 超时 / 解析异常，便于上层重试逻辑处理
                 last_error = e
                 if attempt < 2:
                     sleep_time = 0.5 * (attempt + 1)

@@ -41,7 +41,9 @@ def _is_picklable(obj) -> bool:
     try:
         pickle.dumps(obj)
         return True
-    except Exception:
+    except (pickle.PicklingError, TypeError, AttributeError) as e:
+        # 序列化失败 → 视作不可 pickle；调用方将走串行回退。
+        logger.debug("[engine] 对象不可 pickle: %s", e)
         return False
 
 
@@ -99,7 +101,9 @@ def analyze_stock(
         elif kirin_stage == "回落":
             risk_warnings.append(f"麒麟会·回落({kirin['sub_type']})→不抄底")
             risk_score = max(0, risk_score - 15)
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 三波/麒麟评分失败 → 不影响基础分（stage 留 "未知"，分数已初始化）。
+        logger.warning("[engine] 三波/麒麟评分失败，跳过: %s", e)
         pass
 
     # ========== P3 指标：沙漏评分 ==========
@@ -113,7 +117,9 @@ def analyze_stock(
         sandglass_is_perfect = sg.get("is_perfect", False)
         if sandglass_is_perfect:
             b1_reasons.append(f"沙漏完美图形({sandglass_score:.0f}分)")
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 沙漏评分失败 → 默认 0/False；后续加权仍按 sandglass_score=0 计算。
+        logger.warning("[engine] 沙漏评分失败，按 0 分继续: %s", e)
         pass
 
     # 综合评分（加权平均）
@@ -269,7 +275,9 @@ def screen_stocks(
                     result = future.result()
                     if result and _filter_stock(result, criteria):
                         results.append(result[2])
-        except Exception:
+        except (OSError, RuntimeError, BrokenProcessError, ValueError, KeyError) as e:
+            # 并行失败回退到串行；调用方已知失败会降级处理。
+            logger.warning("[engine] 并行执行失败，降级为串行: %s", e)
             # 并行失败回退到串行
             for stock in stocks:
                 result = _analyze_worker(stock["ts_code"], datasource=datasource)

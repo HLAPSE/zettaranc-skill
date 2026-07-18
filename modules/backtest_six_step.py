@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import logging
 import os
 import math
+import sqlite3
 from dataclasses import dataclass, field
 
 from .loop_engine import ShaofuLoopEngine, LoopConfig, LoopTrade, _calc_stop_loss_price
@@ -24,6 +26,8 @@ if TYPE_CHECKING:
     from .market_regime import MarketRegimeClassifier
     from .position_manager import PositionManager
     from .industry_filter import IndustryFilter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -473,8 +477,9 @@ def backtest_shaofu_portfolio_integrated(
     index_klines: list[DailyData] = []
     try:
         index_klines = get_kline_data("000001.SH", days + warmup_days)
-    except Exception:
-        pass  # 无指数数据时走固定参数路径
+    except (ValueError, KeyError, TypeError, sqlite3.Error, OSError, AttributeError) as e:
+        # 窄化：仅捕获 DB / OS / 数据解析异常，无指数数据时走固定参数路径
+        logger.warning("[backtest_six_step] 大盘指数 K 线加载失败，使用固定参数路径: %s", e)
 
     # 回测起始日：取各股 K 线长度的最大值，保证至少有 120 日可用
     min_kline_len = min(len(kl) for kl in stock_klines.values())

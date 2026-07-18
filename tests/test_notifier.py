@@ -19,8 +19,8 @@ def test_notify_macos(mock_run):
     assert res is True
     mock_run.assert_called_once()
 
-    # 测试异常
-    mock_run.side_effect = Exception("AppleScript error")
+    # M4: 已收窄为 OSError/FileNotFoundError/CalledProcessError 等
+    mock_run.side_effect = FileNotFoundError("AppleScript error")
     assert notify_macos("测试", "内容") is False
 
 
@@ -31,8 +31,8 @@ def test_notify_feishu(mock_post):
     assert res is True
     mock_post.assert_called_once()
 
-    # 模拟网络失败
-    mock_post.side_effect = Exception("network error")
+    # M4: 已收窄为 requests.RequestException/ConnectionError/TimeoutError
+    mock_post.side_effect = ConnectionError("network error")
     assert notify_feishu("https://fake-webhook.url", "标题", "消息") is False
 
 

@@ -17,6 +17,7 @@ from modules.data_sync import DataSyncer
 from modules.watchlist import scan_watchlist, generate_daily_report, get_watchlist
 from modules.notifier import notify_all
 from modules.core.paths import REPORTS_DIR
+from modules.core.errors import ErrorCode, ZettarancError
 
 logger = logging.getLogger("zettaranc-monitor")
 
@@ -40,8 +41,13 @@ def run_watchlist_monitor(sync_days: int = 30, enable_push: bool = True) -> dict
     try:
         syncer = DataSyncer()
         syncer.sync_daily_and_compute(ts_codes=ts_codes, days=sync_days)
-    except Exception as e:
-        logger.error(f"同步数据失败: {e}，将直接进行本地扫描。")
+    except (OSError, ConnectionError, TimeoutError, ValueError, KeyError) as e:
+        # 同步为"尽力而为"：失败仅记录日志，跳过同步但继续本地扫描
+        logger.error(
+            "[监控] 数据同步失败，将直接进行本地扫描 (code=%s): %s",
+            ErrorCode.DATA_SOURCE_ERROR.value,
+            e,
+        )
 
     # 3. 扫描信号
     scan_result = scan_watchlist()

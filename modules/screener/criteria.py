@@ -1,5 +1,6 @@
 """选股筛选条件注册表。"""
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,8 @@ if TYPE_CHECKING:
 CriteriaFn = Callable[[list, "StockScore"], bool]
 
 _CRITERIA_REGISTRY: dict[str, CriteriaFn] = {}
+
+logger = logging.getLogger(__name__)
 
 
 def _register(name: str):
@@ -34,7 +37,9 @@ def _check_centipede(klines) -> bool:
         from ..indicators import detect_centipede_pattern
 
         return bool(detect_centipede_pattern(klines).get("is_centipede"))
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 判定失败 → 当作"非蜈蚣图"(不过滤)；调用方已经把 false 当作兜底。
+        logger.warning("[criteria] 蜈蚣图检测失败，不触发过滤: %s", e)
         return False
 
 
@@ -44,7 +49,9 @@ def _check_sandglass_min(klines, min_score: int = 50) -> bool:
         from ..indicators import calculate_sandglass_score
 
         return calculate_sandglass_score(klines).get("score", 0) < min_score
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 评分失败 → 当作"未低于最低分"(不进入过滤)；调用方已经把 false 当作兜底。
+        logger.warning("[criteria] 沙漏最低分检测失败，不触发过滤: %s", e)
         return False
 
 

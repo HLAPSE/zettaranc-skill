@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import Any
@@ -45,6 +46,9 @@ from .signal_filter import filter_signals, evaluate_stock
 from .metrics import calculate_metrics
 from ..core.metrics import TRADING_DAYS_PER_YEAR, compute_drawdown, compute_sharpe, daily_returns
 from modules.core.errors import ErrorCode, ZettarancError
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -84,7 +88,9 @@ def _load_benchmark_curve(dates: list[str], benchmark_code: str, datasource: Dat
             if date in date_set:
                 curve.append({"date": date, "close": float(row.get("close", 0))})
         return curve
-    except Exception:
+    except (KeyError, TypeError, ValueError, AttributeError, OSError) as e:
+        # 调用方通过空列表回退为不绘制基准曲线，自然降级
+        logger.warning("[simulator] 加载基准指数曲线失败，基准将为空: %s", e)
         return []
 
 

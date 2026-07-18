@@ -7,10 +7,15 @@ import logging
 import os
 import sqlite3
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 from collections.abc import Generator
 from dataclasses import dataclass
 from contextlib import contextmanager
+
+# 避免循环导入：errors 模块需在数据库完全初始化后才可用
+# 这里仅类型检查使用，运行时按需 lazy import
+if TYPE_CHECKING:
+    from modules.core.errors import ErrorCode, ZettarancError
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +89,9 @@ def get_connection() -> Generator[sqlite3.Connection, None, None]:
     try:
         yield conn
         conn.commit()
-    except Exception:
+    except (sqlite3.Error, OSError, ValueError, TypeError) as e:
+        # 窄化：仅捕获 DB / OS / 序列化相关异常，向上抛以保留调用方语义
+        logger.warning("[database] get_connection 事务失败，触发回滚: %s", e)
         conn.rollback()
         raise
     finally:
@@ -1011,8 +1018,14 @@ def save_klines(klines: list[dict[str, Any]]) -> int:
                     ),
                 )
                 saved += 1
-            except Exception as e:
-                logger.warning(f"保存 K 线失败: {kline.get('ts_code')} {kline.get('trade_date')}: {e}")
+            except (sqlite3.Error, OSError, ValueError, TypeError, KeyError) as e:
+                # 窄化：仅捕获 DB / OS / 序列化相关异常，单条失败不阻塞批量
+                logger.warning(
+                    "[database] 保存 K 线失败 %s %s: %s",
+                    kline.get('ts_code'),
+                    kline.get('trade_date'),
+                    e,
+                )
                 continue
         conn.commit()
     return saved

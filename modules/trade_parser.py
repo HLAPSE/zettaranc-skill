@@ -3,10 +3,16 @@
 支持口语化、JSON、CSV等多种格式的解析
 """
 
+import csv
+import io
+import json
+import logging
 import re
 from datetime import datetime
 from typing import Any, Optional
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,7 +136,9 @@ class TradeParser:
             confidence = 0.9 if not missing else 0.6
 
             return ParseResult(success=True, confidence=confidence, data=mapped, missing_fields=missing)
-        except Exception as e:
+        except (ValueError, KeyError, IndexError, csv.Error, UnicodeDecodeError, TypeError) as e:
+            # 窄化：仅捕获 CSV / 字段访问 / 解码 / 索引越界异常，解析失败回退为失败结果
+            logger.warning("[trade_parser] CSV 解析失败: %s", e)
             return ParseResult(
                 success=False, confidence=0, data=None, missing_fields=[], error_message=f"CSV解析失败: {str(e)}"
             )

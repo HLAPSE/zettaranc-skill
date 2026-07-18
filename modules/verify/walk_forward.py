@@ -88,7 +88,7 @@ def _load_windowed_klines(ts_code: str, days: int) -> list[Any]:
                     prev_close=float(d.get("prev_close", 0.0)),
                 )
             )
-        except Exception as e:  # noqa: BLE001
+        except (OSError, KeyError, ValueError, AttributeError, TypeError) as e:
             logger.warning("WF K线转换失败 %s: %s", ts_code, e)
     return out
 
@@ -182,7 +182,7 @@ def walk_forward_verify(
                 try:
                     is_shaofu = _backtest_with_window(code, is_window, config)
                     is_per_stock.append(_stockresult_from_shaofu(code, is_shaofu))
-                except Exception as e:  # noqa: BLE001
+                except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:
                     logger.warning("WF IS 段 %s 失败: %s", code, e)
 
             # OOS 段回测
@@ -190,7 +190,7 @@ def walk_forward_verify(
                 try:
                     oos_shaofu = _backtest_with_window(code, oos_window, config)
                     oos_per_stock.append(_stockresult_from_shaofu(code, oos_shaofu))
-                except Exception as e:  # noqa: BLE001
+                except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:
                     logger.warning("WF OOS 段 %s 失败: %s", code, e)
 
     is_active = [r for r in is_per_stock if r.trades >= 3]

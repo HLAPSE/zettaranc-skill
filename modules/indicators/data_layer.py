@@ -1,9 +1,12 @@
 from typing import Any, Optional
 from collections.abc import Callable
+import logging
 
 """
 技术指标数据层模块
 """
+
+logger = logging.getLogger(__name__)
 
 try:
     from .core import (
@@ -264,7 +267,9 @@ def _load_indicator_cache(ts_code: str, trade_date: str) -> IndicatorResult | No
         result = _load_from_row(row)
         _indicator_memory_cache[mem_key] = result
         return result
-    except Exception:
+    except (OSError, KeyError, ValueError, AttributeError, TypeError) as e:
+        # 缓存读失败 → 返回 None（走重算）；调用方已把 None 视为冷启动。
+        logger.warning("[data_layer] 缓存读取失败，返回 None 走重算: %s", e)
         return None
 
 
@@ -282,7 +287,9 @@ def _save_indicator_cache(result: IndicatorResult, klines: list[DailyData]) -> b
         conn.close()
         _indicator_memory_cache[(result.ts_code, result.trade_date)] = result
         return True
-    except Exception:
+    except (OSError, KeyError, ValueError, AttributeError, TypeError) as e:
+        # 缓存写失败 → 返回 False（不写入）；调用方已把 False 视为写失败兜底。
+        logger.warning("[data_layer] 缓存写入失败: %s", e)
         return False
 
 
@@ -806,7 +813,9 @@ def format_result(result: IndicatorResult) -> str:
             lines.append("[砖型图可视化]")
             lines.append(brick_vis)
             lines.append("")
-    except Exception:
+    except (OSError, KeyError, ValueError, AttributeError, TypeError) as e:
+        # 砖型图可视化失败 → 不影响主报告（lines 继续追加砖型指标）。
+        logger.warning("[data_layer] 砖型图可视化失败，跳过该段落: %s", e)
         pass
 
     lines.append(f"[砖型图] Brick={result.brick_value:.2f}  TrendUp:{result.brick_trend_up}  Fanbao:{result.is_fanbao}")

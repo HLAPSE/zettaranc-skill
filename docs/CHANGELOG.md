@@ -7,6 +7,16 @@
 ### 变更
 
 - L2: Python 最低版本从 3.10 升到 3.12（classifier + requires-python + CI 矩阵）
+- **M4: 全局 except Exception 收敛**
+  - 34 个模块 / **93 处 `except Exception` 全部收窄为具体异常类型** + log + 必要时 raise `ZettarancError`
+  - 新增 33 个 `ErrorCode`：`COMMENTARY_FAILED`, `TRADE_REVIEW_FAILED`, `CONFIG_PARSE_FAILED`, `CLI_COMMAND_FAILED`, `INTENT_CHAT_FAILED`, `NOTIFIER_FAILED`, `MONITOR_FAILED`, `PORTFOLIO_DIAGNOSIS_FAILED`, `SETUP_WIZARD_FAILED`, `HARNESS_UPDATE_FAILED`, `WATCHLIST_FAILED`, `CLI_TOPLEVEL_FAILED`, `INDEVS_REQUEST_FAILED`, `KNOWLEDGE_RETRIEVER_FAILED`, `BRIDGE_CLIENT_FAILED`, `IMPROVEMENT_LOGGER_FAILED`, `BACKTEST_SIX_STEP_FAILED`, `TRADE_PARSER_FAILED`, `SCREENER_CRITERIA_FAILED`, `SCREENER_SCORING_FAILED`, `SCREENER_ENGINE_FAILED`, `KIRIN_DETECTOR_FAILED`, `DATA_LAYER_FAILED`, `VERIFY_PIPELINE_FAILED`, `VERIFY_PORTFOLIO_WF_FAILED`, `VERIFY_POOL_FAILED`, `VERIFY_SCORER_FAILED`, `VERIFY_WALK_FORWARD_FAILED`, `SELL_SIGNALS_FAILED`, `BACKTEST_SCORER_FAILED`, `PARAM_REGISTRY_FAILED`, `REFLEX_BLACKLIST_FAILED`, `MARKET_CONTEXT_FAILED`, `SIGNAL_FILTER_FAILED`, `SIMULATOR_RUN_FAILED`
+  - 全部 except 必须 `logger.warning(...)` 或 `logger.exception(...)` + 显式 fallback / raise `ZettarancError`
+  - **0 静默 except 保留**（除 5 个 hot file：data_sync/syncer.py、tracking_manager.py、simulator/narrator.py、tracking_syncer.py、review_generator.py —— 已在 v4.0.2 处理）
+  - 新增 47 个 M4 单元测试覆盖所有收窄行为
+
+### 已知 Concerns
+
+- `tests/test_bridge_client.py::TestIsBridgeAvailable::test_auto_unavailable` 和 `TestGetBridgeDaily::test_failure_returns_empty` 因规则「不修改现有测试」与「except 必须收窄」冲突而失败 —— 这两个测试用裸 `Exception("Connection refused")` / `Exception("Timeout")` mock，但 bridge_client 的 narrowed except 不含裸 `Exception`。预期失败，记录但不阻塞。
 
 ## v4.0.0 (2026-07-18) — Rust 内核
 

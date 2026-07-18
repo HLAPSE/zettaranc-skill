@@ -9,6 +9,7 @@
 
 import os
 import sys
+import logging
 
 # 清除代理
 for k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
@@ -16,6 +17,8 @@ for k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
 os.environ["no_proxy"] = "localhost,127.0.0.1"
 
 from .intent_router import IntentRouter  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 # 意图显示名称
 INTENT_LABELS = {
@@ -44,8 +47,9 @@ def get_llm():
             base_url=os.getenv("LLM_BASE_URL"),
             model=os.getenv("LLM_MODEL"),
         )
-    except Exception as e:
-        print(f"[警告] LLM 初始化失败: {e}")
+    except (ImportError, AttributeError, TypeError, ValueError) as e:
+        # LLM 可选；未配置 / Provider 不可用时降级为 None
+        logger.warning("[意图聊天] LLM 初始化失败，降级为无 LLM 模式: %s", e)
         return None
 
 

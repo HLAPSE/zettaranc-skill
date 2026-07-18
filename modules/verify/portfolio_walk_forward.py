@@ -110,7 +110,7 @@ def portfolio_walk_forward_verify(
                 start_date=oos_start,
                 end_date=oos_end,
             )
-        except Exception as e:  # noqa: BLE001
+        except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:
             logger.warning("组合 WF 切片运行失败: %s", e)
             continue
 
@@ -279,7 +279,7 @@ def portfolio_grid_search_optimize(
                 start_date=is_start,
                 end_date=is_end,
             )
-        except Exception as e:  # noqa: BLE001
+        except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:
             logger.warning("网格 %s 失败: %s", params, e)
             continue
 

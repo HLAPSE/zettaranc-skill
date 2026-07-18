@@ -8,11 +8,17 @@
 
 from __future__ import annotations
 
+import logging
+import sqlite3
+
 from ..database import get_connection
 from ..datasource import DataSource, get_datasource
 from ..indicators import DailyData, calculate_zg_white, calculate_dg_yellow, calculate_ma
 from . import MarketContext, MarketRegime
+from modules.core.errors import ErrorCode, ZettarancError
 
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_INDEX_CODE = "000001.SH"
 
@@ -145,7 +151,8 @@ def _fetch_breadth(trade_date: str) -> tuple[int, int]:
             if row is None:
                 return 0, 0
             return int(row["limit_up"]), int(row["limit_down"])
-    except Exception:
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as e:
+        logger.warning("[market_context] 查询涨跌停家数失败: %s", e)
         return 0, 0
 
 
@@ -177,7 +184,8 @@ def _fetch_turnover_trend(trade_date: str) -> float | None:
             if previous <= 0:
                 return None
             return recent / previous
-    except Exception:
+    except (sqlite3.Error, KeyError, TypeError, ValueError, ZeroDivisionError, ArithmeticError) as e:
+        logger.warning("[market_context] 计算成交额趋势失败: %s", e)
         return None
 
 
@@ -300,8 +308,9 @@ def precompute_market_contexts(
             for row in cursor.fetchall():
                 breadth_map[row["trade_date"]] = (int(row["limit_up"]), int(row["limit_down"]))
                 daily_amounts[row["trade_date"]] = float(row["total_amount"])
-    except Exception:
-        pass
+    except (sqlite3.Error, KeyError, TypeError, ValueError) as e:
+        # 调用方通过 breadth_map/daily_amounts 缺失回退为 (0,0)/None，已自然容错
+        logger.warning("[market_context] 批量查询涨跌停/成交额失败，使用默认值: %s", e)
 
     sorted_amount_dates = sorted(daily_amounts.keys())
     amount_pos = {d: i for i, d in enumerate(sorted_amount_dates)}

@@ -4,10 +4,15 @@
 定义 DataSource Protocol，并封装 Tushare、Bridge、SQLite、Indevs 以及自动回退的 Composite 数据源。
 """
 
+import logging
 import os
+import sqlite3
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
+import requests
+
+logger = logging.getLogger(__name__)
 
 from .bridge_client import (
     BridgeConfig,
@@ -124,7 +129,9 @@ class TushareDataSource:
             return None
         try:
             return self._client._pro.daily_basic(ts_code=ts_code, start_date=start_date, end_date=end_date)
-        except Exception:
+        except (requests.RequestException, ValueError, KeyError) as e:
+            # 窄化：仅捕获 HTTP / 数据解析异常，返回 None 让上层回退
+            logger.warning("[datasource] TushareDataSource.get_daily_basic 失败 %s: %s", ts_code, e)
             return None
 
     def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
@@ -133,7 +140,9 @@ class TushareDataSource:
             return None
         try:
             return self._client._pro.stk_factor(ts_code=ts_code, start_date=start_date, end_date=end_date)
-        except Exception:
+        except (requests.RequestException, ValueError, KeyError) as e:
+            # 窄化：仅捕获 HTTP / 数据解析异常，返回 None 让上层回退
+            logger.warning("[datasource] TushareDataSource.get_stk_factor 失败 %s: %s", ts_code, e)
             return None
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
@@ -315,7 +324,9 @@ class SqliteDataSource:
             with get_connection() as conn:
                 conn.execute("SELECT 1")
             return True
-        except Exception:
+        except (sqlite3.Error, OSError) as e:
+            # 窄化：仅捕获 DB / OS 异常，健康检查返回 False 让上层选择其他源
+            logger.warning("[datasource] SqliteDataSource.health_check 失败: %s", e)
             return False
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
@@ -571,7 +582,20 @@ class CompositeDataSource:
                 data = source.get_stock_list(exchange)
                 if data:
                     return data
-            except Exception:
+            except (
+                requests.RequestException,
+                sqlite3.Error,
+                OSError,
+                ValueError,
+                KeyError,
+                ZettarancError,
+            ) as e:
+                # 窄化：仅捕获 HTTP / DB / 数据解析 / 项目异常，回退到下一源
+                logger.warning(
+                    "[datasource] CompositeDataSource.get_stock_list 源 %s 失败: %s",
+                    getattr(source, "name", source.__class__.__name__),
+                    e,
+                )
                 continue
         return []
 
@@ -639,7 +663,21 @@ class CompositeDataSource:
                     # 3. 写入 DB 缓存
                     save_klines(data)
                     return data
-            except Exception:
+            except (
+                requests.RequestException,
+                sqlite3.Error,
+                OSError,
+                ValueError,
+                KeyError,
+                ZettarancError,
+            ) as e:
+                # 窄化：仅捕获 HTTP / DB / 数据解析 / 项目异常，回退到下一源
+                logger.warning(
+                    "[datasource] CompositeDataSource.get_kline_dicts 源 %s 失败 %s: %s",
+                    getattr(source, "name", source.__class__.__name__),
+                    ts_code,
+                    e,
+                )
                 continue
         return []
 

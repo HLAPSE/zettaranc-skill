@@ -13,11 +13,14 @@ v3.10.4: 接入 ZettarancError
 
 from typing import Optional
 import os
+import logging
 import httpx
 import json
 from collections.abc import Generator
 
 from modules.core.errors import ErrorCode, ZettarancError
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProvider:
@@ -103,7 +106,8 @@ class MiniMaxProvider(LLMProvider):
 
         try:
             data = resp.json()
-        except Exception as e:
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning("[llm] MiniMax JSON 解析失败 (code=%s): %s", ErrorCode.LLM_INVALID_RESPONSE.value, e)
             raise ZettarancError(
                 ErrorCode.LLM_INVALID_RESPONSE,
                 f"MiniMax 返回无法解析为 JSON: {e}",

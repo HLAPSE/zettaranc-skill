@@ -11,9 +11,15 @@
 """
 
 from typing import Any, Optional
+import logging
+import sqlite3
 from dataclasses import dataclass, field
 
+from .core.errors import ErrorCode
+
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
+
+logger = logging.getLogger(__name__)
 
 from .datasource import daily_to_dict
 from .indicators import (
@@ -200,7 +206,13 @@ def get_stock_info_db(ts_code: str) -> dict[str, Any] | None:
             cursor.execute("SELECT * FROM stock_basic WHERE ts_code = ?", (ts_code,))
             row = cursor.fetchone()
             return dict(row) if row else None
-    except Exception:
+    except (OSError, sqlite3.Error, KeyError) as e:
+        # 名称为可选：DB 不可用时仅记录日志，降级为返回 None
+        logger.warning(
+            "[组合诊断] 读取 stock_basic 失败 (code=%s): %s",
+            ErrorCode.DB_ERROR.value,
+            e,
+        )
         return None
 
 

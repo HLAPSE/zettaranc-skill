@@ -6,12 +6,15 @@
 """
 
 import json
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Any
 
 # 项目根目录（用于解析默认 logs/ 路径）
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+logger = logging.getLogger(__name__)
 
 
 class ImprovementLogger:
@@ -67,8 +70,9 @@ class ImprovementLogger:
 
             return True
 
-        except Exception as e:
-            print(f"记录日志失败: {e}")
+        except (OSError, IOError, TypeError, ValueError) as e:
+            # 窄化：仅捕获文件 I/O / 序列化异常，记录失败返回 False（best effort）
+            logger.warning("[improvement_logger] 记录日志失败 action=%s: %s", action, e)
             return False
 
     def log_signal_detection(
@@ -243,8 +247,9 @@ class ImprovementLogger:
             # 返回最新的日志
             return logs[-limit:]
 
-        except Exception as e:
-            print(f"获取日志失败: {e}")
+        except (OSError, IOError) as e:
+            # 窄化：仅捕获文件 I/O 异常，读取失败返回空列表（best effort）
+            logger.warning("[improvement_logger] 获取日志失败: %s", e)
             return []
 
     def get_logs_by_category(self, category: str, limit: int = 100) -> list:
@@ -295,8 +300,9 @@ class ImprovementLogger:
                 "latest_optimization": latest_optimization,
             }
 
-        except Exception as e:
-            print(f"获取改进摘要失败: {e}")
+        except (OSError, IOError, KeyError, TypeError, AttributeError) as e:
+            # 窄化：仅捕获文件 I/O / 字段访问异常，统计失败返回空字典（best effort）
+            logger.warning("[improvement_logger] 获取改进摘要失败: %s", e)
             return {}
 
 

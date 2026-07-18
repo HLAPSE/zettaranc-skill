@@ -398,7 +398,7 @@ def load_v10_stock_pool_multi_criteria(
                 if len(klines) < 30:
                     continue
                 score = analyze_stock(code, klines=klines, datasource=datasource)
-            except Exception as e:  # noqa: BLE001
+            except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:
                 logger.debug("分析 %s 失败: %s", code, e)
                 continue
 
@@ -411,7 +411,7 @@ def load_v10_stock_pool_multi_criteria(
                     if handler(klines, score):
                         matched[code] = score
                         break
-                except Exception as e:  # noqa: BLE001
+                except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
                     logger.debug("criteria %s 在 %s 上失败: %s", criteria, code, e)
                     continue
 

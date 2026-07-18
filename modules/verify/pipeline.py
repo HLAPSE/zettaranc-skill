@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sqlite3
 from dataclasses import dataclass, field
 
 from modules.backtest_six_step import backtest_shaofu_single
@@ -114,7 +115,7 @@ def _load_klines_with_precheck(
                     skipped=False,
                 )
             )
-        except Exception as e:  # noqa: BLE001 - 单股加载失败不应中断整个组合
+        except (sqlite3.Error, OSError, KeyError, ValueError, AttributeError, TypeError) as e:  # 单股加载失败不应中断整个组合
             logger.warning("加载 %s 失败: %s", code, e)
             results.append(
                 StockResult(
@@ -194,7 +195,7 @@ def _run_single_stock_backtest(
                             skipped=False,
                             equity_curve=list(equity_curve),
                         )
-                except Exception as e:  # noqa: BLE001 - 单 Rust call 失败不应中断流水线
+                except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:  # 单 Rust call 失败不应中断流水线
                     logger.warning(
                         "verify: Rust 回测 %s 失败，fallback Python: %s", ts_code, e
                     )
@@ -215,7 +216,7 @@ def _run_single_stock_backtest(
             skipped=False,
             equity_curve=list(getattr(result, "equity_curve", [])),
         )
-    except Exception as e:  # noqa: BLE001 - 单股回测失败不应中断整个组合
+    except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:  # 单股回测失败不应中断整个组合
         logger.warning("回测 %s 失败: %s", ts_code, e)
         return StockResult(
             ts_code=ts_code,

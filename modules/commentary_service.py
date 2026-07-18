@@ -6,6 +6,8 @@ Z哥点评服务
 """
 
 import os
+import re
+import sqlite3
 import time
 import logging
 from pathlib import Path
@@ -355,11 +357,11 @@ def generate_commentary(analysis: dict[str, Any]) -> dict[str, Any]:
                 response_time_ms=elapsed_ms,
                 success=True,
             )
-        except Exception as log_exc:
+        except (sqlite3.Error, KeyError, TypeError, ValueError, OSError) as log_exc:
+            # 内层日志写入失败：调用方（外层 LLM 成功路径）通过继续返回 text 自然降级
             logger.warning("记录 LLM 响应日志失败: %s", log_exc)
 
         # 过滤掉模型思考过程标签
-        import re
 
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     except ValueError as e:
@@ -374,8 +376,9 @@ def generate_commentary(analysis: dict[str, Any]) -> dict[str, Any]:
                 success=False,
                 error_message=str(e),
             )
-        except Exception:
-            pass
+        except (sqlite3.Error, KeyError, TypeError, ValueError, OSError) as log_exc:
+            # 内层日志写入失败：调用方（外层 ValueError 路径）已在外层返回错误 dict，自然降级
+            logger.warning("记录 LLM 失败日志失败: %s", log_exc)
         return {
             "ts_code": analysis.get("ts_code", ""),
             "trade_date": analysis.get("trade_date", ""),
@@ -385,7 +388,7 @@ def generate_commentary(analysis: dict[str, Any]) -> dict[str, Any]:
             "cached": False,
             "error": "llm_not_configured",
         }
-    except Exception as e:
+    except (ValueError, KeyError, TypeError, AttributeError, OSError, TimeoutError) as e:
         elapsed_ms = (time.perf_counter() - start_ts) * 1000.0
         try:
             from modules.database import record_llm_response
@@ -397,8 +400,9 @@ def generate_commentary(analysis: dict[str, Any]) -> dict[str, Any]:
                 success=False,
                 error_message=str(e),
             )
-        except Exception:
-            pass
+        except (sqlite3.Error, KeyError, TypeError, ValueError, OSError) as log_exc:
+            # 内层日志写入失败：调用方（外层失败路径）已在外层返回错误 dict，自然降级
+            logger.warning("记录 LLM 失败日志失败: %s", log_exc)
         logger.error("LLM 生成失败: %s", e, exc_info=True)
         return {
             "ts_code": analysis.get("ts_code", ""),

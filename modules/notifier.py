@@ -10,6 +10,8 @@ import logging
 import requests
 from typing import Any
 
+from modules.core.errors import ErrorCode
+
 logger = logging.getLogger("zettaranc-notifier")
 
 
@@ -21,6 +23,8 @@ def escape_applescript_string(s: str) -> str:
 def notify_macos(title: str, message: str, sound_name: str = "Glass") -> bool:
     """
     通过 macOS 系统的 osascript 发送系统通知
+
+    通知失败为"尽力而为"语义：记录日志并返回 False，不阻塞上层调用。
     """
     try:
         title_esc = escape_applescript_string(title)
@@ -34,14 +38,20 @@ def notify_macos(title: str, message: str, sound_name: str = "Glass") -> bool:
         cmd = ["osascript", "-e", script]
         subprocess.run(cmd, check=True, capture_output=True)
         return True
-    except Exception as e:
-        logger.error("macOS 通知发送失败: %s", e)
+    except (subprocess.CalledProcessError, subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+        logger.error(
+            "[notifier] macOS 通知发送失败 (code=%s): %s",
+            ErrorCode.NOTIFIER_FAILED.value,
+            e,
+        )
         return False
 
 
 def notify_feishu(webhook_url: str, title: str, message: str) -> bool:
     """
     向飞书/Lark群机器人 Webhook 发送主动通知
+
+    推送失败为"尽力而为"语义：记录日志并返回 False，不阻塞上层调用。
     """
     if not webhook_url:
         return False
@@ -51,8 +61,12 @@ def notify_feishu(webhook_url: str, title: str, message: str) -> bool:
         resp = requests.post(webhook_url, json=payload, headers=headers, timeout=10)
         resp.raise_for_status()
         return True
-    except Exception as e:
-        logger.error("飞书 Webhook 发送失败: %s", e)
+    except (requests.RequestException, TimeoutError, ConnectionError, ValueError) as e:
+        logger.error(
+            "[notifier] 飞书 Webhook 发送失败 (code=%s): %s",
+            ErrorCode.NOTIFIER_FAILED.value,
+            e,
+        )
         return False
 
 

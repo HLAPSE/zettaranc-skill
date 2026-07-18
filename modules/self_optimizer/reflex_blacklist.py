@@ -6,9 +6,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+from modules.core.errors import ErrorCode
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -159,7 +164,13 @@ def check_all(context: dict[str, Any]) -> list[Violation]:
     for name, description, check_fn in TRADING_BLACKLIST:
         try:
             violations.extend(check_fn(context))
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, AttributeError, IndexError) as e:
+            logger.warning(
+                "[reflex_blacklist] 黑名单检测异常 (code=%s, name=%s): %s",
+                ErrorCode.REFLEX_BLACKLIST_FAILED.value,
+                name,
+                e,
+            )
             violations.append(
                 Violation(
                     name=name,

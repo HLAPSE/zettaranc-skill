@@ -727,7 +727,7 @@ def load_persisted_override(strategy_name: str) -> dict | None:
     try:
         d = _json.loads(p.read_text(encoding="utf-8"))
         return d.get("params") if isinstance(d, dict) else None
-    except Exception as e:  # noqa: BLE001
+    except (OSError, ValueError, TypeError, AttributeError) as e:  # 文件读取 / JSON 解析失败
         logging.getLogger(__name__).warning("读 %s 失败: %s", p, e)
         return None
 

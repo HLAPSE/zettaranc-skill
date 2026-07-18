@@ -1,6 +1,11 @@
 from typing import Optional
+import logging
+
 from .core import StrategyType, StrategySignal, Priority, _ensure_daily_klines, _get_macd_dif
 from ..indicators import detect_four_brick_system, DailyData
+
+
+logger = logging.getLogger(__name__)
 
 
 def detect_s1(klines: list[DailyData], index: int, kirin_context: dict | None = None) -> StrategySignal | None:
@@ -68,7 +73,9 @@ def detect_s1(klines: list[DailyData], index: int, kirin_context: dict | None = 
         if chuhuo_score >= 2:
             confidence += 0.25
             mdc_details.append(f"共振触发五式出货({chuhuo_score}项)")
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 五式出货失败不影响主信号；基础 confidence + 不附加强化标签。
+        logger.warning("[sell_signals] 五式出货验证失败，不影响主信号: %s", e)
         pass
 
     # 资金流验证
@@ -149,7 +156,9 @@ def detect_s2(klines: list[DailyData] | None, index: int, dif_list: list[float] 
             if chuhuo_score >= 2:
                 confidence += 0.15
                 mdc_details.append(f"共振触发五式出货({chuhuo_score}项)")
-        except Exception:
+        except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+            # 五式出货失败不影响顶背离信号；基础 confidence 已计入。
+            logger.warning("[sell_signals] S2 五式出货验证失败: %s", e)
             pass
 
         return StrategySignal(
@@ -226,7 +235,9 @@ def detect_s3(klines: list[DailyData], index: int) -> StrategySignal | None:
         if chuhuo_score >= 2:
             confidence += 0.15
             mdc_details.append(f"共振触发五式出货({chuhuo_score}项)")
-    except Exception:
+    except (KeyError, ValueError, AttributeError, TypeError, ArithmeticError) as e:
+        # 五式出货失败不影响最后一根稻草信号；基础 0.7 confidence 已计入。
+        logger.warning("[sell_signals] S3 五式出货验证失败: %s", e)
         pass
 
     return StrategySignal(

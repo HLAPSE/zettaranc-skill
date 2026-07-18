@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any, NoReturn
 
 from modules.core.paths import REPORTS_DIR
+from modules.core.errors import ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -550,7 +551,13 @@ def _daily_step_watchlist(report: dict) -> list:
                     }
                 )
         return watches
-    except Exception as e:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        # 步骤失败不影响整个 daily 流程，继续执行后续步骤
+        logger.warning(
+            "[cli_commands] 观察池扫描失败 (code=%s): %s",
+            ErrorCode.CLI_COMMAND_FAILED.value,
+            e,
+        )
         _warn(f"观察池扫描失败: {e}")
         report["watchlist_scan"] = {"error": str(e)}
         return []
@@ -584,7 +591,12 @@ def _daily_step_screener(report: dict) -> None:
                     }
                 )
         report["top_picks"] = top_picks
-    except Exception as e:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(
+            "[cli_commands] 全市场选股失败 (code=%s): %s",
+            ErrorCode.CLI_COMMAND_FAILED.value,
+            e,
+        )
         _warn(f"全市场选股失败: {e}")
         report["top_picks"] = {"error": str(e)}
 
@@ -613,10 +625,21 @@ def _daily_step_portfolio(report: dict, watches: list) -> None:
                         "diagnosis": diag[:200] if isinstance(diag, str) else str(diag)[:200],
                     }
                 )
-            except Exception as e:
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+                logger.warning(
+                    "[cli_commands] 单股诊断失败 (ts=%s, code=%s): %s",
+                    code,
+                    ErrorCode.CLI_COMMAND_FAILED.value,
+                    e,
+                )
                 portfolio_status.append({"ts_code": code, "error": str(e)})
         report["portfolio_status"] = portfolio_status
-    except Exception as e:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(
+            "[cli_commands] 持仓检查失败 (code=%s): %s",
+            ErrorCode.CLI_COMMAND_FAILED.value,
+            e,
+        )
         _warn(f"持仓检查失败: {e}")
         report["portfolio_status"] = {"error": str(e)}
 
@@ -719,8 +742,12 @@ def _simulate_narrate_text(result: Any, wf_payload: dict[str, Any] | None) -> di
             from .simulator.narrator import generate_simulation_narrative
 
             return generate_simulation_narrative(result)
-        except Exception as exc:
-            logger.warning("narrate 失败，使用兜底文案: %s", exc)
+        except (ImportError, AttributeError, ValueError, KeyError, TypeError) as exc:
+            logger.warning(
+                "[cli_commands] narrate 失败，使用兜底文案 (code=%s): %s",
+                ErrorCode.CLI_COMMAND_FAILED.value,
+                exc,
+            )
             return {
                 "simulation_id": "",
                 "ts_codes": [],

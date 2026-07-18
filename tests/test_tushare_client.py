@@ -123,8 +123,12 @@ class TestApiMethods:
             assert result.iloc[0]["close"] == 100.0
 
     def test_get_daily_exception_returns_none(self, client):
-        """get_daily 异常时返回 None"""
-        with patch("modules.tushare_client.ts.pro_bar", side_effect=Exception("API error")):
+        """get_daily 异常时返回 None
+
+        M4: _call_api_with_retry 已收窄为 requests.RequestException/TimeoutError/
+        ConnectionError/KeyError/ValueError，模拟用 ConnectionError 触发。
+        """
+        with patch("modules.tushare_client.ts.pro_bar", side_effect=ConnectionError("API error")):
             result = client.get_daily("600519.SH", "20260101", "20260115")
             assert result is None
 
@@ -137,7 +141,7 @@ class TestApiMethods:
 
     def test_get_index_daily_exception_returns_none(self, client):
         client._pro = MagicMock()
-        client._pro.index_daily.side_effect = Exception("API error")
+        client._pro.index_daily.side_effect = ConnectionError("API error")
         result = client.get_index_daily("000300.SH", "20260101", "20260115")
         assert result is None
 
@@ -148,7 +152,7 @@ class TestApiMethods:
             assert len(result) == 1
 
     def test_get_realtime_quote_exception_returns_none(self, client):
-        with patch("modules.tushare_client.ts.realtime_quote", side_effect=Exception("API error")):
+        with patch("modules.tushare_client.ts.realtime_quote", side_effect=ConnectionError("API error")):
             result = client.get_realtime_quote(["600519.SH"])
             assert result is None
 
@@ -175,7 +179,7 @@ class TestApiMethods:
 
     def test_get_stock_basic_exception_returns_none(self, client):
         client._pro = MagicMock()
-        client._pro.stock_basic.side_effect = Exception("API error")
+        client._pro.stock_basic.side_effect = ConnectionError("API error")
         result = client.get_stock_basic(ts_code="600519.SH")
         assert result is None
 

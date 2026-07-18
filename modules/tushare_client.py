@@ -10,10 +10,11 @@ import time
 import logging
 from typing import Any, Optional
 
+import requests
+
 from modules.core.errors import ErrorCode, ZettarancError
 
 try:
-    import requests  # noqa: F401  可用性检查
     import pandas as pd
     import tushare as ts
 except ImportError:
@@ -72,8 +73,8 @@ class TushareClient:
             from tushare.stock import cons as ct
 
             ct.verify_token_url = VERIFY_TOKEN_URL
-        except Exception:
-            pass
+        except (ImportError, AttributeError) as e:
+            logger.debug("tushare.stock.cons.verify_token_url 属性不可用: %s", e)
 
         self.min_request_interval = 0.55
         self.last_request_time = 0.0
@@ -85,21 +86,31 @@ class TushareClient:
         self.last_request_time = time.time()
 
     def _call_api_with_retry(self, api_name: str, func, *args, **kwargs):
-        """带退避算法和限流控制的 API 调用封装"""
+        """带退避算法和限流控制的 API 调用封装
+
+        重试期间内层异常被窄化捕获；最终失败返回 None（调用方通过 ``if df is None`` 处理）。
+        保留旧的 None-on-failure 契约以避免破坏所有调用点。
+        """
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 self._rate_limit(api_name)
                 return func(*args, **kwargs)
-            except Exception as e:
+            except (requests.RequestException, TimeoutError, ConnectionError, KeyError, ValueError) as e:
                 if attempt == max_retries - 1:
-                    logger.error(f"[{api_name}] 最终调用失败: {e}")
+                    logger.error(
+                        f"[{api_name}] 最终调用失败 (code=%s): %s",
+                        ErrorCode.DATA_SOURCE_ERROR.value,
+                        e,
+                    )
                     return None
                 sleep_time = 2**attempt
                 logger.warning(
                     f"[{api_name}] API 调用异常: {e}, 等待 {sleep_time} 秒后重试 ({attempt + 1}/{max_retries})"
                 )
                 time.sleep(sleep_time)
+        # 不可达分支：兜底保持原有 None 语义
+        return None
 
     def get_daily(
         self, ts_code: str, start_date: str | None = None, end_date: str | None = None

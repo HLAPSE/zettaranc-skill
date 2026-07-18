@@ -6,10 +6,14 @@
 按意图自动注入分类过滤，提高检索精准度。
 """
 
+import json
+import logging
 from typing import Optional
 import os
 import httpx
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,7 +65,9 @@ class KnowledgeRetriever:
             )
             response.raise_for_status()
             data = response.json()
-        except Exception:
+        except (httpx.HTTPError, httpx.TimeoutException, json.JSONDecodeError, ValueError) as e:
+            # 窄化：仅捕获 HTTP / 超时 / JSON 解析异常，知识库为可选增强，回退为空列表
+            logger.warning("[knowledge_retriever] 知识库 API 调用失败 (intent=%s): %s", intent, e)
             return []
 
         results = data.get("documents", [])

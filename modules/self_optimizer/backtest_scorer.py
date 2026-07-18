@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import logging
 import random
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
 from modules.backtest import backtest_strategy, BacktestResult
+from modules.core.errors import ErrorCode
 from modules.self_optimizer.param_registry import (
     get_defaults,
     using_params,
@@ -160,8 +162,13 @@ class BacktestScorer:
                     result = backtest_strategy(ts_code, days=self._days)
             else:
                 result = backtest_strategy(ts_code, days=self._days)
-        except Exception as e:
-            logger.warning("回测 %s 失败: %s", ts_code, e)
+        except (sqlite3.Error, OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:
+            logger.warning(
+                "[backtest_scorer] 回测 %s 失败 (code=%s): %s",
+                ts_code,
+                ErrorCode.BACKTEST_SCORER_FAILED.value,
+                e,
+            )
             return StockScore(
                 ts_code=ts_code,
                 win_rate=0,

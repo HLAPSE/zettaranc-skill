@@ -5,9 +5,14 @@
 
 from typing import Optional
 import os
+import logging
 from pathlib import Path
 
+from .core.errors import ErrorCode, ZettarancError
+
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
+
+logger = logging.getLogger(__name__)
 
 # 数据模式别名
 MODE_JNB = "jnb"  # JNB 模式：走 Tushare API
@@ -101,7 +106,8 @@ def test_jnb_connection(token: str) -> bool:
     try:
         client = TushareClient(token=token)
         return client.check_connection()
-    except Exception as e:
+    except (ZettarancError, OSError, ConnectionError, TimeoutError, ValueError) as e:
+        logger.warning("[启动向导] JNB 连通性测试失败 (code=%s): %s", ErrorCode.DATA_SOURCE_ERROR.value, e)
         print(f"  连接测试失败: {e}")
         return False
 

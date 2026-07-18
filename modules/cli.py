@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 import os
 from pathlib import Path
@@ -30,6 +31,8 @@ from .core.net import disable_proxy
 from .cli_commands import _json_output
 
 # dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
+
+logger = logging.getLogger(__name__)
 
 
 # CLI 中文别名 → screener 英文 criteria 的统一映射
@@ -96,8 +99,11 @@ def _analyze_core(ts_code: str, days: int = 120) -> dict:
                 )
             wave_data = detect_three_waves(daily_klines)
             kirin_data = detect_kirin_stage(daily_klines)
-    except Exception:
-        pass
+    except (ValueError, KeyError, TypeError, AttributeError, IndexError) as e:
+        # 窄化：仅捕获数据解析 / 属性访问 / 索引越界异常，wave/kirin 为可选字段
+        logger.warning("[cli] _analyze_core 主力阶段 / 麒麟阶段检测失败 %s: %s", ts_code, e)
+        wave_data = None
+        kirin_data = None
 
     # 3. 策略信号
     signals = detect_all_strategies(ts_code, days=days)

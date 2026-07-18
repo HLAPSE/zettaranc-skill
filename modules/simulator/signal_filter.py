@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from ..screener import StockScore, analyze_stock
 from ..datasource import DataSource, get_datasource
 from ..indicators import DailyData, calculate_sandglass_score
@@ -27,6 +29,9 @@ from . import (
 from .strategy_adapter import adapt, filter_by_date, deduplicate
 from .resonance_scorer import calculate_resonance
 from .environment_weights import get_weights
+
+
+logger = logging.getLogger(__name__)
 
 
 _REQUIRED_SIGNALS = ("B1", "沙漏完美", "量比攻击", "牛绳金叉")
@@ -48,8 +53,9 @@ def _extract_signals(score: StockScore, klines: list[DailyData]) -> list[str]:
             signals.append("沙漏完美")
         elif sg.get("score", 0) >= 70:
             signals.append("沙漏良好")
-    except Exception:
-        pass
+    except (KeyError, AttributeError, TypeError, ValueError, IndexError) as e:
+        # 调用方通过 signals 列表缺失回退为无标签，自然降级为不附加该信号
+        logger.warning("[signal_filter] 计算沙漏分失败，跳过沙漏信号: %s", e)
 
     # 量比战法
     try:
@@ -59,8 +65,9 @@ def _extract_signals(score: StockScore, klines: list[DailyData]) -> list[str]:
             signals.append("量比攻击")
         elif scene in ("出货日", "弱势日"):
             signals.append("量比恶劣")
-    except Exception:
-        pass
+    except (KeyError, AttributeError, TypeError, ValueError, IndexError) as e:
+        # 调用方通过 signals 列表缺失回退为无标签，自然降级为不附加该信号
+        logger.warning("[signal_filter] 量比战法检测失败，跳过量比信号: %s", e)
 
     # 牛绳
     try:
@@ -69,8 +76,9 @@ def _extract_signals(score: StockScore, klines: list[DailyData]) -> list[str]:
             signals.append("牛绳金叉")
         elif br.get("signal") == "牛绳断":
             signals.append("牛绳断")
-    except Exception:
-        pass
+    except (KeyError, AttributeError, TypeError, ValueError, IndexError) as e:
+        # 调用方通过 signals 列表缺失回退为无标签，自然降级为不附加该信号
+        logger.warning("[signal_filter] 牛绳检测失败，跳过牛绳信号: %s", e)
 
     # 三波 / 麒麟会阶段（从 reason/warning 推断）
     if "建仓波" in reasons:
