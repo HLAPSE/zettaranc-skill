@@ -124,8 +124,8 @@ def generate_signals_from_df(df: pd.DataFrame) -> list[StrategySignal]:
 
     signals = []
     for st_type, mask in all_masks.items():
-        indices = np.where(mask.fillna(False))[0]
-        for idx in indices:  # type: ignore[union-attr]
+        indices = np.where(mask.fillna(False))[0]  # type: ignore[attr-defined]
+        for idx in indices:
             row = df.iloc[idx]
             # 基础属性
             sig = StrategySignal(
