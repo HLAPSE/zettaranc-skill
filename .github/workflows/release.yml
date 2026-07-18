@@ -100,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheel-py${{ matrix.python-version }}
-          path: target/wheels/*.whl
+          path: rust/target/wheels/*.whl
           if-no-files-found: error
           retention-days: 14
 
