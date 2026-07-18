@@ -7,7 +7,9 @@
 #![warn(missing_debug_implementations)]
 
 pub mod error;
+pub mod kline;
 pub mod schema;
 
 pub use error::{CoreError, Result};
+pub use kline::{KLine, KLineSeries};
 pub use schema::kline_schema;
