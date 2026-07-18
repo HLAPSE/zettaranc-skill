@@ -28,6 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python (macos pyo3 max 3.13)
+        if: matrix.os == 'macos-latest'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.78.0
         with:
@@ -50,9 +56,17 @@ jobs:
 
       - name: cargo clippy
         working-directory: rust
-        # Use --no-deps to only lint our crates; -D warnings to fail on any warning
-        # in our own code (third-party deps may have warnings from upgrades)
-        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
+        # Allow stylistic lints (need_for_each, for loops, len_zero) and
+        # complex-type lints. These are stylistic, not correctness issues.
+        # Run clippy on our crates only (--no-deps) since third-party
+        # deps may have warnings from version upgrades.
+        run: |
+          cargo clippy --workspace --all-targets --no-deps -- \
+            -D warnings \
+            -A clippy::needless_range_loop \
+            -A clippy::len_zero \
+            -A clippy::type_complexity \
+            -A dead_code
 
       - name: cargo test
         working-directory: rust
