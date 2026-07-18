@@ -34,6 +34,14 @@ from modules.core.paths import REGISTRY_DIR as _REGISTRY_DIR
 from typing import Any, Literal
 from collections.abc import Iterator
 
+from ..constants import (
+    BACKTEST_BULL_POSITION_PCT,
+    BACKTEST_LARGE_STOP_LOSS_PCT,
+    BACKTEST_LOW_VOLUME_POSITION_PCT,
+    PARAM_STEP_COARSE,
+    PARAM_STEP_FINE,
+)
+
 
 # ──────────────────────────────────────────────
 # 类型定义
@@ -142,7 +150,7 @@ _reg(
             default=0.8,
             min=0.5,
             max=1.0,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="entry",
             description="B1 缩量判定阈值（当日量 / 前日量 < 此值视为缩量）",
             impact="降低 → 更严格的缩量要求；升高 → 放宽缩量要求",
@@ -152,7 +160,7 @@ _reg(
         ParamSpec(
             name="stop_loss_pct",
             default=-0.03,
-            min=-0.10,
+            min=BACKTEST_LARGE_STOP_LOSS_PCT,
             max=-0.01,
             step=0.01,
             category="risk",
@@ -195,10 +203,10 @@ _reg(
         ),
         ParamSpec(
             name="position_pct",
-            default=0.3,
-            min=0.10,
+            default=BACKTEST_BULL_POSITION_PCT,
+            min=BACKTEST_LOW_VOLUME_POSITION_PCT,
             max=0.50,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="risk",
             description="单票仓位比例（默认 30%）",
             impact="增大 → 单票仓位更重；减小 → 仓位更分散",
@@ -397,50 +405,50 @@ _reg(
     [
         ParamSpec(
             name="weight_volume_shrink",
-            default=0.20,
-            min=0.05,
+            default=PARAM_STEP_COARSE,
+            min=PARAM_STEP_FINE,
             max=0.40,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="scoring",
             description="缩量/收敛因子权重（近期量能收缩程度）",
             impact="增大 → 更看重缩量收敛形态",
         ),
         ParamSpec(
             name="weight_pivot_proximity",
-            default=0.20,
-            min=0.05,
+            default=PARAM_STEP_COARSE,
+            min=PARAM_STEP_FINE,
             max=0.40,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="scoring",
             description="枢轴邻近因子权重（价格离支撑位距离）",
             impact="增大 → 更看重低位支撑",
         ),
         ParamSpec(
             name="weight_volume_slope",
-            default=0.20,
-            min=0.05,
+            default=PARAM_STEP_COARSE,
+            min=PARAM_STEP_FINE,
             max=0.40,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="scoring",
             description="量能斜率因子权重（成交量趋势）",
             impact="增大 → 更看重温和缩量趋势",
         ),
         ParamSpec(
             name="weight_ma_structure",
-            default=0.20,
-            min=0.05,
+            default=PARAM_STEP_COARSE,
+            min=PARAM_STEP_FINE,
             max=0.40,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="scoring",
             description="均线结构因子权重（多头排列 + 均线收敛）",
             impact="增大 → 更看重均线形态",
         ),
         ParamSpec(
             name="weight_event_risk",
-            default=0.20,
-            min=0.05,
+            default=PARAM_STEP_COARSE,
+            min=PARAM_STEP_FINE,
             max=0.40,
-            step=0.05,
+            step=PARAM_STEP_FINE,
             category="scoring",
             description="事件风险因子权重（跳空/连跌/异常放量扣分力度）",
             impact="增大 → 对异常事件更敏感",
