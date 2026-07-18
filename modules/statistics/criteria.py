@@ -211,7 +211,9 @@ def validate_strategy(
                     passed=monte_carlo_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA,
                     actual_value=f"p={monte_carlo_result.p_value:.4f}",
                     threshold=f"p<{STATISTICS_SIGNIFICANCE_ALPHA}",
-                    message="策略显著优于随机" if monte_carlo_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA else "策略可能是数据挖掘产物",
+                    message="策略显著优于随机"
+                    if monte_carlo_result.p_value < STATISTICS_SIGNIFICANCE_ALPHA
+                    else "策略可能是数据挖掘产物",
                 )
             )
         else:

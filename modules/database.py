@@ -1022,8 +1022,8 @@ def save_klines(klines: list[dict[str, Any]]) -> int:
                 # 窄化：仅捕获 DB / OS / 序列化相关异常，单条失败不阻塞批量
                 logger.warning(
                     "[database] 保存 K 线失败 %s %s: %s",
-                    kline.get('ts_code'),
-                    kline.get('trade_date'),
+                    kline.get("ts_code"),
+                    kline.get("trade_date"),
                     e,
                 )
                 continue

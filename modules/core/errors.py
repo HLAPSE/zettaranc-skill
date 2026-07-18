@@ -8,10 +8,10 @@
 - 最小骨架：当前仅试点 tushare_client / datasource / cli 顶层，其余模块后续版本接入
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """统一错误码"""
 
     CONFIG_MISSING = "CONFIG_MISSING"  # 配置缺失（Token / API 地址未配置）

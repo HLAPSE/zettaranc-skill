@@ -18,6 +18,7 @@
         python - 强制使用 Python（跳过 _core_compute 导入）
         auto   - 优先 Rust；导入失败则降级 Python
 """
+
 from __future__ import annotations
 
 import os
@@ -33,9 +34,7 @@ def get_impl_choice() -> ImplChoice:
     """读取并校验 ZETTARANC_BACKTEST_IMPL 环境变量。"""
     raw = os.getenv("ZETTARANC_BACKTEST_IMPL", _DEFAULT_IMPL).lower()
     if raw not in ("rust", "python", "auto"):
-        raise ValueError(
-            f"invalid ZETTARANC_BACKTEST_IMPL={raw!r}; expected one of: rust, python, auto"
-        )
+        raise ValueError(f"invalid ZETTARANC_BACKTEST_IMPL={raw!r}; expected one of: rust, python, auto")
     return raw  # type: ignore[return-value]
 
 

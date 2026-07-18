@@ -304,6 +304,7 @@ class TrackingSyncer:
             signal_type = "NONE"
             signal_score = 0
             signal_reason = ""
+            ts_code = kline_data.get("ts_code", "") if kline_data else ""
 
             j_value = indicator_data.get("j_value")
             bbi = indicator_data.get("bbi")

@@ -12,8 +12,6 @@ from typing import Protocol, runtime_checkable
 import pandas as pd
 import requests
 
-logger = logging.getLogger(__name__)
-
 from .bridge_client import (
     BridgeConfig,
     get_all_stocks_bridge_first,
@@ -25,6 +23,8 @@ from .database import get_connection, save_klines
 from .indevs_client import IndevsClient
 from .tushare_client import TushareClient
 from modules.core.errors import ErrorCode, ZettarancError
+
+logger = logging.getLogger(__name__)
 
 # get_kline_dicts 的固定返回列（与 SELECT 顺序一致，用于元组转 dict）
 _KLINE_COLUMNS = ("ts_code", "trade_date", "open", "high", "low", "close", "vol", "amount", "pct_chg")

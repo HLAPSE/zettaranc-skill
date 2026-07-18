@@ -115,7 +115,14 @@ def _load_klines_with_precheck(
                     skipped=False,
                 )
             )
-        except (sqlite3.Error, OSError, KeyError, ValueError, AttributeError, TypeError) as e:  # 单股加载失败不应中断整个组合
+        except (
+            sqlite3.Error,
+            OSError,
+            KeyError,
+            ValueError,
+            AttributeError,
+            TypeError,
+        ) as e:  # 单股加载失败不应中断整个组合
             logger.warning("加载 %s 失败: %s", code, e)
             results.append(
                 StockResult(
@@ -165,8 +172,10 @@ def _run_single_stock_backtest(
                     klines = get_kline_data(ts_code, days)
                     if klines:
                         kline_dicts = [
-                            k.model_dump() if hasattr(k, "model_dump")
-                            else dict(k.__dict__) if hasattr(k, "__dict__")
+                            k.model_dump()
+                            if hasattr(k, "model_dump")
+                            else dict(k.__dict__)
+                            if hasattr(k, "__dict__")
                             else {
                                 "trade_date": getattr(k, "trade_date", ""),
                                 "open": getattr(k, "open", 0.0),
@@ -195,10 +204,15 @@ def _run_single_stock_backtest(
                             skipped=False,
                             equity_curve=list(equity_curve),
                         )
-                except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:  # 单 Rust call 失败不应中断流水线
-                    logger.warning(
-                        "verify: Rust 回测 %s 失败，fallback Python: %s", ts_code, e
-                    )
+                except (
+                    OSError,
+                    KeyError,
+                    ValueError,
+                    AttributeError,
+                    TypeError,
+                    RuntimeError,
+                ) as e:  # 单 Rust call 失败不应中断流水线
+                    logger.warning("verify: Rust 回测 %s 失败，fallback Python: %s", ts_code, e)
 
         # Python fallback
         # backtest_shaofu_single 返回 ShaofuBacktestResult（dataclass）
@@ -216,7 +230,14 @@ def _run_single_stock_backtest(
             skipped=False,
             equity_curve=list(getattr(result, "equity_curve", [])),
         )
-    except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:  # 单股回测失败不应中断整个组合
+    except (
+        OSError,
+        KeyError,
+        ValueError,
+        AttributeError,
+        TypeError,
+        RuntimeError,
+    ) as e:  # 单股回测失败不应中断整个组合
         logger.warning("回测 %s 失败: %s", ts_code, e)
         return StockResult(
             ts_code=ts_code,

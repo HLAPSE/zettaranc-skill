@@ -10,6 +10,7 @@
 不依赖真实 _core_compute（maturin build），用 fake 模块替代。
 不依赖数据库：用 mock 替代 backtest_shaofu_single / get_kline_data。
 """
+
 from __future__ import annotations
 
 import importlib
@@ -74,6 +75,7 @@ def _isolate_rust_test_state():
     saved_pkg_attr = _SENTINEL
     try:
         import modules as _pkg
+
         if "backtest_six_step" in _pkg.__dict__:
             saved_pkg_attr = _pkg.__dict__["backtest_six_step"]
     except Exception:
@@ -95,12 +97,14 @@ def _isolate_rust_test_state():
         if saved_pkg_attr is not _SENTINEL:
             try:
                 import modules as _pkg
+
                 _pkg.backtest_six_step = saved_pkg_attr
             except Exception:
                 pass
         else:
             try:
                 import modules as _pkg
+
                 _pkg.__dict__.pop("backtest_six_step", None)
             except Exception:
                 pass
@@ -472,10 +476,7 @@ def test_bridge_shaofu_single_silent_fallback_when_rust_raises(fake_rust_module,
     assert result["ts_code"] == "600487.SH"
     assert result["total_trades"] == 1
     # 日志应包含 warning（message 含 "falling back" 或 "fallback"）
-    assert any(
-        "Rust" in r.message and ("fall" in r.message)
-        for r in caplog.records
-    ), (
+    assert any("Rust" in r.message and ("fall" in r.message) for r in caplog.records), (
         f"expected a Rust fallback warning, got: {[r.message for r in caplog.records]}"
     )
 
@@ -741,9 +742,7 @@ def test_verify_pipeline_uses_rust_when_available(fake_rust_module):
         original_bs = verify_pipeline.backtest_shaofu_single
         verify_pipeline.backtest_shaofu_single = MagicMock()
         try:
-            result = verify_pipeline._run_single_stock_backtest(
-                "600487.SH", days=250, config=None
-            )
+            result = verify_pipeline._run_single_stock_backtest("600487.SH", days=250, config=None)
         finally:
             verify_pipeline.backtest_shaofu_single = original_bs
     finally:
@@ -785,9 +784,7 @@ def test_verify_pipeline_falls_back_to_python(no_rust_module):
         original = verify_pipeline.backtest_shaofu_single
         verify_pipeline.backtest_shaofu_single = tracker
         try:
-            result = verify_pipeline._run_single_stock_backtest(
-                "600487.SH", days=250
-            )
+            result = verify_pipeline._run_single_stock_backtest("600487.SH", days=250)
         finally:
             verify_pipeline.backtest_shaofu_single = original
 

@@ -12,10 +12,12 @@
 - silent fallback（try/except + log warning + Python 路径）应该封装在一处
 - 后续若 Rust screener 暴露 `screen_stocks_py`，bridge 也是统一的接入点
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from modules.core._rust_compat import compute_func as _rust_compat_compute_func
 
@@ -293,10 +295,7 @@ def bridge_grid_search(
 
     try:
         # K 线转 dict
-        klines_payload = {
-            code: [_kline_to_dict(k) for k in series]
-            for code, series in klines_by_code.items()
-        }
+        klines_payload = {code: [_kline_to_dict(k) for k in series] for code, series in klines_by_code.items()}
         return fn(base_config, param_grid, splits, klines_payload)
     except Exception as e:
         logger.warning("Rust grid search failed, falling back: %s", e)

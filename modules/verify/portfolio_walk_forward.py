@@ -193,9 +193,17 @@ DEFAULT_PORTFOLIO_PARAM_SPACE: list[ParamDimension] = [
     # J 值阈值（B1 入场）：负值更激进，12 是默认
     ParamDimension("j_threshold", "choice", choices=[6, 12, 18]),
     # 单笔仓位比例（default / bull / very_high）
-    ParamDimension("position_pct", "choice", choices=[BACKTEST_DEFAULT_MAX_POSITION_PCT, BACKTEST_BULL_POSITION_PCT, BACKTEST_VERY_HIGH_POSITION_PCT]),
+    ParamDimension(
+        "position_pct",
+        "choice",
+        choices=[BACKTEST_DEFAULT_MAX_POSITION_PCT, BACKTEST_BULL_POSITION_PCT, BACKTEST_VERY_HIGH_POSITION_PCT],
+    ),
     # 止损比例（tight / default / high_vol → 宽到紧）
-    ParamDimension("stop_loss_pct", "choice", choices=[BACKTEST_TIGHT_STOP_LOSS_PCT, BACKTEST_DEFAULT_STOP_LOSS_PCT, BACKTEST_HIGH_VOL_STOP_LOSS_PCT]),
+    ParamDimension(
+        "stop_loss_pct",
+        "choice",
+        choices=[BACKTEST_TIGHT_STOP_LOSS_PCT, BACKTEST_DEFAULT_STOP_LOSS_PCT, BACKTEST_HIGH_VOL_STOP_LOSS_PCT],
+    ),
     # ATR 止损距离倍数（1.5 / 2.0 / 3.0）
     ParamDimension("atr_stop_multiplier", "choice", choices=[1.5, 2.0, 3.0]),
 ]

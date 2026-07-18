@@ -212,9 +212,7 @@ def cmd_backtest(args) -> None:
         #   - ZETTARANC_BACKTEST_IMPL=python：compute_func 返回 None 直接走 Python
 
         if dict_result.get("total_trades", 0) == 0:
-            _warn(
-                f"{ts_code} 在 {days} 天内无交易记录（数据不足或无信号触发）"
-            )
+            _warn(f"{ts_code} 在 {days} 天内无交易记录（数据不足或无信号触发）")
         if use_json:
             _json_output(dict_result)
         else:
@@ -256,9 +254,7 @@ def cmd_backtest(args) -> None:
 
             dict_single = bridge_shaofu_single(ts_codes[0], days=days)
             if dict_single.get("total_trades", 0) == 0:
-                _warn(
-                    f"{ts_codes[0]} 在 {days} 天内无交易记录（数据不足或无信号触发）"
-                )
+                _warn(f"{ts_codes[0]} 在 {days} 天内无交易记录（数据不足或无信号触发）")
             if use_json:
                 _json_output(dict_single)
             else:

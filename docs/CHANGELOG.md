@@ -46,6 +46,17 @@
 
 `COMMENTARY_FAILED`, `TRADE_REVIEW_FAILED`, `CONFIG_PARSE_FAILED`, `CLI_COMMAND_FAILED`, `INTENT_CHAT_FAILED`, `NOTIFIER_FAILED`, `MONITOR_FAILED`, `PORTFOLIO_DIAGNOSIS_FAILED`, `SETUP_WIZARD_FAILED`, `HARNESS_UPDATE_FAILED`, `WATCHLIST_FAILED`, `CLI_TOPLEVEL_FAILED`, `INDEVS_REQUEST_FAILED`, `KNOWLEDGE_RETRIEVER_FAILED`, `BRIDGE_CLIENT_FAILED`, `IMPROVEMENT_LOGGER_FAILED`, `BACKTEST_SIX_STEP_FAILED`, `TRADE_PARSER_FAILED`, `SCREENER_CRITERIA_FAILED`, `SCREENER_SCORING_FAILED`, `SCREENER_ENGINE_FAILED`, `KIRIN_DETECTOR_FAILED`, `DATA_LAYER_FAILED`, `VERIFY_PIPELINE_FAILED`, `VERIFY_PORTFOLIO_WF_FAILED`, `VERIFY_POOL_FAILED`, `VERIFY_SCORER_FAILED`, `VERIFY_WALK_FORWARD_FAILED`, `SELL_SIGNALS_FAILED`, `BACKTEST_SCORER_FAILED`, `PARAM_REGISTRY_FAILED`, `REFLEX_BLACKLIST_FAILED`, `MARKET_CONTEXT_FAILED`, `SIGNAL_FILTER_FAILED`, `SIMULATOR_RUN_FAILED`
 
+### CI Fixes (lint workflow 转绿)
+
+- `modules/core/errors.py`: `ErrorCode(str, Enum)` → `ErrorCode(StrEnum)` (UP042)
+- `modules/improvement_logger.py`: 删除 `IOError` 别名 3 处（UP024，Python 3.10+ `IOError` 已是 `OSError`）
+- `modules/screener/engine.py`: `from concurrent.futures.process import BrokenProcessPool` (F821，正确捕获 ProcessPoolExecutor 失败)
+- `modules/tracking_syncer.py`: `_detect_signal` 顶部从 `kline_data` 提取 `ts_code`，修复 except 块未定义引用 (F821)
+- `modules/datasource.py` / `modules/portfolio_diagnosis.py`: imports 移到文件头部 (E402)
+- `modules/backtest/_rust_bridge.py`: `from collections.abc import Callable` (UP035)
+- `tests/test_simulator_errors.py`: 移除未使用变量 `date` (F841)
+- `ruff format` 应用于 15 个 trailing-newline / indent 已修复文件（M4 + M5 引入）
+
 ### 已知 Follow-ups
 
 - 8 条 PyO3 0.23 deprecation warning（`ToPyObject::to_object` 等）— 后续 PR 升级到 `IntoPyObject`

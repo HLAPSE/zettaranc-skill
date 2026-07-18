@@ -51,9 +51,7 @@ def test_hot_file_no_bare_except_exception(relpath):
             if isinstance(node.type, ast.Name) and node.type.id == "Exception":
                 bad.append((node.lineno, ast.unparse(node)))
 
-    assert not bad, (
-        f"{relpath} 仍有 bare `except Exception`: " + ", ".join(f"L{ln}: {code}" for ln, code in bad)
-    )
+    assert not bad, f"{relpath} 仍有 bare `except Exception`: " + ", ".join(f"L{ln}: {code}" for ln, code in bad)
 
 
 def test_hot_files_no_pass_only_except_blocks():
@@ -342,7 +340,16 @@ class TestTrackingSyncerExcept:
         with caplog.at_level(logging.WARNING):
             result = syncer._detect_signal(
                 {"j_value": -15, "vol_ratio": None, "macd_dif": 0, "macd_dea": 0},
-                {"ts_code": "TEST.SH", "trade_date": "20260101", "open": 10, "high": 11, "low": 9, "close": 10, "pct_chg": 0, "vol": 100},
+                {
+                    "ts_code": "TEST.SH",
+                    "trade_date": "20260101",
+                    "open": 10,
+                    "high": 11,
+                    "low": 9,
+                    "close": 10,
+                    "pct_chg": 0,
+                    "vol": 100,
+                },
                 {"open": 10, "high": 10.5, "low": 9.5, "close": 10, "pct_chg": 4, "vol": 0},
             )
         # 零除法可能导致 ValueError 或 ZeroDivisionError, 都应被 catch

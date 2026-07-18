@@ -91,7 +91,6 @@ class TradeParser:
 
     def _parse_json(self, text: str) -> ParseResult:
         """解析JSON格式"""
-        import json
 
         try:
             data = json.loads(text)

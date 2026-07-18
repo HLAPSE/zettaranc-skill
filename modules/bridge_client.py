@@ -109,7 +109,14 @@ def is_bridge_available(config: BridgeConfig | None = None) -> bool:
     try:
         resp = _http_get("/health", config=cfg)
         return resp.get("status") == "ok"
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, json.JSONDecodeError, ValueError) as e:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+        json.JSONDecodeError,
+        ValueError,
+    ) as e:
         # 窄化：仅捕获 URL / 超时 / OS / JSON 异常，健康检查失败返回 False
         logger.warning("[bridge_client] is_bridge_available 健康检查失败: %s", e)
         return False
@@ -161,7 +168,16 @@ def get_bridge_daily(
             data = data[-days:]
 
         return data
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+        json.JSONDecodeError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as e:
         # 窄化：仅捕获 URL / 超时 / OS / JSON / 字段解析异常，回退到空列表
         logger.warning("[bridge_client] get_bridge_daily 失败 %s: %s", ts_code, e)
         return []
@@ -188,7 +204,16 @@ def get_bridge_stock_list(exchange: str | None = None, config: BridgeConfig | No
     try:
         resp = _http_get("/stocks", params, config=config)
         return resp.get("stocks", [])
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+        json.JSONDecodeError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as e:
         # 窄化：仅捕获 URL / 超时 / OS / JSON / 字段解析异常，回退到空列表
         logger.warning("[bridge_client] get_bridge_stock_list 失败: %s", e)
         return []
@@ -230,7 +255,16 @@ def query_bridge_local(
     try:
         resp = _http_post("/query/local", body)
         return resp.get("data", [])
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+        json.JSONDecodeError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as e:
         # 窄化：仅捕获 URL / 超时 / OS / JSON / 字段解析异常，回退到空列表
         logger.warning("[bridge_client] query_bridge_local %s 失败: %s", table_name, e)
         return []
@@ -252,7 +286,16 @@ def query_bridge_sql(sql: str) -> list[dict]:
     try:
         resp = _http_post("/query/sql", {"sql": sql})
         return resp.get("data", [])
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        TimeoutError,
+        json.JSONDecodeError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as e:
         # 窄化：仅捕获 URL / 超时 / OS / JSON / 字段解析异常，回退到空列表
         logger.warning("[bridge_client] query_bridge_sql 失败: %s", e)
         return []

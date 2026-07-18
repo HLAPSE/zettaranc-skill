@@ -22,9 +22,7 @@ from modules.simulator import SimulationConfig, SimulationResult, MarketRegime, 
 
 
 def _ctx():
-    return MarketContext(
-        date="20260101", regime=MarketRegime.NEUTRAL, index_trend=50, breadth=0, moneyflow_score=50
-    )
+    return MarketContext(date="20260101", regime=MarketRegime.NEUTRAL, index_trend=50, breadth=0, moneyflow_score=50)
 
 
 def test_run_simulation_invalid_initial_capital_raises():
@@ -105,7 +103,6 @@ def test_run_simulation_success_returns_result():
     # 构造 60 根 K 线 + 1 个 PASS 信号
     klines = []
     for i in range(90):
-        date = f"2026{i:02d}01" if i < 10 else "20260101"
         klines.append(
             type(
                 "K",
@@ -159,9 +156,7 @@ def test_run_simulation_success_returns_result():
                         reasons=[],
                         warnings=[],
                     )
-                    result = run_simulation(
-                        ts_codes=["600519.SH"], days=30, datasource=mock_ds
-                    )
+                    result = run_simulation(ts_codes=["600519.SH"], days=30, datasource=mock_ds)
     assert isinstance(result, SimulationResult)
 
 

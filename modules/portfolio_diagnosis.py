@@ -10,17 +10,12 @@
 5. 止损/止盈位提示
 """
 
-from typing import Any, Optional
 import logging
 import sqlite3
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 from .core.errors import ErrorCode
-
-# dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
-
-logger = logging.getLogger(__name__)
-
 from .datasource import daily_to_dict
 from .indicators import (
     analyze_stock,
@@ -34,6 +29,10 @@ from .indicators import (
     detect_kirin_stage,
 )
 from .strategies import detect_all_strategies, StrategyType
+
+# dotenv 加载已移至 modules/__init__.py（包级别一次性加载）
+
+logger = logging.getLogger(__name__)
 
 # 向后兼容别名
 _daily_to_dict = daily_to_dict

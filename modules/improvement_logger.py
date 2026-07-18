@@ -70,7 +70,7 @@ class ImprovementLogger:
 
             return True
 
-        except (OSError, IOError, TypeError, ValueError) as e:
+        except (OSError, TypeError, ValueError) as e:
             # 窄化：仅捕获文件 I/O / 序列化异常，记录失败返回 False（best effort）
             logger.warning("[improvement_logger] 记录日志失败 action=%s: %s", action, e)
             return False
@@ -247,7 +247,7 @@ class ImprovementLogger:
             # 返回最新的日志
             return logs[-limit:]
 
-        except (OSError, IOError) as e:
+        except OSError as e:
             # 窄化：仅捕获文件 I/O 异常，读取失败返回空列表（best effort）
             logger.warning("[improvement_logger] 获取日志失败: %s", e)
             return []
@@ -300,7 +300,7 @@ class ImprovementLogger:
                 "latest_optimization": latest_optimization,
             }
 
-        except (OSError, IOError, KeyError, TypeError, AttributeError) as e:
+        except (OSError, KeyError, TypeError, AttributeError) as e:
             # 窄化：仅捕获文件 I/O / 字段访问异常，统计失败返回空字典（best effort）
             logger.warning("[improvement_logger] 获取改进摘要失败: %s", e)
             return {}

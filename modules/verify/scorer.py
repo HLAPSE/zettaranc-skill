@@ -122,7 +122,14 @@ class V10VerifyScorer:
                 fit=fit,
                 params=dict(params),
             )
-        except (OSError, KeyError, ValueError, AttributeError, TypeError, RuntimeError) as e:  # 单次评分失败不应中断爬山
+        except (
+            OSError,
+            KeyError,
+            ValueError,
+            AttributeError,
+            TypeError,
+            RuntimeError,
+        ) as e:  # 单次评分失败不应中断爬山
             logger.warning("V10VerifyScorer 评分异常: %s", e)
             return V10ScoreResult(
                 passed_count=0,

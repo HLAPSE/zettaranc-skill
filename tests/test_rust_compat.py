@@ -1,4 +1,5 @@
 """compat shim 的单元测试。"""
+
 import importlib
 
 import pytest

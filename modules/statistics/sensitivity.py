@@ -233,7 +233,16 @@ def analyze_all_parameters(
     # 定义要分析的参数
     params_to_analyze = [
         ("j_threshold", [5, 8, 10, 12, 15, 18, 20]),
-        ("stop_loss_pct", [BACKTEST_LARGE_STOP_LOSS_PCT, BACKTEST_MID_STOP_LOSS_PCT, BACKTEST_HIGH_VOL_STOP_LOSS_PCT, BACKTEST_DEFAULT_STOP_LOSS_PCT, BACKTEST_TIGHT_STOP_LOSS_PCT]),
+        (
+            "stop_loss_pct",
+            [
+                BACKTEST_LARGE_STOP_LOSS_PCT,
+                BACKTEST_MID_STOP_LOSS_PCT,
+                BACKTEST_HIGH_VOL_STOP_LOSS_PCT,
+                BACKTEST_DEFAULT_STOP_LOSS_PCT,
+                BACKTEST_TIGHT_STOP_LOSS_PCT,
+            ],
+        ),
         ("bbi_break_days", [1, 2, 3, 4]),
         ("vol_shrink_threshold", [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]),
     ]
