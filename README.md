@@ -7,8 +7,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-4.0.3-green)](docs/CHANGELOG.md)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-1179%20passed%20%7C%2015%20skipped-brightgreen)](tests/)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
+[![Rust](https://img.shields.io/badge/rust-1.78%2B-orange)](rust/Cargo.toml)
+[![Tests](https://img.shields.io/badge/tests-1318%20passed%20%7C%2015%20skipped-brightgreen)](tests/)
 [![Quality Gate](https://img.shields.io/badge/quality-12%2F12-blue)](corpus/quality_check.py)
 [![Skill](https://img.shields.io/badge/Skill--Schema--V2-✓-purple)](SKILL.md)
 
@@ -677,7 +678,7 @@ python -m modules.data_sync sync --ts_code 600487.SH --days 120 --indicators
 ### 4. 验证
 
 ```bash
-# 运行测试（892 passed, 11 skipped，共 903 用例 / 52 测试文件）
+# 运行测试（1318 passed, 15 skipped，共 98 测试文件）
 python -m pytest tests/ -v
 
 # 分析一只股票
@@ -703,10 +704,11 @@ python -m modules.cli simulate 000001.SZ --days 250 --atr-sizing --json
 
 | 优先级 | 数据来源 | 需要的配置 | 说明 |
 |--------|---------|-----------|------|
-| 1. Tushare Pro | `TUSHARE_TOKEN` + `TUSHARE_API_URL` | 实时行情、财务数据、资金流向 | 最佳，数据最全 |
-| 2. tushare-data-bridge | `TUSHARE_BRIDGE_ENABLED=auto/always` | HTTP 代理缓存的数据 | Tushare 直连受限时自动回退 |
-| 3. 本地 SQLite | 已执行过 `python -m modules.data_sync sync` | `data/stock_data.db` | 离线 / 限额时的最后保障 |
-| 4. Websearch 模式 | `DATA_MODE=websearch` | 无需任何 Token | 纯框架与历史知识问答，无实时数据 |
+| 1. Indevs | `INDEVS_API_KEY` | Tushare Replay API，配置后优先 | 优先数据源，v3.8.1 新增 |
+| 2. Tushare Pro | `TUSHARE_TOKEN` + `TUSHARE_API_URL` | 实时行情、财务数据、资金流向 | 最佳，数据最全 |
+| 3. tushare-data-bridge | `TUSHARE_BRIDGE_ENABLED=auto/always` | HTTP 代理缓存的数据 | Tushare 直连受限时自动回退 |
+| 4. 本地 SQLite | 已执行过 `python -m modules.data_sync sync` | `data/stock_data.db` | 离线 / 限额时的最后保障 |
+| 5. Websearch 模式 | `DATA_MODE=websearch` | 无需任何 Token | 纯框架与历史知识问答，无实时数据 |
 
 > 即使处于降级路径，本工具也**不会编造价格或信号**，而是明确告知用户当前数据状态。
 
@@ -730,7 +732,7 @@ python -m modules.cli simulate 000001.SZ --days 250 --atr-sizing --json
 
 ## CLI 工具
 
-`zt` 共 **14 个顶层子命令**，覆盖分析、选股、回测、模拟、跟踪、自优化全链路。所有命令支持 `--json`，宿主可直接解析。
+`zt` 共 **15 个顶层子命令**，覆盖分析、选股、回测、模拟、跟踪、自优化全链路。所有命令支持 `--json`，宿主可直接解析。
 
 ### 股票分析
 
@@ -1002,8 +1004,15 @@ zettaranc-skill/
 ├── CLAUDE.md / GEMINI.md         # 各宿主 IDE 启动提示
 ├── LICENSE                       # MIT
 ├── skill.json                    # Skill 元数据
+├── rust/                         # Rust workspace（v4.0.0+，6 crate，PyO3 + Polars + Rayon）
+│   ├── Cargo.toml / Cargo.lock / rust-toolchain.toml
+│   ├── .cargo/config.toml        # macOS aarch64 lld 配置
+│   ├── Dockerfile.test
+│   ├── scripts/                  # build_macos.sh / build-linux.sh / fix_linkedit_alignment.py
+│   └── crates/                   # 6 crate：core_types / indicators / screener / backtest_engine / grid_search / bindings
+├── python/_core_compute/         # maturin 编译产物（Python 包入口）
 ├── docs/                         # 项目文档
-│   ├── CHANGELOG.md              # 版本变更日志（v3.6.0 最新）
+│   ├── CHANGELOG.md              # 版本变更日志（v4.0.3 最新）
 │   ├── USER_GUIDE.md             # 详细使用手册
 │   ├── CONFIG_GUIDE.md           # 配置指南
 │   ├── intent-router-design.md   # 意图路由设计文档
@@ -1029,12 +1038,19 @@ zettaranc-skill/
 │   └── stock_data.db             # SQLite 数据库（15 张核心表 + 4 张自我改进表）
 ├── modules/                      # Python 数据层（约 26,400 行）
 │   ├── __init__.py               # 统一 .env 加载入口
-│   ├── cli.py / cli_commands.py  # CLI 主入口（14 个顶层子命令）
+│   ├── cli.py / cli_commands.py  # CLI 主入口（15 个顶层子命令）
 │   ├── database.py               # SQLite 管理（15 张表 + 事务上下文，WAL）
-│   ├── datasource.py             # 统一数据源协议（Tushare / Bridge / SQLite / Composite）
+│   ├── datasource.py             # 统一数据源协议（Indevs / Bridge / SQLite / Composite）
 │   ├── tushare_client.py         # Tushare Pro API 封装（120 次/分钟限流）
 │   ├── bridge_client.py          # tushare-data-bridge HTTP 客户端（v3.2.0 新增）
+│   ├── indevs_client.py          # Indevs Tushare Replay API 客户端（v3.8.1 新增）
+│   ├── constants.py              # 28+ 命名常量（仓位档/止损档/环境权重/涨跌停等，v4.0.2）
 │   ├── data_sync.py              # 向后兼容 shim → 实际逻辑在 `modules/data_sync/`
+│   ├── core/                     # 公共模块（v3.8+，v3.9.0 大幅扩充，v4.0.x 加 Rust 桥接）
+│   │   ├── __init__.py / atr.py / errors.py / market_context.py / metrics.py
+│   │   ├── net.py / paths.py / walk_forward.py / _rust_compat.py
+│   ├── backtest/                 # 回测子包（v3.8+，v3.10.0 多策略融合，v4.0.2 加 Rust 桥）
+│   │   ├── single.py / portfolio.py / _rust_bridge.py
 │   ├── data_sync/                # 数据同步子包（增量 / 全量 / 限流）
 │   │   ├── rate_limiter.py / indicator_cache.py / fetcher.py
 │   │   ├── syncer.py / cli.py / __main__.py
@@ -1098,7 +1114,7 @@ zettaranc-skill/
 ├── frontend/                     # React 19 + Vite 8 + TS 6 + Tailwind 4 + ECharts 6
 │   ├── src/（pages / components / hooks / stores / styles / lib / api）
 │   └── vite.config.ts            # 端口 5173，代理 /api 到 localhost:8000
-├── tests/                        # 单元测试（pytest，903 用例 / 52 文件，892 passed / 11 skipped）
+├── tests/                        # 单元测试（pytest，1318 passed / 15 skipped，98 测试文件）
 │   ├── conftest.py / test_database.py / test_datasource.py / test_data_sync*.py
 │   ├── test_indicators*.py / test_strategies.py / test_kirin_detector.py / test_wave_theory.py
 │   ├── test_screener*.py / test_backtest*.py / test_loop_engine.py
@@ -1315,6 +1331,18 @@ zettaranc ❯ 平安银行 250 天模拟，A 股真实约束 + ATR 仓位：
 
 | 版本 | 核心变化 |
 |------|---------|
+| **v4.0.3** | 收尾技术债（版本号五处统一、USER_GUIDE 追平、性能优化 6.3x/2.4x、`core/errors.py` 统一错误码扩充至 50 个、`except Exception` 全部收窄、返回类型注解 100%、pandas 3.x spec 锁齐、PyO3 0.23 升级） | ✅ 已完成 |
+| **v4.0.2** | CLI ↔ Rust PyO3 桥（`_rust_bridge.py`、`_rust_compat.py::compute_func`、silent fallback）+ H2/H3/M1/M2/L5/L6 技术债清偿 | ✅ 已完成 |
+| **v4.0.1** | PyO3 运行时打通（macOS LINKEDIT 修复、3 个 backtest binding、35 个 proptest） | ✅ 已完成 |
+| **v4.0.0** | 核心计算链路迁至 Rust（6 crate workspace：core_types / indicators / screener / backtest_engine / grid_search / bindings，PyO3 + Polars + Rayon） | ✅ 已完成 |
+| **v3.10.4** | 发布前止血（版本号统一、文档追平、性能优化、统一错误码最小版） | ✅ 已完成 |
+| **v3.10.3** | 组合回测策略权重按市场环境动态调整 + 各策略贡献度统计（`StrategyStats`） | ✅ 已完成 |
+| **v3.10.2** | 组合回测参数 IS 网格搜索自动寻优（`portfolio_grid_search_optimize()`） | ✅ 已完成 |
+| **v3.10.1** | ATR 动态止损 + 移动止损（`core/atr.py`、`LoopConfig.atr_stop_*` / `trailing_stop_*`） | ✅ 已完成 |
+| **v3.10.0** | 组合回测引擎多策略融合（B1/B2/SB1/长安并行 + 共振评分，`EntrySignal`） | ✅ 已完成 |
+| **v3.9.0** | 技术债务清理（统一 `PerformanceMetrics` / `MarketRegime` / 路径与常量，新增 `core/paths.py`、`core/net.py`） | ✅ 已完成 |
+| **v3.8.2** | 数据层统一 DB 优先读取 | ✅ 已完成 |
+| **v3.8.1** | 接入 Indevs 数据源 | ✅ 已完成 |
 | **v3.7.3** | 少妇战法 v1.0 验收 walk_forward 真切片（OOS/IS 从假 1.0 → 真 1.91） | ✅ 已完成 |
 | **v3.7.2** | 少妇战法 v1.0 验收 Calmar 加权寻优（4/5 平台确认 + 5/5 路径图） | ✅ 已完成 |
 | **v3.7.1** | 少妇战法 v1.0 验收参数寻优（1/5 → 4/5 passed_count） | ✅ 已完成 |
@@ -1384,14 +1412,22 @@ python corpus/quality_check.py SKILL.md --score     # 输出 0-100 综合分数
 python corpus/dual_axis_review.py SKILL.md
 
 # 单元测试
-python -m pytest tests/ -v     # 892 passed, 11 skipped
+python -m pytest tests/ -v     # 1318 passed, 15 skipped
+
+# Rust 内核测试（73 个）
+cd rust && cargo test --workspace --exclude zt_bindings
+cargo test -p zt_bindings --no-default-features  # pure-Rust 路径
 
 # Lint + Type
 ruff check modules tests
 mypy modules/ --ignore-missing-imports
+
+# Rust 质量检查
+cd rust && cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --no-deps --exclude zt_bindings -- -D warnings
 ```
 
-CI 工作流（`.github/workflows/test.yml`）每周一跑真实数据回归 + 每月跑 SKILL.md 双轴评审。
+CI 工作流（`.github/workflows/test.yml` + `.github/workflows/rust-ci.yml`）每周一跑真实数据回归 + Rust 内核测试。
 
 ---
 
