@@ -425,7 +425,9 @@ def init_database() -> None:
             ON indicator_cache(last_yidong_date)
         """)
 
-        # 3. 资金流向表
+        # 3. 资金流向表（单位：万元，pct_mf 为百分比 %）
+        # 注意：AkShare 仅提供净额，buy_*/sell_* 明细可能为 0；
+        # 下游 strategies/core.py 会用 net_mf 近似 large_inflow/large_outflow
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS moneyflow (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -568,35 +570,7 @@ def init_database() -> None:
             ON watchlist(tags)
         """)
 
-        # 10. Tushare 官方指标缓存表（用于和我们自己算的指标做 diff 验证）
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tushare_indicator_cache (
-                ts_code TEXT NOT NULL,
-                trade_date TEXT NOT NULL,
-                close REAL DEFAULT 0,
-                macd_dif REAL DEFAULT 0,
-                macd_dea REAL DEFAULT 0,
-                macd REAL DEFAULT 0,
-                kdj_k REAL DEFAULT 0,
-                kdj_d REAL DEFAULT 0,
-                kdj_j REAL DEFAULT 0,
-                rsi_6 REAL DEFAULT 0,
-                rsi_12 REAL DEFAULT 0,
-                rsi_24 REAL DEFAULT 0,
-                boll_upper REAL DEFAULT 0,
-                boll_mid REAL DEFAULT 0,
-                boll_lower REAL DEFAULT 0,
-                cci REAL DEFAULT 0,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (ts_code, trade_date)
-            )
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_tushare_ind_date
-            ON tushare_indicator_cache(ts_code, trade_date DESC)
-        """)
-
-        # 11. LLM 响应耗时日志表
+        # 10. LLM 响应耗时日志表
         # 记录每次 LLM 调用的响应时间、股票代码、日期、模型、是否成功
         # 用于监控 LLM 服务的性能与可用性
         cursor.execute("""

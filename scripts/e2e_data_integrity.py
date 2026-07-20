@@ -86,7 +86,6 @@ with get_connection() as conn:
         "trade_records",
         "sync_log",
         "watchlist",
-        "tushare_indicator_cache",
     }
     for t in sorted(expected_tables):
         check(f"表 {t} 存在", t in tables)
@@ -571,37 +570,8 @@ else:
     print("  ❌ sync_log 读取失败")
 
 # ============================================================
-# ---- 10. tushare_indicator_cache 写入/读取 ----
-print("\n[10] tushare_indicator_cache 表（Tushare官方指标）")
-with get_connection() as conn:
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO tushare_indicator_cache
-        (ts_code, trade_date, close, macd_dif, macd_dea, macd,
-         kdj_k, kdj_d, kdj_j, rsi_6, rsi_12, rsi_24,
-         boll_upper, boll_mid, boll_lower, cci)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        ("000001.SZ", "20250103", 11.0, 0.85, 0.62, 0.46, 72.5, 68.3, 80.9, 65.0, 60.0, 55.0, 11.5, 10.8, 10.1, 120.0),
-    )
-    cursor.execute("SELECT * FROM tushare_indicator_cache WHERE ts_code = '000001.SZ'")
-    tic = cursor.fetchone()
-
-if tic:
-    check("写入+读取成功", True)
-    check("macd_dif", abs(tic["macd_dif"] - 0.85) < 0.01, f"实际: {tic['macd_dif']}")
-    check("kdj_k", abs(tic["kdj_k"] - 72.5) < 0.01, f"实际: {tic['kdj_k']}")
-    check("rsi_6", abs(tic["rsi_6"] - 65.0) < 0.01, f"实际: {tic['rsi_6']}")
-    check("boll_mid", abs(tic["boll_mid"] - 10.8) < 0.01, f"实际: {tic['boll_mid']}")
-    check("cci", abs(tic["cci"] - 120.0) < 0.01, f"实际: {tic['cci']}")
-else:
-    FAIL += 1
-    print("  ❌ tushare_indicator_cache 读取失败")
-
-# ============================================================
-# ---- 11. 跨表关联测试 ----
-print("\n[11] 跨表关联查询测试")
+# ---- 10. 跨表关联测试 ----
+print("\n[10] 跨表关联查询测试")
 with get_connection() as conn:
     cursor = conn.cursor()
     # K线 + 指标缓存 JOIN

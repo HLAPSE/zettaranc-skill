@@ -83,12 +83,12 @@ def test_score_handles_pipeline_exception_without_crashing():
 
     with patch(
         "modules.verify.scorer.verify_v10_pipeline",
-        side_effect=RuntimeError("Tushare rate limit"),
+        side_effect=RuntimeError("data source rate limit"),
     ):
         out = scorer.score({"j_threshold": 12})
 
     assert out.passed_count == 0
-    assert "Tushare rate limit" in out.error
+    assert "data source rate limit" in out.error
     assert out.fit == 0.0
 
 

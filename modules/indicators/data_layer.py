@@ -356,7 +356,7 @@ def get_realtime_data(ts_code: str) -> DailyData | None:
     获取实时/最新行情数据
     需要外部传入实时数据，这里仅作为数据结构定义
     """
-    # 实际使用时由 tushare_client 获取实时数据
+    # 实际使用时由数据源客户端获取实时数据
     pass
 
 

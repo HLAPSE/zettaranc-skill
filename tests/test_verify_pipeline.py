@@ -16,8 +16,7 @@ from modules.verify.pipeline import (
     verify_v10_pipeline,
 )
 
-# 真实数据回归：未配置 TUSHARE_TOKEN 时整条测试 skip
-_TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "")
+# 真实数据回归：未配置 RUN_REALDATA=true 时跳过
 _RUN_REALDATA = os.environ.get("RUN_REALDATA", "").lower() == "true"
 
 
@@ -58,11 +57,11 @@ def test_load_klines_skips_short_history():
 
 @pytest.mark.realdata
 @pytest.mark.skipif(
-    not _TUSHARE_TOKEN or not _RUN_REALDATA,
-    reason="需配置 TUSHARE_TOKEN 并设置 RUN_REALDATA=true 才能跑真实数据回归",
+    not _RUN_REALDATA,
+    reason="需设置 RUN_REALDATA=true 才能跑真实数据回归",
 )
 def test_backtest_single_real_stock_returns_metrics():
-    """真实股票回测返回有效指标（无 token 时 skip）"""
+    """真实股票回测返回有效指标（无 RUN_REALDATA=true 时 skip）"""
     result = _run_single_stock_backtest("600519.SH", days=250)
     assert isinstance(result, StockResult)
     assert result.ts_code == "600519.SH"

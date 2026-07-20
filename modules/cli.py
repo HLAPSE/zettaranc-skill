@@ -11,7 +11,6 @@
     python -m modules.cli sync init
     python -m modules.cli sync sync 600487.SH
     python -m modules.cli sync status
-    python -m modules.cli sync stk-factor 600487.SH
 
 设计：所有命令通过 `zt` entry point（已在 pyproject.toml 注册）暴露。
 本文件取代 v2.9.0 散落在 5 个模块的独立 main()（screener / data_sync /
@@ -459,7 +458,7 @@ def cmd_diagnose(args) -> None:
 
 
 def cmd_sync(args) -> None:
-    """数据同步（init / sync / status / stk-factor）"""
+    """数据同步（init / sync / status）"""
     import logging
     from datetime import datetime, timedelta
     from modules.data_sync import DataSyncer
@@ -475,7 +474,7 @@ def cmd_sync(args) -> None:
         print("数据库初始化完成")
 
     elif action == "sync":
-        syncer = DataSyncer(datasource=get_datasource("tushare"))
+        syncer = DataSyncer(datasource=get_datasource("auto"))
         if args.ts_code:
             # 同步单只股票
             syncer.sync_daily_kline(args.ts_code)
@@ -492,22 +491,8 @@ def cmd_sync(args) -> None:
         print("同步完成")
         print(syncer.get_sync_status())
 
-    elif action == "stk-factor":
-        syncer = DataSyncer(datasource=get_datasource("tushare"))
-        if args.ts_code:
-            print(f"正在同步 Tushare 官方指标: {args.ts_code} ...")
-            start_date = (datetime.now() - timedelta(days=args.days)).strftime("%Y%m%d")
-            end_date = datetime.now().strftime("%Y%m%d")
-            count = syncer.sync_stk_factor(args.ts_code, start_date=start_date, end_date=end_date)
-            print(f"同步完成，{count} 条")
-        else:
-            print("正在批量同步 Tushare 官方指标...")
-            results = syncer.sync_all_stk_factor(days=args.days)
-            success = sum(1 for v in results.values() if v > 0)
-            print(f"批量同步完成，成功 {success}/{len(results)}")
-
     elif action == "status":
-        syncer = DataSyncer(datasource=get_datasource("tushare"))
+        syncer = DataSyncer(datasource=get_datasource("auto"))
         status = syncer.get_sync_status()
         print("=" * 50)
         print(f"  数据库: {status.get('db_path', 'N/A')}")
@@ -716,8 +701,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_wl.add_argument("--tags", help="标签，逗号分隔")
     p_wl.add_argument("--json", action="store_true", help="JSON输出（仅 scan 操作）")
 
-    # ── sync（init/sync/status/stk-factor）──
-    p_sync = subparsers.add_parser("sync", help="数据同步（init/sync/status/stk-factor）")
+    # ── sync（init/sync/status）──
+    p_sync = subparsers.add_parser("sync", help="数据同步（init/sync/status）")
     p_sync_sub = p_sync.add_subparsers(dest="sync_action", required=True)
 
     p_sync_sub.add_parser("init", help="初始化数据库")
@@ -729,9 +714,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-indicators", action="store_true", help="跳过指标缓存（单只默认同步，批量需 --indicators）"
     )
     p_sync_sub.add_parser("status", help="查看同步状态")
-    p_sync_factor = p_sync_sub.add_parser("stk-factor", help="同步 Tushare 官方指标（diff 验证用）")
-    p_sync_factor.add_argument("ts_code", nargs="?", help="股票代码（不传 = 全市场）")
-    p_sync_factor.add_argument("--days", type=int, default=365, help="同步天数")
 
     # ── track（自我改进系统 - 跟踪池管理）──
     p_track = subparsers.add_parser("track", help="自我改进系统 - 跟踪池管理")
@@ -889,6 +871,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # 取消代理，避免 Tushare 连接问题（仅脚本直调时，不影响库导入）
+    # 取消代理，避免数据源连接问题（仅脚本直调时，不影响库导入）
     disable_proxy()
     main()

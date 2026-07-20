@@ -1,5 +1,5 @@
 """
-Tushare Data Bridge 客户端
+Data Bridge 客户端
 封装 bridge HTTP API，提供降级网关：bridge 不通时回退到本地 SQLite
 """
 

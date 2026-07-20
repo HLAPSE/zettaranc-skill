@@ -7,11 +7,12 @@ import pytest
 
 from modules.bridge_client import BridgeConfig, get_bridge_config, is_bridge_available
 from modules.datasource import (
+    AkShareDataSource,
+    BaoStockDataSource,
     BridgeDataSource,
     CompositeDataSource,
     DataSource,
     SqliteDataSource,
-    TushareDataSource,
     get_datasource,
 )
 
@@ -41,9 +42,6 @@ class FakeDataSource:
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str):
         return None
 
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str):
-        return None
-
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None):
         return None
 
@@ -52,6 +50,30 @@ class FakeDataSource:
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
         return []
+
+    def get_limit_list(self, trade_date: str):
+        return None
+
+    def get_top_list(self, trade_date: str):
+        return None
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020"):
+        return None
+
+    def get_valuation(self, ts_code: str):
+        return None
+
+    def get_northbound_flow(self, days: int = 30):
+        return None
+
+    def get_margin_data(self, date: str = ""):
+        return None
+
+    def get_industry_board(self):
+        return None
+
+    def get_concept_board(self):
+        return None
 
     def get_kline_dicts(
         self,
@@ -69,37 +91,12 @@ def test_datasource_protocol_runtime_checkable():
     assert isinstance(FakeDataSource(), DataSource)
 
 
-def test_tushare_datasource_name():
-    assert TushareDataSource().name == "tushare"
+def test_baostock_datasource_name():
+    assert BaoStockDataSource().name == "baostock"
 
 
-def test_tushare_datasource_get_kline_dicts_omits_empty_dates(monkeypatch):
-    """未指定起止日期时，不应向 TushareClient.get_daily 传入空字符串。"""
-    captured: list[dict] = []
-
-    def capture_get_daily(self, ts_code, start_date=None, end_date=None):
-        captured.append({"ts_code": ts_code, "start_date": start_date, "end_date": end_date})
-        return pd.DataFrame(
-            [
-                {
-                    "trade_date": "20260101",
-                    "open": 1,
-                    "high": 2,
-                    "low": 0.5,
-                    "close": 1.5,
-                    "vol": 100,
-                    "amount": 150,
-                    "pct_chg": 0.5,
-                }
-            ]
-        )
-
-    monkeypatch.setattr("modules.datasource.TushareClient.get_daily", capture_get_daily)
-    ds = TushareDataSource()
-    result = ds.get_kline_dicts("600519.SH")
-    assert len(result) == 1
-    assert captured[-1]["start_date"] is None
-    assert captured[-1]["end_date"] is None
+def test_akshare_datasource_name():
+    assert AkShareDataSource().name == "akshare"
 
 
 def test_bridge_datasource_name():
@@ -205,19 +202,12 @@ def test_bridge_datasource_default_uses_global_config(monkeypatch):
     assert captured == [None]
 
 
-def test_composite_auto_does_not_use_tushare(monkeypatch, temp_db, db_conn):
-    """auto 策略在 bridge 不可用时回退到 SQLite，不应调用 TushareDataSource。"""
+def test_composite_auto_falls_back_to_sqlite(monkeypatch, temp_db, db_conn):
+    """auto 策略在 bridge 不可用时回退到 SQLite。"""
     from tests.conftest import write_klines_to_db, write_stock_basic
 
     # bridge 不可用
     monkeypatch.setattr("modules.bridge_client.is_bridge_available", lambda config=None: False)
-    # 标记 TushareDataSource.get_kline_dicts 被调用即失败
-    original_get_kline_dicts = TushareDataSource.get_kline_dicts
-
-    def failing_tushare_klines(self, ts_code, days=60, start_date=None, end_date=None):
-        pytest.fail("TushareDataSource.get_kline_dicts should not be called in auto fallback")
-
-    monkeypatch.setattr(TushareDataSource, "get_kline_dicts", failing_tushare_klines)
 
     write_stock_basic(db_conn, ts_code="600519.SH", name="贵州茅台", industry="白酒", market="主板")
     rows = [
@@ -239,15 +229,3 @@ def test_composite_auto_does_not_use_tushare(monkeypatch, temp_db, db_conn):
     data = ds.get_kline_dicts("600519.SH", days=60)
     assert len(data) == 1
     assert data[0]["trade_date"] == "20260101"
-
-    # 恢复原始方法（monkeypatch 会自动恢复，但显式恢复更安全）
-    monkeypatch.setattr(TushareDataSource, "get_kline_dicts", original_get_kline_dicts)
-
-
-def test_composite_auto_does_not_eagerly_construct_tushare(monkeypatch):
-    """auto 模式下 CompositeDataSource 不应在构造时急切创建 TushareDataSource。"""
-    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
-    composite = CompositeDataSource("auto")
-    assert composite._tushare is None
-    result = composite.health_check()
-    assert isinstance(result, bool)

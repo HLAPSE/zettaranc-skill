@@ -9,7 +9,7 @@ def disable_proxy() -> None:
     """
     禁用 HTTP/HTTPS 代理
 
-    用于避免 Tushare 等数据源的连接问题。
+    用于避免数据源的连接问题。
     """
     os.environ["HTTP_PROXY"] = ""
     os.environ["HTTPS_PROXY"] = ""

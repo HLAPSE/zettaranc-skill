@@ -42,14 +42,16 @@
   "requirements": {
     "python": ">=3.10",
     "dependencies": [
-      "tushare",
+      "baostock",
+      "akshare",
       "pandas",
       "python-dotenv",
       "requests"
     ],
     "optional_dependencies": {
       "jnb_mode": [
-        "tushare>=1.4.0"
+        "baostock>=0.8.8",
+        "akshare>=1.14.0"
       ],
       "websearch_mode": []
     }
@@ -74,7 +76,6 @@
         "pip install -r requirements.txt",
         "pip install -e .",
         "cp .env.example .env",
-        "# 编辑 .env 填入 TUSHARE_TOKEN",
         "python -m modules.database",
         "python -m modules.data_sync sync",
         "zt analyze 600519.SH --json"
@@ -93,7 +94,7 @@
       ]
     },
     "jnb": {
-      "description": "完整模式，接入Tushare真实行情",
+      "description": "完整模式，接入 BaoStock + AkShare 真实行情",
       "env": "DATA_MODE=jnb",
       "features": [
         "实时行情分析",
@@ -103,10 +104,7 @@
         "智能选股",
         "Walk-forward参数寻优"
       ],
-      "requirements": [
-        "TUSHARE_TOKEN",
-        "TUSHARE_API_URL"
-      ]
+      "requirements": []
     }
   },
   "capabilities": [

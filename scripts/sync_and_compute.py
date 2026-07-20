@@ -11,7 +11,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from modules.data_sync import DataSyncer
-from modules.tushare_client import TushareClient  # noqa: F401  触发 env / token 校验
 from scripts._common import load_watchlist
 
 

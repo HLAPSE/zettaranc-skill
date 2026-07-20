@@ -133,10 +133,7 @@ jobs:
           pip install pytest
           pip install -e .
 
-      - name: Run real data regression (600519.SH × MACD/KDJ/RSI vs stk_factor)
-        env:
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
-          TUSHARE_API_URL: ${{ secrets.TUSHARE_API_URL }}
+      - name: Run real data regression (600519.SH × MACD/KDJ/RSI)
         run: |
           pytest tests/test_indicators_realdata.py -v --tb=short
 

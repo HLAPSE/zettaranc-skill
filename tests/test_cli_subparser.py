@@ -79,11 +79,11 @@ def test_watchlist_help_lists_all_five_actions():
 
 # ==================== sync 子动作 ====================
 
-EXPECTED_SYNC_ACTIONS = ["init", "sync", "status", "stk-factor"]
+EXPECTED_SYNC_ACTIONS = ["init", "sync", "status"]
 
 
-def test_sync_help_lists_all_four_actions():
-    """zt sync --help 必须列出 4 个 action"""
+def test_sync_help_lists_all_three_actions():
+    """zt sync --help 必须列出 3 个 action"""
     result = run_zt("sync", "--help")
     assert result.returncode == 0
     for action in EXPECTED_SYNC_ACTIONS:
@@ -104,12 +104,6 @@ def test_sync_sync_help():
     # 其余是 flag
     for flag in ("ts_code", "--days", "--indicators", "--skip-indicators"):
         assert flag in result.stdout, f"sync sync --help 缺 {flag}"
-
-
-def test_sync_stk_factor_help():
-    """zt sync stk-factor --help 必须 exit 0"""
-    result = run_zt("sync", "stk-factor", "--help")
-    assert result.returncode == 0
 
 
 # ==================== screen 11 种 strategy 仍被接受 ====================

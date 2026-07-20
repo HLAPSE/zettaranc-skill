@@ -1,7 +1,7 @@
 """
 统一数据源抽象层
 
-定义 DataSource Protocol，并封装 Tushare、Bridge、SQLite、Indevs 以及自动回退的 Composite 数据源。
+定义 DataSource Protocol，并封装 BaoStock、AkShare、Bridge、SQLite 以及自动回退的 Composite 数据源。
 """
 
 import logging
@@ -12,6 +12,7 @@ from typing import Protocol, runtime_checkable
 import pandas as pd
 import requests
 
+from .akshare_client import get_client as get_akshare_client
 from .bridge_client import (
     BridgeConfig,
     get_all_stocks_bridge_first,
@@ -19,9 +20,8 @@ from .bridge_client import (
     is_bridge_available,
     set_bridge_config,
 )
+from .baostock_client import get_client as get_baostock_client
 from .database import get_connection, save_klines
-from .indevs_client import IndevsClient
-from .tushare_client import TushareClient
 from modules.core.errors import ErrorCode, ZettarancError
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class DataSource(Protocol):
 
     @property
     def name(self) -> str:
-        """数据源标识名（tushare / bridge / sqlite / indevs / composite 之一）"""
+        """数据源标识名（bridge / sqlite / composite 之一）"""
         ...
 
     def health_check(self) -> bool:
@@ -63,10 +63,6 @@ class DataSource(Protocol):
         """获取个股每日基础指标（换手率 / PE / PB / 总市值等）"""
         ...
 
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股技术因子（动量 / 量价等）"""
-        ...
-
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
         """获取股票基础信息（行业 / 上市日期 / 股本等）"""
         ...
@@ -77,6 +73,38 @@ class DataSource(Protocol):
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
         """获取股票列表（按交易所）"""
+        ...
+
+    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取涨跌停股票列表"""
+        ...
+
+    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取龙虎榜数据"""
+        ...
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> pd.DataFrame | None:
+        """获取财务分析指标（ROE/ROA/毛利率/净利率等）"""
+        ...
+
+    def get_valuation(self, ts_code: str) -> pd.DataFrame | None:
+        """获取个股估值分析（PE/PB/股息率等）"""
+        ...
+
+    def get_northbound_flow(self, days: int = 30) -> pd.DataFrame | None:
+        """获取北向资金历史流向"""
+        ...
+
+    def get_margin_data(self, date: str = "") -> pd.DataFrame | None:
+        """获取融资融券汇总数据"""
+        ...
+
+    def get_industry_board(self) -> pd.DataFrame | None:
+        """获取行业板块实时行情"""
+        ...
+
+    def get_concept_board(self) -> pd.DataFrame | None:
+        """获取概念板块实时行情"""
         ...
 
     def get_kline_dicts(
@@ -90,77 +118,91 @@ class DataSource(Protocol):
         ...
 
 
-class TushareDataSource:
-    """Tushare Pro API 数据源封装。"""
+class AkShareDataSource:
+    """AkShare 数据源封装（免费数据源，无需 token）。
 
-    def __init__(self, token: str | None = None) -> None:
-        self._client = TushareClient(token)
+    用于补充 BaoStock 不支持的数据：
+    - 资金流向（get_moneyflow）
+    - 实时行情（get_realtime_quote）
+    - 涨跌停列表（get_limit_list）
+    - 龙虎榜（get_top_list）
+    """
+
+    def __init__(self) -> None:
+        self._client = get_akshare_client()
 
     @property
     def name(self) -> str:
-        """数据源标识名（tushare / bridge / sqlite / indevs / composite 之一）"""
-        return "tushare"
+        return "akshare"
 
     def health_check(self) -> bool:
-        """检查数据源连通性；返回 True 表示可用"""
         return self._client.check_connection()
 
     def get_daily(
         self, ts_code: str, start_date: str | None = None, end_date: str | None = None
     ) -> pd.DataFrame | None:
-        """获取个股日线行情（OHLCV + 涨跌幅）"""
-        return self._client.get_daily(ts_code, start_date, end_date)
+        """AkShare 日线（未实现，由 BaoStock 处理）"""
+        return None
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取指数日线行情"""
-        return self._client.get_index_daily(ts_code, start_date, end_date)
+        """AkShare 指数日线（未实现，由 BaoStock 处理）"""
+        return None
 
     def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
-        """获取实时行情快照（多只股票批量查询）"""
+        """获取实时行情快照"""
         return self._client.get_realtime_quote(ts_codes)
 
     def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
-        """获取个股资金流向（特大单 / 大单 / 中单 / 小单）"""
+        """获取个股资金流向"""
         return self._client.get_moneyflow(ts_code, trade_date)
 
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股每日基础指标（换手率 / PE / PB / 总市值等）"""
-        if self._client._pro is None:
-            return None
-        try:
-            return self._client._pro.daily_basic(ts_code=ts_code, start_date=start_date, end_date=end_date)
-        except (requests.RequestException, ValueError, KeyError) as e:
-            # 窄化：仅捕获 HTTP / 数据解析异常，返回 None 让上层回退
-            logger.warning("[datasource] TushareDataSource.get_daily_basic 失败 %s: %s", ts_code, e)
-            return None
-
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股技术因子（动量 / 量价等）"""
-        if self._client._pro is None:
-            return None
-        try:
-            return self._client._pro.stk_factor(ts_code=ts_code, start_date=start_date, end_date=end_date)
-        except (requests.RequestException, ValueError, KeyError) as e:
-            # 窄化：仅捕获 HTTP / 数据解析异常，返回 None 让上层回退
-            logger.warning("[datasource] TushareDataSource.get_stk_factor 失败 %s: %s", ts_code, e)
-            return None
+        """AkShare 不直接提供 daily_basic，返回 None 由 BaoStock 处理"""
+        return None
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
-        """获取股票基础信息（行业 / 上市日期 / 股本等）"""
-        return self._client.get_stock_basic(ts_code, name)
+        """AkShare 股票基础信息（未实现，由 BaoStock 处理）"""
+        return None
 
     def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取交易日历（指定交易所）"""
-        return self._client.get_trade_cal(exchange, start_date, end_date)
+        """AkShare 交易日历（未实现，由 BaoStock 处理）"""
+        return None
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
-        """获取股票列表（按交易所）"""
-        df = self.get_stock_basic()
-        if df is None or df.empty:
-            return []
-        columns = ["ts_code", "name", "industry", "market"]
-        available = [c for c in columns if c in df.columns]
-        return df[available].to_dict("records")
+        """AkShare 股票列表（未实现，由 BaoStock 处理）"""
+        return []
+
+    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取涨跌停股票列表"""
+        return self._client.get_limit_list(trade_date)
+
+    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取龙虎榜数据"""
+        return self._client.get_top_list(trade_date)
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> pd.DataFrame | None:
+        """获取财务分析指标"""
+        return self._client.get_financial_indicator(ts_code, start_year)
+
+    def get_valuation(self, ts_code: str) -> pd.DataFrame | None:
+        """获取个股估值分析"""
+        return self._client.get_valuation(ts_code)
+
+    def get_northbound_flow(self, days: int = 30) -> pd.DataFrame | None:
+        """获取北向资金历史流向"""
+        return self._client.get_northbound_flow(days)
+
+    def get_margin_data(self, date: str = "") -> pd.DataFrame | None:
+        """获取融资融券汇总数据"""
+        return self._client.get_margin_data(date)
+
+    def get_industry_board(self) -> pd.DataFrame | None:
+        """获取行业板块实时行情"""
+        return self._client.get_industry_board()
+
+    def get_concept_board(self) -> pd.DataFrame | None:
+        """获取概念板块实时行情"""
+        return self._client.get_concept_board()
 
     def get_kline_dicts(
         self,
@@ -169,69 +211,89 @@ class TushareDataSource:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> list[dict]:
-        """获取 K 线 dict 列表（含缓存与回退）"""
-        df = self.get_daily(ts_code, start_date, end_date)
-        if df is None or df.empty:
-            return []
-        records = df.to_dict("records")
-        records.sort(key=lambda x: x.get("trade_date", ""))
-        if not start_date and days > 0:
-            records = records[-days:]
-        return records
+        """AkShare K 线（未实现，由 BaoStock 处理）"""
+        return []
 
 
-class IndevsDataSource:
-    """Indevs Tushare Replay API 数据源封装。"""
+class BaoStockDataSource:
+    """BaoStock 数据源封装（免费数据源，无需注册）。
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
-        self._client = IndevsClient(api_key, base_url)
+    作为主力数据源，提供：
+    - 日线/周线/月线/分钟线行情（含 PE/PB/PS/换手率）
+    - 指数行情
+    - 股票列表（含行业分类）
+    - 交易日历
+    """
+
+    def __init__(self) -> None:
+        self._client = get_baostock_client()
 
     @property
     def name(self) -> str:
-        """数据源标识名（tushare / bridge / sqlite / indevs / composite 之一）"""
-        return "indevs"
+        return "baostock"
 
     def health_check(self) -> bool:
-        """检查数据源连通性；返回 True 表示可用"""
-        return self._client.health_check()
+        return self._client.check_connection()
 
     def get_daily(
         self, ts_code: str, start_date: str | None = None, end_date: str | None = None
     ) -> pd.DataFrame | None:
-        """获取个股日线行情（OHLCV + 涨跌幅）"""
-        return self._client.get_daily(ts_code, start_date, end_date)
+        return self._client.get_daily(ts_code, start_date or "", end_date or "")
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取指数日线行情"""
         return self._client.get_index_daily(ts_code, start_date, end_date)
 
     def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
-        """获取实时行情快照（多只股票批量查询）"""
-        return self._client.get_realtime_quote(ts_codes)
+        """BaoStock 不支持实时行情，返回 None 由 AkShare 处理"""
+        return None
 
     def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
-        """获取个股资金流向（特大单 / 大单 / 中单 / 小单）"""
-        return self._client.get_moneyflow(ts_code, trade_date)
+        """BaoStock 不支持资金流向，返回 None 由 AkShare 处理"""
+        return None
 
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股每日基础指标（换手率 / PE / PB / 总市值等）"""
         return self._client.get_daily_basic(ts_code, start_date, end_date)
 
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股技术因子（动量 / 量价等）"""
-        return self._client.get_stk_factor(ts_code, start_date, end_date)
-
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
-        """获取股票基础信息（行业 / 上市日期 / 股本等）"""
         return self._client.get_stock_basic(ts_code, name)
 
     def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取交易日历（指定交易所）"""
         return self._client.get_trade_cal(exchange, start_date, end_date)
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
-        """获取股票列表（按交易所）"""
         return self._client.get_stock_list(exchange)
+
+    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+        """BaoStock 不支持涨跌停列表，返回 None 由 AkShare 处理"""
+        return None
+
+    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+        """BaoStock 不支持龙虎榜，返回 None 由 AkShare 处理"""
+        return None
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> pd.DataFrame | None:
+        """获取财务分析指标（BaoStock 提供基础财务数据）"""
+        return self._client.get_financial_data(ts_code, start_year)
+
+    def get_valuation(self, ts_code: str) -> pd.DataFrame | None:
+        """BaoStock 不提供个股估值分析，返回 None 由 AkShare 处理"""
+        return None
+
+    def get_northbound_flow(self, days: int = 30) -> pd.DataFrame | None:
+        """BaoStock 不支持北向资金，返回 None 由 AkShare 处理"""
+        return None
+
+    def get_margin_data(self, date: str = "") -> pd.DataFrame | None:
+        """BaoStock 不支持融资融券，返回 None 由 AkShare 处理"""
+        return None
+
+    def get_industry_board(self) -> pd.DataFrame | None:
+        """BaoStock 不提供板块行情，返回 None 由 AkShare 处理"""
+        return None
+
+    def get_concept_board(self) -> pd.DataFrame | None:
+        """BaoStock 不提供概念板块，返回 None 由 AkShare 处理"""
+        return None
 
     def get_kline_dicts(
         self,
@@ -240,12 +302,11 @@ class IndevsDataSource:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> list[dict]:
-        """获取 K 线 dict 列表（含缓存与回退）"""
         return self._client.get_kline_dicts(ts_code, days, start_date, end_date)
 
 
 class BridgeDataSource:
-    """Tushare Data Bridge HTTP API 数据源封装。
+    """Data Bridge HTTP API 数据源封装。
 
     支持传入实例级 ``BridgeConfig``，不会修改全局 bridge 配置。
     若未传 config，则使用当前全局配置。
@@ -256,7 +317,7 @@ class BridgeDataSource:
 
     @property
     def name(self) -> str:
-        """数据源标识名（tushare / bridge / sqlite / indevs / composite 之一）"""
+        """数据源标识名（bridge / sqlite / composite 之一）"""
         return "bridge"
 
     def health_check(self) -> bool:
@@ -283,10 +344,6 @@ class BridgeDataSource:
         """获取个股每日基础指标（换手率 / PE / PB / 总市值等）"""
         return None
 
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股技术因子（动量 / 量价等）"""
-        return None
-
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
         """获取股票基础信息（行业 / 上市日期 / 股本等）"""
         return None
@@ -298,6 +355,38 @@ class BridgeDataSource:
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
         """获取股票列表（按交易所）"""
         return get_all_stocks_bridge_first(exchange, config=self._config)
+
+    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取涨跌停股票列表"""
+        return None
+
+    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取龙虎榜数据"""
+        return None
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> pd.DataFrame | None:
+        """获取财务分析指标"""
+        return None
+
+    def get_valuation(self, ts_code: str) -> pd.DataFrame | None:
+        """获取个股估值分析"""
+        return None
+
+    def get_northbound_flow(self, days: int = 30) -> pd.DataFrame | None:
+        """获取北向资金历史流向"""
+        return None
+
+    def get_margin_data(self, date: str = "") -> pd.DataFrame | None:
+        """获取融资融券汇总数据"""
+        return None
+
+    def get_industry_board(self) -> pd.DataFrame | None:
+        """获取行业板块实时行情"""
+        return None
+
+    def get_concept_board(self) -> pd.DataFrame | None:
+        """获取概念板块实时行情"""
+        return None
 
     def get_kline_dicts(
         self,
@@ -315,7 +404,7 @@ class SqliteDataSource:
 
     @property
     def name(self) -> str:
-        """数据源标识名（tushare / bridge / sqlite / indevs / composite 之一）"""
+        """数据源标识名（bridge / sqlite / composite 之一）"""
         return "sqlite"
 
     def health_check(self) -> bool:
@@ -349,10 +438,6 @@ class SqliteDataSource:
         """获取个股每日基础指标（换手率 / PE / PB / 总市值等）"""
         return None
 
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股技术因子（动量 / 量价等）"""
-        return None
-
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
         """获取股票基础信息（行业 / 上市日期 / 股本等）"""
         return None
@@ -374,6 +459,38 @@ class SqliteDataSource:
             cursor.execute(sql, params)
             rows = cursor.fetchall()
         return [dict(row) for row in rows]
+
+    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取涨跌停股票列表"""
+        return None
+
+    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取龙虎榜数据"""
+        return None
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> pd.DataFrame | None:
+        """获取财务分析指标"""
+        return None
+
+    def get_valuation(self, ts_code: str) -> pd.DataFrame | None:
+        """获取个股估值分析"""
+        return None
+
+    def get_northbound_flow(self, days: int = 30) -> pd.DataFrame | None:
+        """获取北向资金历史流向"""
+        return None
+
+    def get_margin_data(self, date: str = "") -> pd.DataFrame | None:
+        """获取融资融券汇总数据"""
+        return None
+
+    def get_industry_board(self) -> pd.DataFrame | None:
+        """获取行业板块实时行情"""
+        return None
+
+    def get_concept_board(self) -> pd.DataFrame | None:
+        """获取概念板块实时行情"""
+        return None
 
     def get_kline_dicts(
         self,
@@ -451,12 +568,14 @@ class SqliteDataSource:
 class CompositeDataSource:
     """组合数据源：按配置优先级自动回退。
 
-    当前实现中，indevs / bridge / SQLite 提供 ``get_stock_list`` 与
-    ``get_kline_dicts`` 两个接口的回退；其余 DataSource 方法仅在
-    ``preferred="tushare"`` 或 ``preferred="indevs"`` 时生效。
+    数据源优先级（auto 模式）：
+    BaoStock（主力：日线/指数/股票列表/交易日历/基础指标）
+      → AkShare（补充：资金流向/实时行情/涨跌停/龙虎榜）
+      → Bridge（HTTP 缓存）
+      → SQLite（离线兜底）
     """
 
-    VALID_PREFERRED = ("auto", "tushare", "indevs", "bridge", "sqlite")
+    VALID_PREFERRED = ("auto", "bridge", "sqlite", "akshare", "baostock")
 
     def __init__(self, preferred: str = "auto") -> None:
         if preferred not in self.VALID_PREFERRED:
@@ -465,26 +584,13 @@ class CompositeDataSource:
                 f"不支持的数据源: {preferred}，仅支持 {' / '.join(self.VALID_PREFERRED)}",
             )
         self._preferred = preferred
+        self._baostock = BaoStockDataSource()
+        self._akshare = AkShareDataSource()
         self._bridge = BridgeDataSource()
         self._sqlite = SqliteDataSource()
-        self._tushare: TushareDataSource | None = None
-        self._indevs: IndevsDataSource | None = None
-
-    @property
-    def _tushare_source(self) -> TushareDataSource:
-        if self._tushare is None:
-            self._tushare = TushareDataSource()
-        return self._tushare
-
-    @property
-    def _indevs_source(self) -> IndevsDataSource:
-        if self._indevs is None:
-            self._indevs = IndevsDataSource()
-        return self._indevs
 
     @property
     def name(self) -> str:
-        """数据源标识名（tushare / bridge / sqlite / indevs / composite 之一）"""
         return f"composite({self._preferred})"
 
     def health_check(self) -> bool:
@@ -493,89 +599,111 @@ class CompositeDataSource:
             return self._bridge.health_check()
         if self._preferred == "sqlite":
             return self._sqlite.health_check()
-        if self._preferred == "tushare":
-            return self._tushare_source.health_check()
-        if self._preferred == "indevs":
-            return self._indevs_source.health_check()
-        return self._indevs_source.health_check() or self._bridge.health_check() or self._sqlite.health_check()
+        if self._preferred == "akshare":
+            return self._akshare.health_check()
+        if self._preferred == "baostock":
+            return self._baostock.health_check()
+        return (
+            self._baostock.health_check()
+            or self._akshare.health_check()
+            or self._bridge.health_check()
+            or self._sqlite.health_check()
+        )
 
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """获取个股日线行情（OHLCV + 涨跌幅）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_daily(ts_code, start_date, end_date)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_daily(ts_code, start_date, end_date)
-        return None
+        if self._preferred == "baostock":
+            return self._baostock.get_daily(ts_code, start_date, end_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_daily(ts_code, start_date, end_date)
+        # auto 模式：优先 BaoStock
+        result = self._baostock.get_daily(ts_code, start_date, end_date)
+        if result is not None:
+            return result
+        return self._akshare.get_daily(ts_code, start_date, end_date)
 
     def get_index_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """获取指数日线行情"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_index_daily(ts_code, start_date, end_date)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_index_daily(ts_code, start_date, end_date)
-        return None
+        if self._preferred == "baostock":
+            return self._baostock.get_index_daily(ts_code, start_date, end_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_index_daily(ts_code, start_date, end_date)
+        result = self._baostock.get_index_daily(ts_code, start_date, end_date)
+        if result is not None:
+            return result
+        return self._akshare.get_index_daily(ts_code, start_date, end_date)
 
     def get_realtime_quote(self, ts_codes: list[str]) -> pd.DataFrame | None:
         """获取实时行情快照（多只股票批量查询）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_realtime_quote(ts_codes)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_realtime_quote(ts_codes)
+        if self._preferred == "baostock":
+            return self._akshare.get_realtime_quote(ts_codes)
+        if self._preferred == "akshare":
+            return self._akshare.get_realtime_quote(ts_codes)
+        # auto 模式：优先 AkShare
+        result = self._akshare.get_realtime_quote(ts_codes)
+        if result is not None:
+            return result
         return None
 
     def get_moneyflow(self, ts_code: str, trade_date: str) -> pd.DataFrame | None:
         """获取个股资金流向（特大单 / 大单 / 中单 / 小单）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_moneyflow(ts_code, trade_date)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_moneyflow(ts_code, trade_date)
+        if self._preferred == "baostock":
+            return self._akshare.get_moneyflow(ts_code, trade_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_moneyflow(ts_code, trade_date)
+        # auto 模式：优先 AkShare
+        result = self._akshare.get_moneyflow(ts_code, trade_date)
+        if result is not None:
+            return result
         return None
 
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """获取个股每日基础指标（换手率 / PE / PB / 总市值等）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_daily_basic(ts_code, start_date, end_date)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_daily_basic(ts_code, start_date, end_date)
-        return None
-
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """获取个股技术因子（动量 / 量价等）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_stk_factor(ts_code, start_date, end_date)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_stk_factor(ts_code, start_date, end_date)
-        return None
+        if self._preferred == "baostock":
+            return self._baostock.get_daily_basic(ts_code, start_date, end_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_daily_basic(ts_code, start_date, end_date)
+        # auto 模式：优先 BaoStock
+        result = self._baostock.get_daily_basic(ts_code, start_date, end_date)
+        if result is not None:
+            return result
+        return self._akshare.get_daily_basic(ts_code, start_date, end_date)
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
         """获取股票基础信息（行业 / 上市日期 / 股本等）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_stock_basic(ts_code, name)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_stock_basic(ts_code, name)
-        return None
+        if self._preferred == "baostock":
+            return self._baostock.get_stock_basic(ts_code, name)
+        if self._preferred == "akshare":
+            return self._akshare.get_stock_basic(ts_code, name)
+        result = self._baostock.get_stock_basic(ts_code, name)
+        if result is not None:
+            return result
+        return self._akshare.get_stock_basic(ts_code, name)
 
     def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """获取交易日历（指定交易所）"""
-        if self._preferred == "auto" and os.environ.get("INDEVS_API_KEY"):
-            return self._indevs_source.get_trade_cal(exchange, start_date, end_date)
-        if self._preferred in ("tushare", "indevs"):
-            return self._indevs_source.get_trade_cal(exchange, start_date, end_date)
-        return None
+        if self._preferred == "baostock":
+            return self._baostock.get_trade_cal(exchange, start_date, end_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_trade_cal(exchange, start_date, end_date)
+        result = self._baostock.get_trade_cal(exchange, start_date, end_date)
+        if result is not None:
+            return result
+        return self._akshare.get_trade_cal(exchange, start_date, end_date)
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
         """获取股票列表（按交易所）"""
         sources: list[DataSource] = []
         if self._preferred == "auto":
-            sources = [self._indevs_source, self._bridge, self._sqlite]
+            sources = [self._baostock, self._akshare, self._bridge, self._sqlite]
         elif self._preferred == "bridge":
             sources = [self._bridge]
         elif self._preferred == "sqlite":
             sources = [self._sqlite]
-        elif self._preferred == "tushare":
-            sources = [self._tushare_source]
-        elif self._preferred == "indevs":
-            sources = [self._indevs_source]
+        elif self._preferred == "akshare":
+            sources = [self._akshare]
+        elif self._preferred == "baostock":
+            sources = [self._baostock]
 
         for source in sources:
             try:
@@ -590,7 +718,6 @@ class CompositeDataSource:
                 KeyError,
                 ZettarancError,
             ) as e:
-                # 窄化：仅捕获 HTTP / DB / 数据解析 / 项目异常，回退到下一源
                 logger.warning(
                     "[datasource] CompositeDataSource.get_stock_list 源 %s 失败: %s",
                     getattr(source, "name", source.__class__.__name__),
@@ -598,6 +725,57 @@ class CompositeDataSource:
                 )
                 continue
         return []
+
+    def get_limit_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取涨跌停股票列表（优先 AkShare）"""
+        if self._preferred == "baostock":
+            return self._akshare.get_limit_list(trade_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_limit_list(trade_date)
+        return self._akshare.get_limit_list(trade_date)
+
+    def get_top_list(self, trade_date: str) -> pd.DataFrame | None:
+        """获取龙虎榜数据（优先 AkShare）"""
+        if self._preferred == "baostock":
+            return self._akshare.get_top_list(trade_date)
+        if self._preferred == "akshare":
+            return self._akshare.get_top_list(trade_date)
+        return self._akshare.get_top_list(trade_date)
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> pd.DataFrame | None:
+        """获取财务分析指标（优先 AkShare，BaoStock 补充）"""
+        if self._preferred == "baostock":
+            return self._baostock.get_financial_indicator(ts_code, start_year)
+        if self._preferred == "akshare":
+            return self._akshare.get_financial_indicator(ts_code, start_year)
+        result = self._akshare.get_financial_indicator(ts_code, start_year)
+        if result is not None:
+            return result
+        return self._baostock.get_financial_indicator(ts_code, start_year)
+
+    def get_valuation(self, ts_code: str) -> pd.DataFrame | None:
+        """获取个股估值分析（优先 AkShare）"""
+        if self._preferred == "baostock":
+            return self._baostock.get_valuation(ts_code)
+        if self._preferred == "akshare":
+            return self._akshare.get_valuation(ts_code)
+        return self._akshare.get_valuation(ts_code)
+
+    def get_northbound_flow(self, days: int = 30) -> pd.DataFrame | None:
+        """获取北向资金历史流向（仅 AkShare）"""
+        return self._akshare.get_northbound_flow(days)
+
+    def get_margin_data(self, date: str = "") -> pd.DataFrame | None:
+        """获取融资融券汇总数据（仅 AkShare）"""
+        return self._akshare.get_margin_data(date)
+
+    def get_industry_board(self) -> pd.DataFrame | None:
+        """获取行业板块实时行情（仅 AkShare）"""
+        return self._akshare.get_industry_board()
+
+    def get_concept_board(self) -> pd.DataFrame | None:
+        """获取概念板块实时行情（仅 AkShare）"""
+        return self._akshare.get_concept_board()
 
     def get_kline_dicts(
         self,
@@ -609,7 +787,6 @@ class CompositeDataSource:
         """获取 K 线数据，优先从 DB 读取，DB 没有时调 API 并缓存"""
         # 1. 先查 DB
         with get_connection() as conn:
-            # sqlite3.Row 构造开销大，批量逐股调用场景下用裸元组 + zip 转 dict 更快
             conn.row_factory = None
             cursor = conn.cursor()
             sql = """
@@ -628,8 +805,6 @@ class CompositeDataSource:
 
             sql += " ORDER BY trade_date DESC"
 
-            # 与 TushareDataSource / SqliteDataSource 对齐：只要未指定 start_date，
-            # 就按 days 截断最近 N 天（即使指定了 end_date），避免拉取全历史
             if not start_date and days > 0:
                 sql += " LIMIT ?"
                 params.append(days)
@@ -638,29 +813,27 @@ class CompositeDataSource:
             rows = cursor.fetchall()
 
         if rows:
-            # DB 有数据，直接返回
             records = [dict(zip(_KLINE_COLUMNS, row)) for row in rows]
-            records.reverse()  # 因为查询时是 DESC，需要反转为 ASC
+            records.reverse()
             return records
 
         # 2. DB 没有数据，调 API
         sources: list[DataSource] = []
         if self._preferred == "auto":
-            sources = [self._indevs_source, self._bridge, self._sqlite]
+            sources = [self._baostock, self._akshare, self._bridge, self._sqlite]
         elif self._preferred == "bridge":
             sources = [self._bridge]
         elif self._preferred == "sqlite":
             sources = [self._sqlite]
-        elif self._preferred == "tushare":
-            sources = [self._tushare_source]
-        elif self._preferred == "indevs":
-            sources = [self._indevs_source]
+        elif self._preferred == "akshare":
+            sources = [self._akshare]
+        elif self._preferred == "baostock":
+            sources = [self._baostock]
 
         for source in sources:
             try:
                 data = source.get_kline_dicts(ts_code, days=days, start_date=start_date, end_date=end_date)
                 if data:
-                    # 3. 写入 DB 缓存
                     save_klines(data)
                     return data
             except (
@@ -671,7 +844,6 @@ class CompositeDataSource:
                 KeyError,
                 ZettarancError,
             ) as e:
-                # 窄化：仅捕获 HTTP / DB / 数据解析 / 项目异常，回退到下一源
                 logger.warning(
                     "[datasource] CompositeDataSource.get_kline_dicts 源 %s 失败 %s: %s",
                     getattr(source, "name", source.__class__.__name__),
@@ -688,12 +860,8 @@ class CompositeDataSource:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> dict[str, list[dict]]:
-        """批量获取多只股票的 K 线：DB 共享连接批量查询优先，缺失的股票逐只回退外部源。
-
-        返回 {ts_code: [K 线 dict 升序]}，无数据的股票对应空列表。
-        """
+        """批量获取多只股票的 K 线：DB 共享连接批量查询优先，缺失的股票逐只回退外部源。"""
         result = self._sqlite.get_kline_dicts_batch(ts_codes, days=days, start_date=start_date, end_date=end_date)
-        # DB 缺失的股票走单股回退路径（含 save_klines 缓存写回）
         for code in ts_codes:
             if not result.get(code):
                 result[code] = self.get_kline_dicts(code, days=days, start_date=start_date, end_date=end_date)
@@ -752,11 +920,7 @@ def dict_to_daily(klines: list[dict] | list) -> list:
 
 
 def daily_to_dict(klines: list) -> list[dict]:
-    """将 ``DailyData`` 列表转为符合战法检测需要的 dict 格式列表。
-
-    自动计算派生字段：prev_close / prev_vol / is_rise / is_beidou /
-    is_suoliang / is_jiayin / is_yinxian / is_fangliang_yinxian。
-    """
+    """将 ``DailyData`` 列表转为符合战法检测需要的 dict 格式列表。"""
     result = []
     for i, k in enumerate(klines):
         prev_close = klines[i - 1].close if i > 0 else k.close
@@ -787,15 +951,17 @@ def daily_to_dict(klines: list) -> list[dict]:
 
 
 def get_datasource(preferred: str = "auto") -> DataSource:
-    """数据源工厂函数。"""
-    if preferred == "tushare":
-        return TushareDataSource()
+    """数据源工厂函数。
+
+    默认策略：auto 模式下优先使用 BaoStock（免费数据源），
+    其次是 AkShare/Bridge/SQLite。
+    """
     if preferred == "bridge":
         return BridgeDataSource()
     if preferred == "sqlite":
         return SqliteDataSource()
-    if preferred == "indevs":
-        return IndevsDataSource()
-    if os.environ.get("INDEVS_API_KEY"):
-        return CompositeDataSource("auto")
+    if preferred == "akshare":
+        return AkShareDataSource()
+    if preferred == "baostock":
+        return BaoStockDataSource()
     return CompositeDataSource("auto")

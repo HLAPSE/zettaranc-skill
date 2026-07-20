@@ -5,7 +5,7 @@
 设计约束：
 - 继承 ValueError，向后兼容现有 `except ValueError` / `pytest.raises(ValueError)` 调用点
 - 消息统一格式：[ERROR_CODE] 人类可读描述
-- 最小骨架：当前仅试点 tushare_client / datasource / cli 顶层，其余模块后续版本接入
+- 最小骨架：当前仅试点 datasource / cli 顶层，其余模块后续版本接入
 """
 
 from enum import StrEnum
@@ -20,8 +20,8 @@ class ErrorCode(StrEnum):
     DB_ERROR = "DB_ERROR"  # 数据库读写失败
     INVALID_PARAM = "INVALID_PARAM"  # 参数非法
 
-    # indevs_client (v3.10.4)
-    INDEVS_NO_DATA = "INDEVS_NO_DATA"  # Indevs 返回数据为空 / 数据源未配置
+    # 数据源相关
+    DATA_SOURCE_NO_DATA = "DATA_SOURCE_NO_DATA"  # 数据源返回数据为空 / 数据源未配置
 
     # llm_providers (v3.10.4)
     LLM_TIMEOUT = "LLM_TIMEOUT"  # LLM 请求超时
@@ -53,7 +53,7 @@ class ErrorCode(StrEnum):
     HARNESS_UPDATE_FAILED = "HARNESS_UPDATE_FAILED"  # harness 更新失败
     WATCHLIST_FAILED = "WATCHLIST_FAILED"  # 自选股处理失败
     CLI_TOPLEVEL_FAILED = "CLI_TOPLEVEL_FAILED"  # CLI 顶层入口失败
-    INDEVS_REQUEST_FAILED = "INDEVS_REQUEST_FAILED"  # indevs 请求失败
+    DATA_SOURCE_REQUEST_FAILED = "DATA_SOURCE_REQUEST_FAILED"  # 数据源请求失败
     KNOWLEDGE_RETRIEVER_FAILED = "KNOWLEDGE_RETRIEVER_FAILED"  # 知识检索失败
     BRIDGE_CLIENT_FAILED = "BRIDGE_CLIENT_FAILED"  # bridge_client 操作失败
     IMPROVEMENT_LOGGER_FAILED = "IMPROVEMENT_LOGGER_FAILED"  # 改进日志失败
@@ -101,6 +101,6 @@ class ZettarancError(ValueError):
 
 
 if __name__ == "__main__":
-    err = ZettarancError(ErrorCode.CONFIG_MISSING, "未设置 TUSHARE_TOKEN")
+    err = ZettarancError(ErrorCode.CONFIG_MISSING, "未配置数据源")
     print(str(err))
     print(err.to_dict())

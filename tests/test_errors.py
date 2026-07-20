@@ -6,7 +6,6 @@
 - ErrorCode 枚举取值
 - ZettarancError 消息格式 / to_dict / cause 透传
 - 向后兼容：ZettarancError 是 ValueError 子类
-- 试点模块：TushareClient 配置缺失抛 CONFIG_MISSING
 - CLI 顶层捕获 ZettarancError → stderr 统一格式 + exit 2
 """
 
@@ -37,8 +36,8 @@ class TestZettarancError:
     """异常基类"""
 
     def test_message_format(self):
-        err = ZettarancError(ErrorCode.CONFIG_MISSING, "未设置 TUSHARE_TOKEN")
-        assert str(err) == "[CONFIG_MISSING] 未设置 TUSHARE_TOKEN"
+        err = ZettarancError(ErrorCode.CONFIG_MISSING, "未设置数据源配置")
+        assert str(err) == "[CONFIG_MISSING] 未设置数据源配置"
 
     def test_is_value_error_subclass(self):
         """向后兼容：现有 except ValueError / pytest.raises(ValueError) 不受影响"""
@@ -64,31 +63,6 @@ class TestZettarancError:
     def test_to_dict_with_cause(self):
         err = ZettarancError(ErrorCode.DB_ERROR, "写入失败", cause=KeyError("k"))
         assert "KeyError" in err.to_dict()["cause"]
-
-
-class TestTushareClientPilot:
-    """试点：TushareClient 配置缺失抛结构化错误"""
-
-    def test_missing_token_raises_zettaranc_error(self, monkeypatch):
-        monkeypatch.setenv("DATA_MODE", "jnb")
-        monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
-        import modules.tushare_client as tc
-
-        monkeypatch.setattr(tc, "TUSHARE_TOKEN", "")
-        monkeypatch.setattr(tc, "TUSHARE_API_URL", "http://example.com")
-        with pytest.raises(ZettarancError) as exc_info:
-            tc.TushareClient()
-        assert exc_info.value.code == ErrorCode.CONFIG_MISSING
-        assert "TUSHARE_TOKEN" in str(exc_info.value)
-
-    def test_missing_api_url_raises_zettaranc_error(self, monkeypatch):
-        monkeypatch.setenv("DATA_MODE", "jnb")
-        import modules.tushare_client as tc
-
-        monkeypatch.setattr(tc, "TUSHARE_TOKEN", "fake_token")
-        monkeypatch.setattr(tc, "TUSHARE_API_URL", "")
-        with pytest.raises(ZettarancError, match="TUSHARE_API_URL"):
-            tc.TushareClient()
 
 
 class TestDatasourcePilot:

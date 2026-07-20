@@ -1,4 +1,4 @@
-"""M4: except narrowing tests for watchlist.py + trade_parser.py + improvement_logger.py + indevs_client.py + cli.py"""
+"""M4: except narrowing tests for watchlist.py + trade_parser.py + improvement_logger.py + cli.py"""
 
 import sys
 
@@ -27,14 +27,6 @@ class TestImprovementLoggerNarrow:
         from modules import improvement_logger
 
         assert "except Exception" not in inspect.getsource(improvement_logger)
-
-
-class TestIndevsClientNarrow:
-    def test_no_bare_exception(self):
-        import inspect
-        from modules import indevs_client
-
-        assert "except Exception" not in inspect.getsource(indevs_client)
 
 
 class TestCliTopLevelNarrow:

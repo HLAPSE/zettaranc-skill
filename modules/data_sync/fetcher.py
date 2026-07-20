@@ -22,10 +22,6 @@ class DataFetcher:
         """拉取个股日 K 线。"""
         return self.datasource.get_daily(ts_code, start_date, end_date)
 
-    def fetch_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
-        """拉取个股技术因子。"""
-        return self.datasource.get_stk_factor(ts_code, start_date, end_date)
-
     def fetch_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame | None:
         """拉取个股每日基础指标。"""
         return self.datasource.get_daily_basic(ts_code, start_date, end_date)

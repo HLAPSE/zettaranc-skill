@@ -9,11 +9,11 @@
 
 本项目是一个 **AI Skill（思维框架蒸馏包）+ 真实数据量化工具** 的混合体。
 
-核心目标：将 B 站 UP 主 / 前阳光私募冠军基金经理 zettaranc（万千）的投资思维框架、决策启发式和表达 DNA，封装为可供 Claude Code / Cursor 等 AI 工具调用的 Skill 文件（`SKILL.md`），同时提供基于真实 Tushare 行情数据的 Python 数据层 + Rust 内核支撑。
+核心目标：将 B 站 UP 主 / 前阳光私募冠军基金经理 zettaranc（万千）的投资思维框架、决策启发式和表达 DNA，封装为可供 Claude Code / Cursor 等 AI 工具调用的 Skill 文件（`SKILL.md`），同时提供基于真实行情数据（BaoStock + AkShare）的 Python 数据层 + Rust 内核支撑。
 
 - **核心交付物**：`SKILL.md`（可直接被 AI 工具加载的角色扮演协议，Skill-Schema-V2 合规）
 - **计算内核**：Rust workspace（6 crate，PyO3 + Polars + Rayon）→ `_core_compute` 原生扩展
-- **数据层**：Python 模块 + SQLite 数据库 + Tushare/Indevs/Bridge 数据源（JNB 模式）
+- **数据层**：Python 模块 + SQLite 数据库 + BaoStock/AkShare/Bridge 数据源（JNB 模式）
 - **Web 看板**：`api/`（FastAPI 后端）+ `frontend/`（React + Vite + Tailwind 前端），可选
 - **语料基础**：约 467 篇直播/付费课整理文章（~200 万字）+ 13 个 ztalk 视频 transcript（~12.7 万字）+ 9 篇交易心理系列（~3.3 万字）+ 后续新增文章
 - **许可证**：MIT
@@ -23,7 +23,7 @@
 
 | 模式 | 环境变量 | 说明 |
 |------|---------|------|
-| **JNB 模式** | `DATA_MODE=jnb` | 接入 Tushare 真实行情，具备实时数据查询、技术指标计算、战法识别能力 |
+| **JNB 模式** | `DATA_MODE=jnb` | 接入真实行情（BaoStock + AkShare），具备实时数据查询、技术指标计算、战法识别能力 |
 | **普通小万** | `DATA_MODE=websearch` | 纯 LLM 对话，不走任何外部数据接口 |
 
 ### Rust 内核开关（v4.0.0+）
@@ -41,14 +41,13 @@
 `modules/datasource.py` 的 `CompositeDataSource` 在 `auto` 模式下按以下优先级选源：
 
 ```
-Indevs（配置 INDEVS_API_KEY 时优先，v3.8.1 新增）
-  → tushare-data-bridge（HTTP 缓存代理，TUSHARE_BRIDGE_ENABLED=auto/always）
-  → 本地 SQLite（data/stock_data.db，离线兜底）
+BaoStock（主力：日线/指数/股票列表/交易日历/基础指标，无需注册）
+  -> AkShare（补充：资金流向/实时行情/涨跌停/龙虎榜，无需 token）
+  -> bridge（HTTP 缓存代理，TUSHARE_BRIDGE_ENABLED=auto/always）
+  -> 本地 SQLite（data/stock_data.db，离线兜底）
 ```
 
-> **重要**：`auto` 模式的回退链**不包含 Tushare Pro**。`TushareDataSource` 仅在两种情况下被使用：
-> 1. 显式指定 `preferred="tushare"`
-> 2. 在 `DataSyncer`（`modules/data_sync/syncer.py`）中，当 `INDEVS_API_KEY` 未配置且 `DATA_MODE=jnb` 时直接实例化（绕过 CompositeDataSource）
+> **重要**：项目默认使用 BaoStock + AkShare 双免费数据源，无需配置任何 Token，安装即可使用。
 
 自 **v3.8.2** 起，K 线读取统一走 **DB 优先** 策略：先查 `daily_kline` 表，DB 没有时才调 API 并写回 DB 缓存。即使处于降级路径，工具也**不会编造价格或信号**，而是明确告知当前数据状态。
 
@@ -65,9 +64,9 @@ Rust 内核（rust/crates/，6 crate）         Python 数据层（modules/）  
                                               │  ├─ market_context.py 市场环境
 Python 桥接（modules/）                       │  ├─ atr.py          ATR 计算
 ├─ backtest/_rust_bridge.py  CLI↔Rust 桥      │  └─ net.py          网络工具
-├─ datasource.py   统一数据源协议             ├─ tushare_client.py  Tushare API
-│                  （Indevs/Bridge/SQLite）    ├─ bridge_client.py   Bridge HTTP 客户端
-├─ data_sync/      数据同步子包               ├─ indevs_client.py   Indevs 客户端
+├─ datasource.py   统一数据源协议             ├─ baostock_client.py BaoStock API（主力数据源）
+│                  （BaoStock/AkShare/Bridge） ├─ akshare_client.py  AkShare API（补充数据源）
+├─ data_sync/      数据同步子包               ├─ bridge_client.py   Bridge HTTP 客户端
 ├─ indicators/     60+ 技术指标               ├─ database.py        SQLite（15 张表）
 ├─ strategies/     30+ 战法识别               ├─ constants.py       28+ 命名常量（v4.0.2）
 ├─ screener/       选股评分子包               ├─ simulator/         交易模拟器
@@ -96,8 +95,8 @@ Python 桥接（modules/）                       │  ├─ atr.py          AT
 | Rust 内核 | Rust 1.78+（stable）、PyO3 0.23、Polars 0.54、Rayon 1.10、Arrow 59、proptest 1.5 |
 | 构建工具 | maturin ≥1.5（Rust → Python 扩展） |
 | 数据管道 | Python 3.12+（标准库 + `sqlite3`、`pathlib`、`dataclasses`、`enum`、`StrEnum`） |
-| 外部数据 | `tushare`（Pro API，支持中转 URL）、`pandas` ≥3.0,<4、`requests`、`httpx`、`pyyaml` |
-| 可选数据源 | Indevs Tushare Replay API（需 `INDEVS_API_KEY`） |
+| 外部数据 | `baostock`（主力数据源，免费）、`akshare`（补充数据源，免费）、`pandas` ≥3.0,<4、`requests`、`httpx`、`pyyaml` |
+| 可选数据源 | bridge（HTTP 缓存代理，需配置 `TUSHARE_BRIDGE_HOST`） |
 | 环境配置 | `python-dotenv`（`.env` 文件） |
 | 数据库 | SQLite（本地文件，15 张表 = 11 张核心表 + 4 张自我改进跟踪表） |
 | 接口协议 | CLI（`zt` 入口）、可选 FastAPI Web 服务（`zt-web`） |
@@ -115,7 +114,7 @@ Python 桥接（modules/）                       │  ├─ atr.py          AT
 | 文件 | 作用 |
 |------|------|
 | `pyproject.toml` | 包定义、`zt` / `zt-web` / `zt-monitor` 命令入口、pytest/ruff/mypy/coverage 配置、`[tool.maturin]` Rust 扩展配置、可选依赖分组 |
-| `requirements.txt` | 核心 Python 依赖（tushare / python-dotenv / pandas / requests / pyyaml / httpx） |
+| `requirements.txt` | 核心 Python 依赖（baostock / akshare / python-dotenv / pandas / requests / pyyaml / httpx） |
 | `.env.example` | 环境变量模板（`.env` 不入库） |
 | `rust/Cargo.toml` | Rust workspace 配置（6 members、workspace dependencies、release profile） |
 | `rust/rust-toolchain.toml` | Rust 工具链（stable + rustfmt + clippy + rust-src） |
@@ -133,36 +132,38 @@ Python 桥接（modules/）                       │  ├─ atr.py          AT
 
 ```ini
 DATA_MODE=jnb                       # jnb(真实数据) 或 websearch(纯对话)
-TUSHARE_TOKEN=你的token
-TUSHARE_API_URL=                    # 中转 API 地址（JNB 模式必填）
-# TUSHARE_VERIFY_TOKEN_URL=***      # 可选，实时行情验证地址
 
-# Tushare Bridge 配置（可选，用于数据降级）
-# 默认值与 modules/bridge_client.py 中 _BRIDGE_* 保持一致
-# TUSHARE_BRIDGE_HOST=127.0.0.1
-# TUSHARE_BRIDGE_PORT=8765
-# TUSHARE_BRIDGE_TIMEOUT=10
-# TUSHARE_BRIDGE_ENABLED=auto       # auto/always/never
+# ============================================================
+# 免费数据源（推荐，无需注册/Token）
+# ============================================================
+# BaoStock: 日线/指数/股票列表/交易日历/基础指标（PE/PB/PS/换手率）
+# AkShare: 资金流向、实时行情、涨跌停、龙虎榜
+# 安装: pip install baostock akshare
+# 无需配置任何环境变量，安装即可用
 
-# 限流配置（可选）
-# TUSHARE_RPM=120  # 每分钟请求数
+# 数据源优先级（auto 模式）:
+#   BaoStock → AkShare → Bridge → SQLite
 
-# Indevs Tushare Replay API（可选，配置后数据同步优先走该源）
-# INDEVS_API_KEY=your_api_key
-# INDEVS_API_URL=https://ai-tool.indevs.in/tushare/pro
-
+# ============================================================
+# 数据库配置
+# ============================================================
 DATA_DIR=data
 DB_PATH=data/stock_data.db
-LLM_API_KEY=***                     # 可选，LLM 回答生成
+
+# ============================================================
+# LLM 配置（意图识别后的回答生成，可选）
+# ============================================================
+# LLM_API_KEY=***
 # LLM_BASE_URL=https://api.openai.com/v1
 # LLM_MODEL=gpt-4o-mini
 # ANTHROPIC_API_KEY=***             # 可选，Anthropic Claude API
 
-# KB_ENABLED=true                   # 可选，向量知识库
+# ============================================================
+# 其他配置（可选）
+# ============================================================
+# KB_ENABLED=true
 # KB_API_URL=http://localhost:8000
 IM_PUSH_WEBHOOK=                    # 可选，飞书 webhook
-
-# 缓存配置（可选）
 # COMMENTARY_CACHE_TTL=3600
 # SIMULATION_NARRATE_CACHE_TTL=3600
 
@@ -170,7 +171,7 @@ IM_PUSH_WEBHOOK=                    # 可选，飞书 webhook
 # ZETTARANC_BACKTEST_IMPL=rust      # 可选，rust/python/auto（v4.0.0+）
 ```
 
-> v2.1.1 之后，所有 Tushare URL 均从环境变量读取，代码中不再硬编码任何内部域名。
+> 自 v4.1.0 起，项目默认使用 BaoStock + AkShare 双免费数据源，无需配置任何 Token，安装即可使用。
 
 ---
 
@@ -326,8 +327,8 @@ modules/
 │  ├─ param_registry.py / mutator.py / scorer.py / backtest_scorer.py
 │  ├─ llm_judge.py / reflex_blacklist.py / phase1_baseline.py / phase2_hillclimb.py / phase3_report.py
 ├─ constants.py          28+ 命名常量（v4.0.2，仓位档/止损档/环境权重/涨跌停等）
-├─ datasource.py         统一数据源协议（Indevs/Bridge/SQLite Composite）
-├─ tushare_client.py / bridge_client.py / indevs_client.py
+├─ datasource.py         统一数据源协议（BaoStock/AkShare/Bridge/SQLite Composite）
+├─ baostock_client.py / akshare_client.py / bridge_client.py
 ├─ database.py           SQLite 管理（15 张表）
 ├─ data_sync.py / screener.py  兼容 shim
 ├─ backtest_six_step.py  少妇战法六步闭环
@@ -384,7 +385,7 @@ references/research/（11 份调研提炼文件）
 | `trade_records` | 随堂测试/交易记录 | action, price, quantity, reason, signal_type, zg_review |
 | `sync_log` | 数据同步日志 | data_type, last_date, status |
 | `watchlist` | 自选股观察池 | ts_code, name, tags, add_date, alert_enabled |
-| `tushare_indicator_cache` | Tushare 官方指标（diff 验证） | macd_dif, rsi_6, kdj_k, boll_mid 等 |
+| `indicator_cache` | 技术指标缓存（每日快照） | KDJ/MACD/BBI/MA/RSI/WR/布林带/双线/砖形图/DMI/量比/信号 |
 | `llm_response_log` | LLM 响应耗时日志 | ts_code, request_date, model, response_time_ms, success |
 | `tracking_pool_self` | 自我改进跟踪池 | ts_code, add_date, status, strategy_tags |
 | `tracking_records_self` | 跟踪记录表 | 行情 + 指标 + 信号每日快照 |
@@ -441,7 +442,7 @@ python -m pytest tests/test_indicators.py -v
 # 慢速端到端测试（默认不跑）
 python -m pytest tests/ -m slow -v
 
-# 真实数据回归（需 TUSHARE_TOKEN + RUN_REALDATA=true）
+# 真实数据回归（需数据源可用）
 python -m pytest tests/test_indicators_realdata.py -v
 
 # Rust 全 workspace 测试（73 个）
@@ -453,7 +454,7 @@ cargo test -p zt_bindings --no-default-features
 python -m pytest tests/test_rust_compat.py tests/test_cli_uses_rust.py -v
 ```
 
-> `test_indicators_realdata.py` 等真实数据测试会在无 `TUSHARE_TOKEN` 时自动 skip。
+> `test_indicators_realdata.py` 等真实数据测试会在数据源不可用时自动 skip。
 
 ### 数据库初始化与数据同步
 
@@ -476,7 +477,7 @@ zt sync sync --ts_code 600487.SH --days 365 --indicators
 # 查看同步状态
 zt sync status
 
-# 同步 Tushare 官方指标（diff 验证）
+# 同步指标缓存（BaoStock/AkShare）
 zt sync stk-factor --ts_code 600487.SH --days 365
 ```
 
@@ -607,7 +608,7 @@ cargo clippy --workspace --all-targets --no-deps --exclude zt_bindings -- -D war
 - **环境变量加载**：统一由 `modules/__init__.py` 在包首次 import 时一次性加载 `.env`（支持 `ZETTARANC_ENV` 自定义路径，`override=False` 保证测试 fixture 隔离）；各子模块不再重复加载
 - **模块间 DB 路径解析**：`modules/*.py` 使用 `Path(__file__).parent.parent`（项目根目录）；`modules/indicators/*.py` 使用 `Path(__file__).parent.parent.parent`
 - **路径常量**：`DATA_DIR` / `REGISTRY_DIR` / `REPORTS_DIR` 从 `modules/core/paths.py` 导入；`TRADING_DAYS_PER_YEAR` 从 `modules/core/metrics.py` 导入（注意：不在 paths.py）；`ZETTARANC_BACKTEST_IMPL` 从 `modules/core/_rust_compat.py` 读取
-- **限流控制**：所有 Tushare/Indevs API 调用必须带 `_rate_limit()`，控制 120 次/分钟
+- **限流控制**：所有数据源 API 调用必须带 `_rate_limit()`，控制 120 次/分钟
 - **事务管理**：数据库操作统一使用 `get_connection()` 上下文管理器（自动 commit/rollback，默认 WAL 模式）
 - **错误处理**：API 调用用 try/except 包裹具体异常类型（v4.0.3 M4 已收窄全部 `except Exception`），记录 error log，返回空 DataFrame/None 而非抛异常中断；必要时 raise `ZettarancError`
 - **类型统一**（v3.9.0 起）：`PerformanceMetrics`（20 字段）以 `modules/core/metrics.py` 为准；`MarketRegime` 枚举以 `modules/core/market_context.py` 为唯一来源；收益率字段统一命名 `annualized_return`；`equity_curve` 统一为 `list[float]`；ATR 计算统一用 `modules/core/atr.py`
@@ -676,7 +677,7 @@ cargo clippy --workspace --all-targets --no-deps --exclude zt_bindings -- -D war
 - **配置**：`pyproject.toml` 中 `testpaths = ["tests"]`，默认 `-v --tb=short`
 - **标记**：
   - `@pytest.mark.slow` 用于慢速端到端测试（如 self_optimizer 多轮），默认不跑
-  - `@pytest.mark.realdata` 用于真实数据回归测试（需 `TUSHARE_TOKEN` + `RUN_REALDATA=true`），默认 skip
+  - `@pytest.mark.realdata` 用于真实数据回归测试（需数据源可用），默认 skip
 - **Fixture**：`tests/conftest.py` 提供
   - `mock_env_for_tests`：autouse，自动将环境变量 mock 到临时目录
   - `temp_db`：初始化好的临时数据库
@@ -710,7 +711,7 @@ cargo clippy --workspace --all-targets --no-deps --exclude zt_bindings -- -D war
 | `test_intent_router.py` | 意图路由规则匹配 |
 | `test_quality_check.py` | SKILL.md 12 项质量检查 |
 | `test_rate_limiter.py` | 120次/分钟限流器 |
-| `test_bridge_client.py` / `test_tushare_client.py` | Tushare 客户端与 bridge 降级网关 |
+| `test_bridge_client.py` | bridge 降级网关测试 |
 | `test_monitor.py` / `test_notifier.py` | 自选股监控与推送 |
 | `test_tracking_system.py` | 自我改进跟踪池 |
 | `test_self_optimizer_*.py` / `test_param_registry.py` / `test_mutator.py` / `test_scorer.py` / `test_break_signal.py` / `test_reflex_blacklist.py` / `test_backtest_scorer.py` | Darwin 自优化管线 |
@@ -721,7 +722,7 @@ cargo clippy --workspace --all-targets --no-deps --exclude zt_bindings -- -D war
 | `test_silent_except.py` | H3 静默 except 收敛验证（5 个 hot file） |
 | `test_llm_providers_errors.py` | LLM 提供者异常路径 |
 | `test_m4_*.py`（16 个文件） | **M4 异常收窄回归测试（v4.0.3）**：覆盖 16 个模块/子包的 `except Exception` → 具体异常类型收窄行为 |
-| `test_indicators_realdata.py` | 真实 Tushare 数据指标回归（无 token 时 skip） |
+| `test_indicators_realdata.py` | 真实数据源指标回归（数据源不可用时 skip） |
 | `test_routing.md` | 路由规则文档（非 .py，不被 pytest 收集） |
 
 ### 运行预期
@@ -788,7 +789,7 @@ $ cargo test -p zt_bindings --no-default-features
 
 1. **免责声明**：`SKILL.md` 和 `README.md` 均包含明确免责声明——**不构成任何投资建议**。
 2. **版权边界**：原始语料不提交到仓库。仓库中只保留粉丝整理的 Markdown 提炼文件和转写文本。
-3. **敏感信息**：Tushare Token、API URL、LLM API Key、飞书 webhook 通过 `.env` 文件管理，**绝不硬编码**；`.env` 已加入 `.gitignore`。
+3. **敏感信息**：数据源配置、LLM API Key、飞书 webhook 通过 `.env` 文件管理，**绝不硬编码**；`.env` 已加入 `.gitignore`。
 4. **信息偏差标注**：`SKILL.md` 的「诚实边界」一节明确标注了公开表达与真实想法的差异。
 5. **高风险动作**：Skill 不会代下单、转账或处理内幕信息；给出买卖建议时必须附加免责声明。
 6. **语料截止期**：信息截止到调研时间（2026-04-18 及后续更新）。
@@ -806,8 +807,8 @@ $ cargo test -p zt_bindings --no-default-features
 | 验证风格一致性 | 对照「风格验证清单」逐项检查 |
 | 修复数据层 bug | 修改 `modules/*.py` → 补充/更新 `tests/test_*.py` → `pytest tests/ -v` |
 | 修复 Rust 内核 bug | 修改 `rust/crates/**/*.rs` → 补充/更新 `rust/crates/*/tests/*.rs` → `cargo test --workspace --exclude zt_bindings` → `maturin develop --release` 重建 `_core_compute` |
-| 接入新 Tushare 接口 | 修改 `modules/tushare_client.py` 或 `modules/data_sync.py` → 确认 `modules/database.py` 表结构支持 → 补充保存逻辑与测试 |
-| 初始化全新环境 | `cp .env.example .env` → 填入 Token → `python -m modules.database` → `python -m modules.data_sync sync` → （可选）`cd rust/crates/bindings && maturin develop --release` → `pytest tests/ -v` |
+| 接入新数据源接口 | 修改 `modules/datasource.py` 或对应 client 模块 → 确认 `modules/database.py` 表结构支持 → 补充保存逻辑与测试 |
+| 初始化全新环境 | `cp .env.example .env` → `pip install baostock akshare` → `python -m modules.database` → `python -m modules.data_sync sync` → （可选）`cd rust/crates/bindings && maturin develop --release` → `pytest tests/ -v` |
 | 运行 Web 看板 | 安装 `fastapi uvicorn pydantic-settings` → `zt-web` → `cd frontend && npm install && npm run dev` |
 | 跑 Darwin 自优化 | `zt self-optimize run --target trading --rounds 3` |
 | 跑少妇战法 v1.0 验收 | `zt verify v1.0 --limit 50 --days 300 --walk-forward` |

@@ -40,9 +40,6 @@ jobs:
           pip install -e .
 
       - name: Run real data regression
-        env:
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
-          TUSHARE_API_URL: ${{ secrets.TUSHARE_API_URL }}
         run: |
           echo "=== 真实数据回归 (周一 02:00 UTC cron) ==="
           date -u

@@ -45,8 +45,6 @@ PUBLIC_METHODS = {
     "sync_indicator_cache": {"days": 120},
     "sync_all_indicators": {"ts_codes": None},
     "sync_daily_and_compute": {"ts_codes": None, "days": 730},
-    "sync_stk_factor": {"start_date": None, "end_date": None},
-    "sync_all_stk_factor": {"ts_codes": None, "days": 365},
     "ensure_daily_basic_columns": {},
     "sync_daily_basic": {"start_date": "", "end_date": ""},
     "sync_all_daily_basic": {"ts_codes": None, "days": 730},
@@ -95,9 +93,6 @@ class FakeDataSource:
     def get_daily_basic(self, ts_code: str, start_date: str, end_date: str) -> Any:
         return None
 
-    def get_stk_factor(self, ts_code: str, start_date: str, end_date: str) -> Any:
-        return None
-
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> Any:
         return None
 
@@ -106,6 +101,30 @@ class FakeDataSource:
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
         return []
+
+    def get_limit_list(self, trade_date: str) -> Any:
+        return None
+
+    def get_top_list(self, trade_date: str) -> Any:
+        return None
+
+    def get_financial_indicator(self, ts_code: str, start_year: str = "2020") -> Any:
+        return None
+
+    def get_valuation(self, ts_code: str) -> Any:
+        return None
+
+    def get_northbound_flow(self, days: int = 30) -> Any:
+        return None
+
+    def get_margin_data(self, date: str = "") -> Any:
+        return None
+
+    def get_industry_board(self) -> Any:
+        return None
+
+    def get_concept_board(self) -> Any:
+        return None
 
     def get_kline_dicts(
         self,
@@ -123,62 +142,27 @@ def test_data_syncer_accepts_datasource_parameter(monkeypatch):
 
     monkeypatch.setenv("DATA_MODE", "websearch")
     fake = FakeDataSource()
-    syncer = DataSyncer(token="dummy", datasource=fake)
+    syncer = DataSyncer(datasource=fake)
     assert syncer._datasource is fake
     assert syncer._fetcher.datasource is fake
 
 
-def test_data_syncer_default_datasource_is_tushare(monkeypatch):
-    """DataSyncer 默认 datasource 为 tushare"""
+def test_data_syncer_default_datasource_is_composite(monkeypatch):
+    """DataSyncer 默认 datasource 为 composite(auto)"""
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy")
-    assert syncer._datasource.name == "tushare"
+    syncer = DataSyncer()
+    assert "composite" in syncer._datasource.name
 
 
-def test_data_syncer_default_datasource_uses_explicit_token(monkeypatch):
-    """datasource 为 None 时，显式传入的 token 应交给 TushareDataSource"""
-    from modules.data_sync.syncer import DataSyncer
-
-    monkeypatch.setenv("DATA_MODE", "websearch")
-    captured = {}
-
-    class MockTushareDataSource:
-        def __init__(self, token=None):
-            captured["token"] = token
-
-        @property
-        def name(self):
-            return "tushare"
-
-    monkeypatch.setattr("modules.data_sync.syncer.TushareDataSource", MockTushareDataSource)
-    syncer = DataSyncer(token="explicit-token")
-    assert captured["token"] == "explicit-token"
-    assert syncer._datasource.name == "tushare"
-
-
-def test_datasyncer_honors_token_argument(monkeypatch):
-    """TUSHARE_TOKEN 为空时，显式传入 token 仍应被用于构造 TushareDataSource"""
-    from modules.data_sync.syncer import DataSyncer
-    from modules.datasource import TushareDataSource
-
-    monkeypatch.setenv("DATA_MODE", "websearch")
-    monkeypatch.setenv("TUSHARE_TOKEN", "")
-    ds = DataSyncer(token="explicit-token")
-    assert isinstance(ds._datasource, TushareDataSource)
-    assert ds._datasource._client.token == "explicit-token"
-
-
-def test_data_syncer_with_datasource_skips_jnb_validation(monkeypatch):
-    """提供 datasource 时，即使 JNB 模式缺少 token/URL 也不应抛错"""
+def test_data_syncer_with_datasource_skips_validation(monkeypatch):
+    """提供 datasource 时，不应抛错"""
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "jnb")
-    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
-    monkeypatch.delenv("TUSHARE_API_URL", raising=False)
     fake = FakeDataSource()
-    syncer = DataSyncer(token=None, datasource=fake)
+    syncer = DataSyncer(datasource=fake)
     assert syncer._datasource is fake
     assert syncer._fetcher.datasource is fake
 
@@ -191,7 +175,7 @@ def test_call_api_with_retry_returns_result(monkeypatch):
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy", datasource=FakeDataSource())
+    syncer = DataSyncer(datasource=FakeDataSource())
     syncer._rate_limit = Mock()
     result = syncer._call_api_with_retry("test_api", lambda: "ok")
     assert result == "ok"
@@ -203,7 +187,7 @@ def test_call_api_with_retry_retries_then_raises(monkeypatch):
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy", datasource=FakeDataSource())
+    syncer = DataSyncer(datasource=FakeDataSource())
     syncer._rate_limit = Mock()
     monkeypatch.setattr("time.sleep", lambda x: None)
 
@@ -226,7 +210,7 @@ def test_call_api_with_retry_passes_args_kwargs(monkeypatch):
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy", datasource=FakeDataSource())
+    syncer = DataSyncer(datasource=FakeDataSource())
     syncer._rate_limit = Mock()
 
     captured = {}
@@ -250,7 +234,7 @@ def test_batch_sync_returns_empty_for_empty_list(monkeypatch):
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy", datasource=FakeDataSource())
+    syncer = DataSyncer(datasource=FakeDataSource())
     result = syncer._batch_sync("test", lambda code: 1, [])
     assert result == {}
 
@@ -260,7 +244,7 @@ def test_batch_sync_maps_codes_to_counts(monkeypatch):
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy", datasource=FakeDataSource())
+    syncer = DataSyncer(datasource=FakeDataSource())
 
     def sync_fn(code: str) -> int:
         return int(code)
@@ -274,7 +258,7 @@ def test_batch_sync_handles_failure_gracefully(monkeypatch):
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    syncer = DataSyncer(token="dummy", datasource=FakeDataSource())
+    syncer = DataSyncer(datasource=FakeDataSource())
 
     def sync_fn(code: str) -> int:
         if code == "bad":

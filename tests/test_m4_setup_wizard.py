@@ -8,35 +8,25 @@ from modules.core.errors import ErrorCode, ZettarancError
 
 
 class TestSetupWizardConnectionFallback:
-    """`test_jnb_connection` 在连通性测试抛错时返回 False"""
-
-    def test_returns_false_on_zettaranc_error(self, monkeypatch):
-        import modules.tushare_client as tc
-        from modules import setup_wizard as sw
-
-        class FakeClient:
-            def __init__(self, token):
-                raise ZettarancError(ErrorCode.CONFIG_MISSING, "未配置")
-
-            def check_connection(self):
-                return True
-
-        monkeypatch.setattr(tc, "TushareClient", FakeClient)
-        assert sw.test_jnb_connection("any_token") is False
+    """`test_baostock_connection` 在连通性测试抛错时返回 False"""
 
     def test_returns_false_on_os_error(self, monkeypatch):
-        import modules.tushare_client as tc
         from modules import setup_wizard as sw
 
-        class FakeClient:
-            def __init__(self, token):
-                raise OSError("network down")
+        def failing_get_client():
+            raise OSError("network down")
 
-            def check_connection(self):
-                return True
+        monkeypatch.setattr("modules.baostock_client.get_client", failing_get_client)
+        assert sw.test_baostock_connection() is False
 
-        monkeypatch.setattr(tc, "TushareClient", FakeClient)
-        assert sw.test_jnb_connection("any_token") is False
+    def test_returns_false_on_connection_error(self, monkeypatch):
+        from modules import setup_wizard as sw
+
+        def failing_get_client():
+            raise ConnectionError("connection refused")
+
+        monkeypatch.setattr("modules.baostock_client.get_client", failing_get_client)
+        assert sw.test_baostock_connection() is False
 
 
 if __name__ == "__main__":

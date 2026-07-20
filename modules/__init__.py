@@ -14,7 +14,6 @@ load_dotenv(_env_path, override=False)  # 已有的环境变量不被 .env 覆�
 
 # ─── 公开 API ────────────────────────────────────────────────────────────────
 from .database import get_connection, get_db_path, init_database  # noqa: E402
-from .tushare_client import TushareClient  # noqa: E402
 from .setup_wizard import run_wizard, check_env_exists, check_data_mode  # noqa: E402
 
 # 随堂测试复盘模块（数据准备层，点评由LLM生成）
@@ -27,8 +26,6 @@ __all__ = [
     "get_connection",
     "get_db_path",
     "init_database",
-    # Tushare
-    "TushareClient",
     # 初始化向导
     "run_wizard",
     "check_env_exists",

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from ..database import get_connection, get_db_path
-from ..datasource import DataSource, IndevsDataSource, TushareDataSource, get_datasource
+from ..datasource import DataSource, get_datasource
 from .rate_limiter import _rate_limit_global, _MAX_SYNC_WORKERS
 from .indicator_cache import (
     _get_indicator_funcs,
@@ -30,38 +30,14 @@ logger = logging.getLogger(__name__)
 # 新股前 5 日无限制。当前简化处理，v2.11.0 计划按 market 字段动态调整。
 _LIMIT_THRESHOLD = 9.9
 
-# 中转 API 配置（从环境变量读取）
-TUSHARE_API_URL = os.environ.get("TUSHARE_API_URL", "")
-VERIFY_TOKEN_URL = os.environ.get("TUSHARE_VERIFY_TOKEN_URL", "")
-
 
 class DataSyncer:
     """数据同步器"""
 
     def __init__(self, token: str | None = None, datasource: DataSource | None = None) -> None:
-        self.token = token or os.environ.get("TUSHARE_TOKEN")
-
         # 依赖注入 DataSource；默认按环境变量选择数据源
         if datasource is None:
-            data_mode = os.getenv("DATA_MODE", "websearch")
-            # 优先 Indevs Replay API
-            if os.environ.get("INDEVS_API_KEY"):
-                datasource = IndevsDataSource()
-            elif data_mode == "jnb":
-                if not self.token:
-                    raise ZettarancError(
-                        ErrorCode.CONFIG_MISSING,
-                        "JNB 模式下未设置 TUSHARE_TOKEN，请检查 .env 文件。",
-                    )
-                if not TUSHARE_API_URL:
-                    raise ZettarancError(
-                        ErrorCode.CONFIG_MISSING,
-                        "JNB 模式下未设置 TUSHARE_API_URL，请在 .env 中配置中转 API 地址。\n"
-                        "示例：TUSHARE_API_URL=https://tt.xiaodefa.cn",
-                    )
-                datasource = TushareDataSource(token=self.token)
-            else:
-                datasource = TushareDataSource(token=self.token)
+            datasource = get_datasource("auto")
         self._datasource = datasource
         self._fetcher = DataFetcher(self._datasource)
 
@@ -134,8 +110,8 @@ class DataSyncer:
     def _batch_sync(self, task_name: str, sync_fn, ts_codes: list[str]) -> dict[str, int]:
         """通用批量同步：并发执行 + 进度追踪 + 异常处理
 
-        消除 sync_all_daily_kline / sync_all_indicators / sync_all_stk_factor /
-        sync_all_daily_basic 四个方法中的重复模式。
+        消除 sync_all_daily_kline / sync_all_indicators /
+        sync_all_daily_basic 三个方法中的重复模式。
 
         Args:
             task_name: 任务名称（用于日志，如"日线数据"）
@@ -212,7 +188,15 @@ class DataSyncer:
             ]
             df = df[available_cols].fillna("")
             with get_connection() as conn:
-                df.to_sql("stock_basic", conn, if_exists="append", index=False, method="multi")
+                cursor = conn.cursor()
+                # 使用 INSERT OR REPLACE 处理重复数据
+                for _, row in df.iterrows():
+                    cursor.execute(
+                        """INSERT OR REPLACE INTO stock_basic (ts_code, name, area, industry, market, list_date, is_hs)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (row["ts_code"], row["name"], row.get("area", ""), row.get("industry", ""),
+                         row.get("market", ""), row.get("list_date", ""), row.get("is_hs", "")),
+                    )
 
             self._log_sync("stock_basic", None, datetime.now().strftime("%Y%m%d"), "success")
             logger.info(f"股票基本信息同步完成，共 {len(df)} 只")
@@ -268,14 +252,19 @@ class DataSyncer:
             df["is_limit_up"] = df["pct_chg"].apply(lambda x: 1 if x >= _LIMIT_THRESHOLD else 0)
             df["is_limit_down"] = df["pct_chg"].apply(lambda x: 1 if x <= -_LIMIT_THRESHOLD else 0)
 
+            # 确保 PE/PB/PS 列存在
+            self.ensure_daily_basic_columns()
+
             with get_connection() as conn:
                 cursor = conn.cursor()
 
-                # 准备批量插入的数据
-                records = []
+                # 使用 upsert 模式：先插入（忽略重复），再更新非主键字段
+                # 避免 INSERT OR REPLACE 覆盖 sync_daily_basic 设置的 total_mv/circ_mv/pe/ps 等字段
+                insert_records = []
+                update_records = []
                 for row in df.itertuples(index=False):
                     row_dict = row._asdict()
-                    records.append(
+                    insert_records.append(
                         (
                             row_dict["ts_code"],
                             row_dict["trade_date"],
@@ -289,17 +278,53 @@ class DataSyncer:
                             None,  # vol_ratio later
                             row_dict.get("is_limit_up", 0),
                             row_dict.get("is_limit_down", 0),
+                            row_dict.get("pe_ttm"),
+                            row_dict.get("pb"),
+                            row_dict.get("ps_ttm"),
+                        )
+                    )
+                    update_records.append(
+                        (
+                            row_dict["open"],
+                            row_dict["high"],
+                            row_dict["low"],
+                            row_dict["close"],
+                            row_dict["vol"],
+                            row_dict["amount"],
+                            row_dict.get("pct_chg", 0),
+                            None,  # vol_ratio later
+                            row_dict.get("is_limit_up", 0),
+                            row_dict.get("is_limit_down", 0),
+                            row_dict.get("pe_ttm"),
+                            row_dict.get("pb"),
+                            row_dict.get("ps_ttm"),
+                            row_dict["ts_code"],
+                            row_dict["trade_date"],
                         )
                     )
 
+                # 先尝试插入新行（忽略已存在的）
                 cursor.executemany(
                     """
-                    INSERT OR REPLACE INTO daily_kline
+                    INSERT OR IGNORE INTO daily_kline
                     (ts_code, trade_date, open, high, low, close, vol, amount,
-                     pct_chg, vol_ratio, is_limit_up, is_limit_down)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     pct_chg, vol_ratio, is_limit_up, is_limit_down, pe_ttm, pb, ps_ttm)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                    records,
+                    insert_records,
+                )
+
+                # 再更新已存在的行（保留 sync_daily_basic 设置的字段）
+                # 使用 COALESCE 避免用 NULL/NaN 覆盖已有的有效值
+                cursor.executemany(
+                    """
+                    UPDATE daily_kline SET
+                        open = ?, high = ?, low = ?, close = ?, vol = ?, amount = ?,
+                        pct_chg = ?, vol_ratio = ?, is_limit_up = ?, is_limit_down = ?,
+                        pe_ttm = COALESCE(?, pe_ttm), pb = COALESCE(?, pb), ps_ttm = COALESCE(?, ps_ttm)
+                    WHERE ts_code = ? AND trade_date = ?
+                """,
+                    update_records,
                 )
 
             # 更新同步日志
@@ -456,96 +481,6 @@ class DataSyncer:
             ts_codes_for_indic = [c for c, n in kline_results.items() if n > 0]
         return self.sync_all_indicators(ts_codes=ts_codes_for_indic or None)
 
-    # ==================== Tushare 官方指标（用于 diff 验证） ====================
-
-    def sync_stk_factor(self, ts_code: str, start_date: str | None = None, end_date: str | None = None) -> int:
-        """
-        同步单只股票的 Tushare 官方技术指标（stk_factor 接口）
-
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期 YYYYMMDD
-            end_date: 结束日期 YYYYMMDD
-
-        Returns:
-            更新条数
-        """
-        try:
-            if start_date is None:
-                start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-            if end_date is None:
-                end_date = datetime.now().strftime("%Y%m%d")
-
-            df = self._call_api_with_retry(
-                "stk_factor",
-                self._fetcher.fetch_stk_factor,
-                ts_code,
-                start_date,
-                end_date,
-            )
-
-            if df is None or len(df) == 0:
-                return 0
-
-            # 字段映射：Tushare 字段名 -> 数据库字段名
-            field_map = {
-                "ts_code": "ts_code",
-                "trade_date": "trade_date",
-                "close": "close",
-                "macd_dif": "macd_dif",
-                "macd_dea": "macd_dea",
-                "macd": "macd",
-                "kdj_k": "kdj_k",
-                "kdj_d": "kdj_d",
-                "kdj_j": "kdj_j",
-                "rsi_6": "rsi_6",
-                "rsi_12": "rsi_12",
-                "rsi_24": "rsi_24",
-                "boll_upper": "boll_upper",
-                "boll_mid": "boll_mid",
-                "boll_lower": "boll_lower",
-                "cci": "cci",
-            }
-
-            with get_connection() as conn:
-                cursor = conn.cursor()
-                records = []
-                for row in df.itertuples(index=False):
-                    row_dict = row._asdict()
-                    values = [row_dict.get(field_map.get(k, k), 0) for k in field_map.keys()]
-                    records.append(values)
-
-                cursor.executemany(
-                    """
-                    INSERT OR REPLACE INTO tushare_indicator_cache
-                    (ts_code, trade_date, close, macd_dif, macd_dea, macd,
-                     kdj_k, kdj_d, kdj_j, rsi_6, rsi_12, rsi_24,
-                     boll_upper, boll_mid, boll_lower, cci)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    records,
-                )
-
-            latest_date = df["trade_date"].max()
-            self._log_sync("stk_factor", ts_code, latest_date, "success")
-            logger.info(f"Tushare 指标同步完成: {ts_code}, {len(df)} 条")
-            return len(df)
-
-        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
-            logger.error(f"Tushare 指标同步失败 {ts_code}: {e}")
-            self._log_sync("stk_factor", ts_code, "", "failed", str(e))
-            return 0
-
-    def sync_all_stk_factor(self, ts_codes: list[str] | None = None, days: int = 365) -> dict[str, int]:
-        """批量同步 Tushare 官方指标（并发）"""
-        if ts_codes is None:
-            ts_codes = self._fetch_all_codes("SELECT ts_code FROM stock_basic")
-
-        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
-        end_date = datetime.now().strftime("%Y%m%d")
-
-        return self._batch_sync("Tushare指标", lambda code: self.sync_stk_factor(code, start_date, end_date), ts_codes)
-
     # ==================== 每日估值指标 (PE/PB/PS) ====================
 
     def ensure_daily_basic_columns(self) -> None:
@@ -572,7 +507,7 @@ class DataSyncer:
         """
         同步单只股票的每日估值指标（PE/PB/PS/市值等）
 
-        使用 Tushare daily_basic 接口，数据写入 daily_kline 表对应列。
+        使用每日基础指标接口，数据写入 daily_kline 表对应列。
 
         Args:
             ts_code: 股票代码
@@ -600,25 +535,26 @@ class DataSyncer:
                 cursor = conn.cursor()
                 for row in df.itertuples(index=False):
                     row_dict = row._asdict()
-                    cursor.execute(
-                        """
-                        UPDATE daily_kline SET
-                            pe = ?, pe_ttm = ?, pb = ?, ps = ?, ps_ttm = ?,
-                            total_mv = ?, circ_mv = ?
-                        WHERE ts_code = ? AND trade_date = ?
-                    """,
-                        (
-                            row_dict.get("pe"),
-                            row_dict.get("pe_ttm"),
-                            row_dict.get("pb"),
-                            row_dict.get("ps"),
-                            row_dict.get("ps_ttm"),
-                            row_dict.get("total_mv"),
-                            row_dict.get("circ_mv"),
-                            row_dict["ts_code"],
-                            row_dict["trade_date"],
-                        ),
-                    )
+                    # 构建 SET 子句：仅更新非 None 的值，避免覆盖已有数据
+                    # 注意：BaoStock 只返回 pe_ttm/pb/ps_ttm/pcf_ncf_ttm，
+                    # 不返回 pe/ps/total_mv/circ_mv（这些字段永远为 None）
+                    set_clauses = []
+                    params = []
+                    for field in ["pe_ttm", "pb", "ps_ttm", "pcf_ncf_ttm"]:
+                        value = row_dict.get(field)
+                        if value is not None:
+                            set_clauses.append(f"{field} = ?")
+                            params.append(value)
+                    
+                    if set_clauses:
+                        params.extend([row_dict["ts_code"], row_dict["trade_date"]])
+                        cursor.execute(
+                            f"""
+                            UPDATE daily_kline SET {', '.join(set_clauses)}
+                            WHERE ts_code = ? AND trade_date = ?
+                        """,
+                            params,
+                        )
 
             self._log_sync("daily_basic", ts_code, end_date, "success")
             return len(df)

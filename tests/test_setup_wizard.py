@@ -18,7 +18,7 @@ from modules.setup_wizard import (
 class TestCheckEnvExists:
     def test_no_env_not_configured(self):
         # 清除环境变量
-        for key in ("TUSHARE_TOKEN", "DATA_MODE"):
+        for key in ("DATA_MODE",):
             if key in os.environ:
                 del os.environ[key]
         assert check_env_exists() is False
@@ -43,18 +43,14 @@ class TestWriteEnvFile:
         """写 JNB 模式"""
         if "DATA_MODE" in os.environ:
             del os.environ["DATA_MODE"]
-        if "TUSHARE_TOKEN" in os.environ:
-            del os.environ["TUSHARE_TOKEN"]
 
         temp_file = tmp_path / ".env"
-        path = write_env_file(token="test_token_12345", mode=MODE_JNB, env_path=temp_file)
+        path = write_env_file(mode=MODE_JNB, env_path=temp_file)
         assert Path(path).exists()
         assert os.environ.get("DATA_MODE") == MODE_JNB
-        assert os.environ.get("TUSHARE_TOKEN") == "test_token_12345"
 
         content = Path(path).read_text(encoding="utf-8")
         assert "DATA_MODE=jnb" in content
-        assert "TUSHARE_TOKEN=test_token_12345" in content
 
 
 class TestCheckDataMode:

@@ -179,8 +179,16 @@ def get_kline_data(ts_code: str, days: int = 120) -> list[dict]:
                 "dmi_plus": row["dmi_plus"] or 0,
                 "dmi_minus": row["dmi_minus"] or 0,
                 "net_mf": row["net_mf"] or 0,
-                "large_inflow": (row["buy_lg_amount"] or 0) + (row["buy_elg_amount"] or 0),
-                "large_outflow": (row["sell_lg_amount"] or 0) + (row["sell_elg_amount"] or 0),
+                # 大单资金流向：优先使用 buy_*/sell_* 明细（部分数据源提供），
+                # 若明细为 0（AkShare 仅提供净额），则用 net_mf 近似
+                "large_inflow": (
+                    ((row["buy_lg_amount"] or 0) + (row["buy_elg_amount"] or 0))
+                    or max(row["net_mf"] or 0, 0)
+                ),
+                "large_outflow": (
+                    ((row["sell_lg_amount"] or 0) + (row["sell_elg_amount"] or 0))
+                    or max(-(row["net_mf"] or 0), 0)
+                ),
             }
         )
 

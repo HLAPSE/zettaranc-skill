@@ -3,7 +3,7 @@ P1-4 回归测试：data_sync._RateLimiter 模块级限流器
 
 - multiprocessing 安全（同机多进程共享）
 - 滑动窗口 token bucket
-- TUSHARE_RPM env var 覆盖
+- API_RATE_LIMIT env var 覆盖
 - 替换原 instance-level _rate_limit_lock
 """
 
@@ -171,7 +171,7 @@ def test_data_syncer_rate_limit_does_not_crash():
     """DataSyncer._rate_limit(api_name) 调一次不应该崩（即使没真发请求）"""
     from modules.data_sync import DataSyncer
 
-    # 用 __new__ 绕过 __init__ 的 Tushare token 强制检查（websearch 模式下不影响，
+    # 用 __new__ 绕过 __init__ 的 datasource 初始化（websearch 模式下不影响，
     # 但更稳是手动设 attrs）。设 min_interval/last_request_time/_rate_limit_lock 与 __init__ 一致。
     syncer = DataSyncer.__new__(DataSyncer)
     syncer.min_interval = 60 / 120
@@ -185,16 +185,16 @@ def test_data_syncer_rate_limit_does_not_crash():
     assert "test_api" in syncer.last_request_time
 
 
-# ==================== TUSHARE_RPM env 变量 ====================
+# ==================== API_RATE_LIMIT env 变量 ====================
 
 
-def test_global_limiter_reads_tushare_rpm_env(monkeypatch):
-    """TUSHARE_RPM env var 必须能覆盖默认 180"""
+def test_global_limiter_reads_api_rate_limit_env(monkeypatch):
+    """API_RATE_LIMIT env var 必须能覆盖默认 180"""
     # 模块级 _GLOBAL_LIMITER 在 import 时已确定 max_per_min
-    # 验证模块级代码确实读了 TUSHARE_RPM（静态检查）
+    # 验证模块级代码确实读了 API_RATE_LIMIT（静态检查）
     import inspect
     from modules.data_sync import rate_limiter
 
     src = inspect.getsource(rate_limiter)
-    assert "TUSHARE_RPM" in src
+    assert "API_RATE_LIMIT" in src
     assert "os.environ.get" in src

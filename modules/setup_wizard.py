@@ -1,6 +1,6 @@
 """
 启动向导模块
-用户首次使用时引导配置数据源：JNB 模式（走 Tushare API）或 普通小万模式（走网络搜索）
+用户首次使用时引导配置数据源：JNB 模式（走 BaoStock + AkShare）或 普通小万模式（走网络搜索）
 """
 
 from typing import Optional
@@ -15,7 +15,7 @@ from .core.errors import ErrorCode, ZettarancError
 logger = logging.getLogger(__name__)
 
 # 数据模式别名
-MODE_JNB = "jnb"  # JNB 模式：走 Tushare API
+MODE_JNB = "jnb"  # JNB 模式：走 BaoStock + AkShare
 MODE_NORMAL = "websearch"  # 普通小万模式：走网络搜索
 MODE_NAMES = {
     MODE_JNB: "JNB",
@@ -29,10 +29,8 @@ def check_env_exists() -> bool:
     if not env_path.exists():
         return False
 
-    # 检查是否有有效的 token（不是占位符）
-    token = os.environ.get("TUSHARE_TOKEN", "")
     data_mode = os.environ.get("DATA_MODE", "")
-    return bool(token) and "你的" not in token and data_mode != ""
+    return data_mode != ""
 
 
 def check_data_mode() -> str | None:
@@ -45,12 +43,11 @@ def get_mode_display_name(mode: str) -> str:
     return MODE_NAMES.get(mode, mode)
 
 
-def write_env_file(token: str | None = None, mode: str = MODE_NORMAL, env_path: Path | None = None) -> str:
+def write_env_file(mode: str = MODE_NORMAL, env_path: Path | None = None) -> str:
     """
     写入 .env 文件
 
     Args:
-        token: Tushare Token，普通小万模式下可为 None
         mode: 数据模式，"jnb" 或 "websearch"
         env_path: 目标 .env 写入路径（可选，若未指定则写入默认位置）
 
@@ -61,53 +58,36 @@ def write_env_file(token: str | None = None, mode: str = MODE_NORMAL, env_path: 
         env_path = Path(__file__).parent.parent / ".env"
 
     lines = [
-        "# 数据模式: jnb(JNB模式/走Tushare API) 或 websearch(普通小万模式/走网络搜索)",
+        "# 数据模式: jnb(JNB模式/走 BaoStock + AkShare) 或 websearch(普通小万模式/走网络搜索)",
         f"DATA_MODE={mode}",
         "",
+        "# 数据库路径（相对于项目根目录）",
+        "DATA_DIR=data",
+        "DB_PATH=data/stock_data.db",
+        "",
     ]
-
-    if token:
-        lines.extend(
-            [
-                "# Tushare API 配置",
-                f"TUSHARE_TOKEN={token}",
-                "",
-            ]
-        )
-
-    lines.extend(
-        [
-            "# 数据库路径（相对于项目根目录）",
-            "DATA_DIR=data",
-            "DB_PATH=data/stock_data.db",
-            "",
-        ]
-    )
 
     env_path.write_text("\n".join(lines), encoding="utf-8")
 
     # 同时设置环境变量，使当前会话立即生效
     os.environ["DATA_MODE"] = mode
-    if token:
-        os.environ["TUSHARE_TOKEN"] = token
 
     return str(env_path)
 
 
-def test_jnb_connection(token: str) -> bool:
+def test_baostock_connection() -> bool:
     """
-    测试 JNB(Tushare) 连通性
+    测试 BaoStock 连通性
 
     Returns:
         True 表示连接成功
     """
-    from .tushare_client import TushareClient
-
     try:
-        client = TushareClient(token=token)
+        from .baostock_client import get_client
+        client = get_client()
         return client.check_connection()
-    except (ZettarancError, OSError, ConnectionError, TimeoutError, ValueError) as e:
-        logger.warning("[启动向导] JNB 连通性测试失败 (code=%s): %s", ErrorCode.DATA_SOURCE_ERROR.value, e)
+    except (OSError, ConnectionError, TimeoutError, ValueError) as e:
+        logger.warning("[启动向导] BaoStock 连通性测试失败: %s", e)
         print(f"  连接测试失败: {e}")
         return False
 
@@ -119,7 +99,7 @@ def run_wizard() -> str | None:
     流程：
     1. 检查是否已配置
     2. 询问用户选择数据模式
-    3. 如选 JNB，收集 Token 并测试连通性
+    3. 如选 JNB，测试 BaoStock 连通性
     4. 写入 .env 并确认
     """
     print("=" * 50)
@@ -141,7 +121,7 @@ def run_wizard() -> str | None:
 
     print("欢迎使用 Zettaranc！请选择模式：")
     print()
-    print("  [1] JNB — 走 Tushare API（需要 Token，指标全开）")
+    print("  [1] JNB — 走 BaoStock + AkShare（免费数据源，指标全开）")
     print("  [2] 普通小万 — 走网络搜索（不用配，开箱即用）")
     print()
 
@@ -154,31 +134,19 @@ def run_wizard() -> str | None:
     if choice == "1":
         # ====== JNB 模式 ======
         print()
-        print("请输入你的 Tushare Token（56位）")
-        print("  获取地址：https://tushare.pro/user/token")
-        print()
-
-        while True:
-            token = input("Token: ").strip()
-            if len(token) >= 30:
-                break
-            print("  Token 长度不够，请重新输入")
-
-        print()
-        print("正在测试连通性...")
-        if test_jnb_connection(token):
+        print("正在测试 BaoStock 连通性...")
+        if test_baostock_connection():
             print("  连接测试通过！")
-            env_path = write_env_file(token=token, mode=MODE_JNB)
+            env_path = write_env_file(mode=MODE_JNB)
             print(f"  配置已写入: {env_path}")
             print()
-            print("JNB 模式已启用")
+            print("JNB 模式已启用（BaoStock + AkShare）")
             return MODE_JNB
         else:
             print("  连接测试失败")
             print()
             retry = input("是否重试？[y/n]: ").strip().lower()
             if retry == "y":
-                os.environ.pop("TUSHARE_TOKEN", None)
                 return run_wizard()
             else:
                 print("已切换至普通小万模式")

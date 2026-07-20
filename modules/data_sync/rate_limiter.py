@@ -18,12 +18,12 @@ _MAX_SYNC_WORKERS = 5
 # 多进程安全：同机多进程共享同一把 multiprocessing.Lock
 # 限流仅同机多进程有效，跨机器需 Redis 协调（详见 plan P1-4 风险）
 class _RateLimiter:
-    """Tushare 限流器（多进程安全 + 滑动窗口 token bucket）
+    """API 限流器（多进程安全 + 滑动窗口 token bucket）
 
     设计：
     - 60s 滑动窗口内的请求计数（in-memory deque）
     - multiprocessing.Lock 序列化 critical section
-    - TUSHARE_RPM env var 控制 max requests/min（默认 180，留 20 缓冲应对 200 上限）
+    - API_RATE_LIMIT env var 控制 max requests/min（默认 180）
 
     用法：
         _GLOBAL_LIMITER.wait()  # 阻塞直到安全可调
@@ -65,7 +65,7 @@ class _RateLimiter:
 
 
 # 模块级单例（v2.10.0 P1-4 替代原 instance-level _rate_limit_lock）
-_GLOBAL_LIMITER = _RateLimiter(max_per_min=int(os.environ.get("TUSHARE_RPM", "180")))
+_GLOBAL_LIMITER = _RateLimiter(max_per_min=int(os.environ.get("API_RATE_LIMIT", "180")))
 
 
 def _rate_limit_global() -> None:

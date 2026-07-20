@@ -203,9 +203,6 @@ class UnpicklableDataSource:
     def get_daily_basic(self, ts_code, start_date, end_date):
         return None
 
-    def get_stk_factor(self, ts_code, start_date, end_date):
-        return None
-
     def get_stock_basic(self, ts_code=None, name=None):
         return None
 
@@ -214,6 +211,30 @@ class UnpicklableDataSource:
 
     def get_stock_list(self, exchange=None):
         return [{"ts_code": f"00000{i}.SZ", "name": f"Stock{i}", "market": "主板"} for i in range(60)]
+
+    def get_limit_list(self, trade_date):
+        return None
+
+    def get_top_list(self, trade_date):
+        return None
+
+    def get_financial_indicator(self, ts_code, start_year="2020"):
+        return None
+
+    def get_valuation(self, ts_code):
+        return None
+
+    def get_northbound_flow(self, days=30):
+        return None
+
+    def get_margin_data(self, date=""):
+        return None
+
+    def get_industry_board(self):
+        return None
+
+    def get_concept_board(self):
+        return None
 
     def get_kline_dicts(self, ts_code, days=60, start_date=None, end_date=None):
         return []
