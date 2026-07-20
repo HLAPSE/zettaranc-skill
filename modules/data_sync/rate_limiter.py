@@ -11,7 +11,8 @@ from ..constants import RATE_LIMITER_WINDOW_BUFFER_S
 logger = logging.getLogger(__name__)
 
 # 并发同步线程数（4 个 sync_* 方法共用）
-_MAX_SYNC_WORKERS = 5
+# BaoStock 官方建议不超过 20 并发
+_MAX_SYNC_WORKERS = 15
 
 
 # ==================== 模块级限流器（v2.10.0 P1-4） ====================
