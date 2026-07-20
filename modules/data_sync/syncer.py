@@ -496,6 +496,7 @@ class DataSyncer:
                 ("pb", "REAL"),
                 ("ps", "REAL"),
                 ("ps_ttm", "REAL"),
+                ("pcf_ncf_ttm", "REAL"),
                 ("total_mv", "REAL"),
                 ("circ_mv", "REAL"),
             ]:
