@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import atexit
 import logging
+import threading
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -25,6 +26,9 @@ class BaoStockClient:
     使用时通过 ``get_client()`` 获取单例，客户端会自动登录并保持连接，
     程序退出时自动登出。
 
+    **线程安全**：``_ensure_login`` 使用 ``threading.Lock`` 保护，
+    避免多线程并发登录导致 ``Connection reset by peer``。
+
     支持的数据：
     - 日线/周线/月线行情（含 PE/PB/PS/换手率等基础指标）
     - 指数行情
@@ -34,6 +38,7 @@ class BaoStockClient:
     """
 
     def __init__(self) -> None:
+        self._login_lock = threading.Lock()
         try:
             import baostock as bs
             self._bs = bs
@@ -46,28 +51,32 @@ class BaoStockClient:
             self._logged_in = False
 
     def _ensure_login(self) -> bool:
-        """确保已登录，如果未登录则执行登录"""
+        """确保已登录，如果未登录则执行登录（线程安全）"""
         if not self._available:
             return False
         if self._logged_in:
             return True
-        try:
-            lg = self._bs.login()
-            self._logged_in = lg.error_code == "0"
-            return self._logged_in
-        except (
-            ConnectionError,
-            TimeoutError,
-            OSError,
-            ValueError,
-            KeyError,
-            AttributeError,
-            TypeError,
-            RuntimeError,
-        ) as e:
-            logger.warning("[baostock] login 失败: %s", e)
-            self._logged_in = False
-            return False
+        with self._login_lock:
+            # 双重检查：可能在等锁期间已被其他线程登录
+            if self._logged_in:
+                return True
+            try:
+                lg = self._bs.login()
+                self._logged_in = lg.error_code == "0"
+                return self._logged_in
+            except (
+                ConnectionError,
+                TimeoutError,
+                OSError,
+                ValueError,
+                KeyError,
+                AttributeError,
+                TypeError,
+                RuntimeError,
+            ) as e:
+                logger.warning("[baostock] login 失败: %s", e)
+                self._logged_in = False
+                return False
 
     def check_connection(self) -> bool:
         """检查 BaoStock 是否可用"""
@@ -313,6 +322,57 @@ class BaoStockClient:
             RuntimeError,
         ) as e:
             logger.warning("[baostock] get_index_daily 失败 %s: %s", ts_code, e)
+            return None
+
+    def get_all_stocks_daily(self, date: str) -> pd.DataFrame | None:
+        """获取全市场某天的股票列表（仅元数据，无 OHLCV）
+
+        .. deprecated::
+            BaoStock 不支持批量获取全市场某天的 K 线数据。
+            此方法现仅返回 ``query_all_stock(day)`` 的结果（code/tradeStatus/isST/code_name），
+            用于"今天有哪些股票交易"的元数据查询。
+
+            对于全市场 K 线同步：
+            - 当天数据：使用 ``AkShareClient.get_all_stocks_spot()`` 实时快照
+            - 历史日期：使用 ``DataSyncer.sync_all_daily_kline()`` 逐股并发查询
+
+        Args:
+            date: 交易日期，格式 YYYY-MM-DD
+
+        Returns:
+            包含 code/tradeStatus/isST/code_name 的 DataFrame
+        """
+        if not self._available:
+            return None
+        try:
+            if not self._ensure_login():
+                return None
+
+            rs = self._bs.query_all_stock(day=date)
+            df = self._fetch_result(rs)
+            if df is None or df.empty:
+                return None
+
+            # 字段映射
+            df = df.rename(columns={
+                "code": "ts_code",
+                "tradeStatus": "trade_status",
+                "code_name": "name",
+            })
+            df["ts_code"] = df["ts_code"].apply(self._convert_ts_code_full)
+            return df
+
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            KeyError,
+            AttributeError,
+            TypeError,
+            RuntimeError,
+        ) as e:
+            logger.warning("[baostock] get_all_stocks_daily 失败 %s: %s", date, e)
             return None
 
     def get_kline_dicts(

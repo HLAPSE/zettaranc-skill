@@ -11,8 +11,9 @@ from ..constants import RATE_LIMITER_WINDOW_BUFFER_S
 logger = logging.getLogger(__name__)
 
 # 并发同步线程数（4 个 sync_* 方法共用）
-# BaoStock 官方建议不超过 20 并发
-_MAX_SYNC_WORKERS = 15
+# BaoStock 底层 socket 非线程安全，>5 并发会出现数据混乱
+# （'utf-8 codec can't decode' / '接收数据异常'）
+_MAX_SYNC_WORKERS = 5
 
 
 # ==================== 模块级限流器（v2.10.0 P1-4） ====================
@@ -66,7 +67,8 @@ class _RateLimiter:
 
 
 # 模块级单例（v2.10.0 P1-4 替代原 instance-level _rate_limit_lock）
-_GLOBAL_LIMITER = _RateLimiter(max_per_min=int(os.environ.get("API_RATE_LIMIT", "180")))
+# 默认 10000 req/min（BaoStock 无严格限流，50 并发下基本不成为瓶颈）
+_GLOBAL_LIMITER = _RateLimiter(max_per_min=int(os.environ.get("API_RATE_LIMIT", "10000")))
 
 
 def _rate_limit_global() -> None:

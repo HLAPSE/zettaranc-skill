@@ -11,6 +11,8 @@ import concurrent.futures
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+import pandas as pd
+
 from ..database import get_connection, get_db_path
 from ..datasource import DataSource, get_datasource
 from .rate_limiter import _rate_limit_global, _MAX_SYNC_WORKERS
@@ -378,22 +380,472 @@ class DataSyncer:
             results[code] = count
         return results
 
+    def sync_daily_batch(self, date: str, *, force_historical: bool = False) -> int:
+        """按天批量同步全市场日线数据（混合方案）
+
+        根据日期自动选择数据源路径：
+        - **当天数据**：优先使用 ``AkShareClient.get_all_stocks_spot()`` 实时快照
+          （一次获取全市场约 5000+ 只，速度比逐股快 100 倍）。
+          如果 AkShare 失败（如反爬虫），**直接返回 0**，不降级到逐股同步
+          （7310 只逐股同步太慢，且当天数据可明日用历史接口补）。
+        - **历史日期**：直接返回 0，提示使用 ``sync_incremental`` 或 ``sync_all_daily_kline``
+          （逐股增量同步，每只一次获取多天，比逐天逐股快 N 倍）。
+
+        Args:
+            date: 交易日期，格式 YYYYMMDD
+            force_historical: 强制走历史日期路径（跳过 AkShare 快照），
+                即使 date 是今天。用于测试或避开 AkShare。
+
+        Returns:
+            同步记录数（行数）
+        """
+        today = datetime.now().strftime("%Y%m%d")
+
+        # 当天数据：尝试 AkShare 批量快照
+        if date == today and not force_historical:
+            count = self._sync_daily_batch_via_akshare(date)
+            if count > 0:
+                return count
+            logger.warning(
+                f"AkShare 快照失败，跳过当天数据同步（不降级到逐股，明日可用 sync_incremental 补）: {date}"
+            )
+            return 0
+
+        # 历史日期：使用 BaoStock 批量 API
+        if date != today:
+            return self._sync_daily_batch_via_baostock(date)
+        return 0
+
+    def _sync_daily_batch_via_baostock(self, date: str) -> int:
+        """BaoStock 批量同步历史日期数据
+
+        使用 query_daily_history_k_AStock 一次获取全市场数据，
+        比逐股同步快 100 倍以上。
+        """
+        try:
+            from modules.baostock_client import get_client
+            client = get_client()
+
+            # 转换日期格式 YYYYMMDD → YYYY-MM-DD
+            date_fmt = f"{date[:4]}-{date[4:6]}-{date[6:]}"
+
+            df = self._call_api_with_retry(
+                "daily_batch_baostock",
+                client.get_all_stocks_daily,
+                date_fmt,
+            )
+
+            if df is None or len(df) == 0:
+                return 0
+
+            # 确保 PE/PB/PS 列存在
+            self.ensure_daily_basic_columns()
+
+            # 计算涨跌停标记
+            df["is_limit_up"] = df["pct_chg"].apply(
+                lambda x: 1 if pd.notna(x) and x >= _LIMIT_THRESHOLD else 0
+            )
+            df["is_limit_down"] = df["pct_chg"].apply(
+                lambda x: 1 if pd.notna(x) and x <= -_LIMIT_THRESHOLD else 0
+            )
+
+            return self._upsert_daily_kline_batch(df, source="baostock_batch")
+
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
+            logger.error(f"BaoStock 批量同步失败 {date}: {e}")
+            self._log_sync("daily_batch_baostock", None, date, "failed", str(e))
+            return 0
+
+    def _sync_daily_batch_via_akshare(self, date: str) -> int:
+        """AkShare 实时快照批量同步（仅支持当天）"""
+        try:
+            from modules.akshare_client import get_client as get_akshare_client
+            akshare_client = get_akshare_client()
+            if not akshare_client.available:
+                return 0
+
+            df = self._call_api_with_retry(
+                "daily_batch_akshare",
+                akshare_client.get_all_stocks_spot,
+            )
+            if df is None or len(df) == 0:
+                return 0
+
+            # 确保 PE/PB/PS/总市值/流通市值 列存在
+            self.ensure_daily_basic_columns()
+
+            # 计算涨跌停标记
+            df["is_limit_up"] = df["pct_chg"].apply(
+                lambda x: 1 if pd.notna(x) and x >= _LIMIT_THRESHOLD else 0
+            )
+            df["is_limit_down"] = df["pct_chg"].apply(
+                lambda x: 1 if pd.notna(x) and x <= -_LIMIT_THRESHOLD else 0
+            )
+
+            # 强制使用传入的 date（AkShare 返回的是 today）
+            df["trade_date"] = date
+
+            return self._upsert_daily_kline_batch(df, source="akshare_spot")
+
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
+            logger.error(f"AkShare 批量同步失败 {date}: {e}")
+            self._log_sync("daily_batch_akshare", None, date, "failed", str(e))
+            return 0
+
+    def _upsert_daily_kline_batch(self, df, source: str = "batch") -> int:
+        """将 DataFrame 批量 upsert 到 daily_kline 表
+
+        使用 upsert 模式：先 INSERT OR IGNORE 新行，再 UPDATE 已存在行。
+        使用 COALESCE 保留已有有效值（避免覆盖 sync_daily_basic 设置的 total_mv/circ_mv）。
+
+        Args:
+            df: 包含 ts_code, trade_date, open, high, low, close, vol, amount,
+                pct_chg, (可选) pe_ttm, pb, ps_ttm, total_mv, circ_mv 等列的 DataFrame
+            source: 数据源标记（用于日志）
+
+        Returns:
+            写入行数
+        """
+        try:
+            # 确保 PE/PB/PS/总市值/流通市值 列存在
+            self.ensure_daily_basic_columns()
+
+            # 计算涨跌停标记
+            if "is_limit_up" not in df.columns:
+                df["is_limit_up"] = df["pct_chg"].apply(
+                    lambda x: 1 if pd.notna(x) and x >= _LIMIT_THRESHOLD else 0
+                )
+            if "is_limit_down" not in df.columns:
+                df["is_limit_down"] = df["pct_chg"].apply(
+                    lambda x: 1 if pd.notna(x) and x <= -_LIMIT_THRESHOLD else 0
+                )
+
+            insert_records = []
+            update_records = []
+            for row in df.itertuples(index=False):
+                row_dict = row._asdict()
+                insert_records.append(
+                    (
+                        row_dict["ts_code"],
+                        row_dict["trade_date"],
+                        row_dict.get("open"),
+                        row_dict.get("high"),
+                        row_dict.get("low"),
+                        row_dict.get("close"),
+                        row_dict.get("vol"),
+                        row_dict.get("amount"),
+                        row_dict.get("pct_chg", 0),
+                        None,  # vol_ratio
+                        row_dict.get("is_limit_up", 0),
+                        row_dict.get("is_limit_down", 0),
+                        row_dict.get("pe_ttm"),
+                        row_dict.get("pb"),
+                        row_dict.get("ps_ttm"),
+                    )
+                )
+                update_records.append(
+                    (
+                        row_dict.get("open"),
+                        row_dict.get("high"),
+                        row_dict.get("low"),
+                        row_dict.get("close"),
+                        row_dict.get("vol"),
+                        row_dict.get("amount"),
+                        row_dict.get("pct_chg", 0),
+                        None,  # vol_ratio
+                        row_dict.get("is_limit_up", 0),
+                        row_dict.get("is_limit_down", 0),
+                        row_dict.get("pe_ttm"),
+                        row_dict.get("pb"),
+                        row_dict.get("ps_ttm"),
+                        row_dict["ts_code"],
+                        row_dict["trade_date"],
+                    )
+                )
+
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
+                # 先尝试插入新行（忽略已存在的）
+                cursor.executemany(
+                    """
+                    INSERT OR IGNORE INTO daily_kline
+                    (ts_code, trade_date, open, high, low, close, vol, amount,
+                     pct_chg, vol_ratio, is_limit_up, is_limit_down, pe_ttm, pb, ps_ttm)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    insert_records,
+                )
+
+                # 再更新已存在的行（保留 sync_daily_basic 设置的 total_mv/circ_mv 等字段）
+                # 使用 COALESCE 避免用 NULL/NaN 覆盖已有的有效值
+                cursor.executemany(
+                    """
+                    UPDATE daily_kline SET
+                        open = ?, high = ?, low = ?, close = ?, vol = ?, amount = ?,
+                        pct_chg = ?, vol_ratio = ?, is_limit_up = ?, is_limit_down = ?,
+                        pe_ttm = COALESCE(?, pe_ttm), pb = COALESCE(?, pb), ps_ttm = COALESCE(?, ps_ttm)
+                    WHERE ts_code = ? AND trade_date = ?
+                """,
+                    update_records,
+                )
+
+            date_str = str(df["trade_date"].iloc[0]) if len(df) > 0 else ""
+            self._log_sync(
+                "daily_batch",
+                None,
+                date_str,
+                "success",
+                f"{len(insert_records)} stocks via {source}",
+            )
+            logger.info(f"批量写入完成 ({source}): {date_str}, {len(insert_records)} 只股票")
+            return len(insert_records)
+
+        except (sqlite3.Error, ValueError, KeyError, OSError) as e:
+            logger.error(f"批量写入失败 ({source}): {e}")
+            date_str = str(df["trade_date"].iloc[0]) if len(df) > 0 else ""
+            self._log_sync("daily_batch", None, date_str, "failed", str(e))
+            return 0
+
+    def sync_daily_batch_range(self, start_date: str, end_date: str) -> dict[str, int]:
+        """批量同步日期范围内的全市场日线数据
+
+        自动获取交易日历，只同步交易日。
+
+        Args:
+            start_date: 开始日期，格式 YYYYMMDD
+            end_date: 结束日期，格式 YYYYMMDD
+
+        Returns:
+            dict[日期] = 同步股票数
+        """
+        # 获取交易日历（使用公共方法，不直接访问 client._bs）
+        from modules.baostock_client import get_client
+        client = get_client()
+        trade_cal_df = client.get_trade_cal(
+            exchange="SSE",
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        if trade_cal_df is None or trade_cal_df.empty:
+            logger.warning(f"无法获取交易日历 {start_date}~{end_date}")
+            return {}
+
+        # 筛选交易日（is_open=True）
+        trade_dates = trade_cal_df[trade_cal_df["is_open"] == True]["trade_date"].tolist()  # noqa: E712
+        logger.info(f"交易日范围: {len(trade_dates)} 天")
+
+        results = {}
+        for date in trade_dates:
+            count = self.sync_daily_batch(date)
+            results[date] = count
+
+        return results
+
+    def sync_incremental(self, days: int = 7) -> dict[str, int]:
+        """增量同步：逐股并发获取缺失的 K 线数据
+
+        **设计原理**：使用 ``sync_all_daily_kline`` 逐股增量同步，
+        每只股票一次 API 调用获取多天数据（比逐天逐股快 N 倍）。
+        近 2 天已同步的股票会自动跳过。
+
+        流程：
+        1. 同步 stock_basic（每周一次）
+        2. 逐股并发获取 K 线（``sync_all_daily_kline``，智能跳过）
+        3. 当天数据额外尝试 AkShare 快照（如果 BaoStock 还没今天的）
+        4. 并行计算技术指标
+
+        Args:
+            days: 回溯天数（默认7天）
+
+        Returns:
+            dict[类型] = 记录数（kline/indicator/basic）
+        """
+        results = {"kline": 0, "indicator": 0, "basic": 0}
+
+        # 1. 同步 stock_basic（仅每周同步一次）
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(last_date) FROM sync_log WHERE data_type='stock_basic'")
+            row = cursor.fetchone()
+            last_basic_sync = row[0] if row and row[0] else None
+
+        if last_basic_sync:
+            last_dt = datetime.strptime(last_basic_sync, "%Y%m%d")
+            if (datetime.now() - last_dt).days < 7:
+                logger.info(f"stock_basic 最近已同步（{last_basic_sync}），跳过")
+            else:
+                logger.info("同步股票基本信息...")
+                results["basic"] = self.sync_stock_basic()
+        else:
+            logger.info("同步股票基本信息...")
+            results["basic"] = self.sync_stock_basic()
+
+        # 2. 批量同步历史 K 线（使用 BaoStock 批量 API，比逐股快 100 倍）
+        logger.info(f"批量同步 K 线（回溯 {days} 天）...")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+        end_date = datetime.now().strftime("%Y%m%d")
+
+        # 获取交易日历
+        from modules.baostock_client import get_client
+        client = get_client()
+
+        start_fmt = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
+        end_fmt = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}"
+
+        rs = client._bs.query_trade_dates(start_date=start_fmt, end_date=end_fmt)
+        trade_dates = []
+        while rs.next():
+            row = rs.get_row_data()
+            if row[1] == "1":
+                trade_dates.append(row[0].replace("-", ""))
+
+        # 检查哪些日期已同步
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT trade_date FROM daily_kline")
+            synced_dates = {row[0] for row in cursor.fetchall()}
+
+        missing_dates = [d for d in trade_dates if d not in synced_dates]
+        logger.info(f"交易日: {len(trade_dates)} 天, 已同步: {len(synced_dates)} 天, 缺失: {len(missing_dates)} 天")
+
+        # 批量同步缺失日期
+        if missing_dates:
+            logger.info(f"开始批量同步 {len(missing_dates)} 天数据...")
+            for date in missing_dates:
+                count = self.sync_daily_batch(date)
+                results["kline"] += count
+
+        # 3. 当天数据：额外尝试 AkShare 快照（BaoStock 可能还没今天的）
+        today = datetime.now().strftime("%Y%m%d")
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM daily_kline WHERE trade_date = ?", (today,))
+            today_count = cursor.fetchone()[0]
+
+        if today_count == 0:
+            logger.info("尝试 AkShare 快照补充当天数据...")
+            spot_count = self.sync_daily_batch(today)
+            results["kline"] += spot_count
+
+        # 4. 并行计算指标（仅有新数据的股票）
+        if results["kline"] > 0:
+            logger.info("开始并行计算指标...")
+            with get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT ts_code FROM daily_kline")
+                ts_codes = [row[0] for row in cursor.fetchall()]
+
+            indicator_results = self.sync_all_indicators(ts_codes=ts_codes or None)
+            results["indicator"] = sum(1 for v in indicator_results.values() if v > 0)
+
+        return results
+
+    def sync_full(self, days: int = 90, max_indicator_stocks: int | None = None) -> dict[str, int]:
+        """完整同步：全量 K 线 + 指标计算
+
+        **设计原理**：使用 ``sync_all_daily_kline`` 逐股增量同步，
+        每只股票一次 API 调用获取多天数据。
+
+        Args:
+            days: 同步天数（默认90天，满足所有指标计算需求）
+            max_indicator_stocks: 指标计算的最大股票数（None=全部，整数=限制数量，便于调试）
+
+        Returns:
+            dict[类型] = 记录数
+        """
+        results = {"kline": 0, "indicator": 0, "basic": 0}
+
+        # 1. 同步 stock_basic
+        logger.info("同步股票基本信息...")
+        results["basic"] = self.sync_stock_basic()
+
+        # 2. 逐股并发同步 K 线（核心：每只一次获取多天）
+        logger.info(f"逐股同步 K 线（{days} 天）...")
+        kline_results = self.sync_all_daily_kline(days=days)
+        results["kline"] = sum(kline_results.values())
+
+        # 3. 当天数据：额外尝试 AkShare 快照
+        today = datetime.now().strftime("%Y%m%d")
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM daily_kline WHERE trade_date = ?", (today,))
+            today_count = cursor.fetchone()[0]
+
+        if today_count == 0:
+            logger.info("尝试 AkShare 快照补充当天数据...")
+            results["kline"] += self.sync_daily_batch(today)
+
+        # 4. 并行计算指标（默认全部，可通过 max_indicator_stocks 限制）
+        logger.info("并行计算指标...")
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT ts_code FROM daily_kline")
+            ts_codes = [row[0] for row in cursor.fetchall()]
+
+        if max_indicator_stocks is not None:
+            ts_codes = ts_codes[:max_indicator_stocks]
+
+        indicator_results = self.sync_all_indicators(ts_codes=ts_codes or None)
+        results["indicator"] = sum(1 for v in indicator_results.values() if v > 0)
+
+        return results
+
     def sync_all_daily_kline(self, ts_codes: list[str] | None = None, days: int = 730) -> dict[str, int]:
-        """批量同步日线数据（并发，含智能跳过）"""
+        """批量同步日线数据（并发，含智能跳过）
+
+        优化：
+        - 批量预查询所有股票的最后同步日期（1 次 SQL 代替 N 次）
+        - 跳过近 1 天已同步的股票
+        - 并发 50 线程
+        """
         if ts_codes is None:
             ts_codes = self._fetch_all_codes("SELECT ts_code FROM stock_basic")
 
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
+        # 批量预查询所有股票的最后同步日期（1 次 SQL 代替 N 次）
+        last_dates_map: dict[str, str] = {}
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT ts_code, MAX(last_date) as last_date
+                FROM sync_log
+                WHERE data_type = 'daily_kline' AND status = 'success'
+                GROUP BY ts_code
+                """
+            )
+            for row in cursor.fetchall():
+                last_dates_map[row[0]] = row[1]
+
+        # 筛选需要同步的股票（跳过近 1 天已同步的）
+        today = datetime.now()
+        need_sync: list[str] = []
+        skipped = 0
+        for code in ts_codes:
+            last_date = last_dates_map.get(code)
+            if last_date:
+                try:
+                    last_dt = datetime.strptime(last_date, "%Y%m%d")
+                    if (today - last_dt).days < 1:
+                        skipped += 1
+                        continue
+                except ValueError:
+                    pass
+            need_sync.append(code)
+
+        logger.info(f"共 {len(ts_codes)} 只，跳过 {skipped} 只（近 1 天已同步），需同步 {len(need_sync)} 只")
+
+        if not need_sync:
+            return {}
+
         def _sync_one(code: str) -> int:
-            # 近2天已同步则跳过
-            last_date = self._get_last_date("daily_kline", code)
-            if last_date and (datetime.now() - datetime.strptime(last_date, "%Y%m%d")).days < 2:
-                return 0
             return self.sync_daily_kline(code, start_date, end_date)
 
-        return self._batch_sync("日线数据", _sync_one, ts_codes)
+        return self._batch_sync("日线数据", _sync_one, need_sync)
 
     # ==================== 指标缓存 ====================
 

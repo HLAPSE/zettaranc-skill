@@ -199,22 +199,24 @@ python3 -m scripts.optimize_for_v10_verify --rounds 5 --stocks 100 --days 300
 
 ## 完整安装（接入真实行情）
 
-> 需要 [Tushare Pro](https://tushare.pro/) Token（免费注册）+ 中转 API 地址。
+> 默认使用 [BaoStock](http://baostock.com) + [AkShare](https://akshare.akfamily.xyz) 双免费数据源，**无需注册、无需 Token**，安装即用。
 
 ```bash
 # 1. 克隆并安装
 git clone https://github.com/lululu811/zettaranc-skill.git && cd zettaranc-skill
 pip install -r requirements.txt && pip install -e .
 
-# 2. 配置环境变量
+# 2. 配置环境变量（可选：默认即走 BaoStock + AkShare）
 cp .env.example .env
-# 编辑 .env，填入你的 TUSHARE_TOKEN 和 TUSHARE_API_URL
+# 编辑 .env，设置 DATA_MODE=jnb
 
 # 3. 初始化数据库（15 张核心表 + 4 张自我改进跟踪表）
 python -m modules.database
 
-# 4. 同步股票数据
+# 4. 同步股票数据（首次建议 sync_incremental 增量同步，约 8 分钟）
 python -m modules.data_sync sync
+# 或高效增量同步（推荐）
+python -c "from modules.data_sync.syncer import DataSyncer; DataSyncer().sync_incremental(days=90)"
 
 # 5. 开始使用
 zt analyze 600519.SH --json
@@ -650,17 +652,20 @@ cp .env.example .env
 
 ```ini
 DATA_MODE=jnb
-TUSHARE_TOKEN=你的56位token
-TUSHARE_API_URL=中转API地址
+# 默认走 BaoStock + AkShare 双免费数据源，无需 Token
+# 可选配置项：
+# DB_PATH=data/stock_data.db         # 数据库路径
+# API_RATE_LIMIT=180                  # 数据源每分钟请求上限
+# LLM_API_KEY=***                     # 可选，启用 LLM 点评功能
+# IM_PUSH_WEBHOOK=                    # 可选，飞书 webhook 推送
 ```
 
 > [!NOTE]
-> * **数据模式**：`DATA_MODE=jnb` 时必须配置 Tushare Token 和 API URL；`DATA_MODE=websearch` 时可留空。
-> * **Token 获取**：前往 [Tushare 官网](https://tushare.pro/user/token) 注册获取 Token。
-> * **中转 API**：可使用中转服务商提供的代理地址。
+> * **数据模式**：`DATA_MODE=jnb` 接入真实行情（默认 BaoStock + AkShare，无需 Token）；`DATA_MODE=websearch` 纯框架对话。
+> * **数据源**：[BaoStock](http://baostock.com) 提供日线/指数/股票列表/PE/PB/PS，[AkShare](https://akshare.akfamily.xyz) 提供资金流向/实时行情/涨跌停/龙虎榜。两者均免费、无需注册。
 > * **LLM 配置**：可选。配置 `LLM_API_KEY` 等参数后可启用小万 LLM 对话及点评功能；未配置时将仅输出命令行分析及意图路由。
 > * **向量知识库**：默认关闭，设置 `KB_ENABLED=true` 并配置对应服务后可开启本地 RAG 知识检索。
-> * **bridge 中转**：`TUSHARE_BRIDGE_ENABLED=auto/always/never` 控制 tushare-data-bridge HTTP 缓存代理（v3.2.0 新增）。
+> * **bridge 中转**：`TUSHARE_BRIDGE_ENABLED=auto/always/never` 控制 tushare-data-bridge HTTP 缓存代理（可选，非必需）。
 
 ### 3. 初始化
 
@@ -700,15 +705,14 @@ python -m modules.cli simulate 000001.SZ --days 250 --atr-sizing --json
 
 ### 数据可用性路径
 
-当真实数据不可用时，系统会按以下优先级自动降级，确保分析框架始终可用：
+系统使用 BaoStock + AkShare 作为主要数据源，无需 Token 即可使用：
 
 | 优先级 | 数据来源 | 需要的配置 | 说明 |
 |--------|---------|-----------|------|
-| 1. Indevs | `INDEVS_API_KEY` | Tushare Replay API，配置后优先 | 优先数据源，v3.8.1 新增 |
-| 2. Tushare Pro | `TUSHARE_TOKEN` + `TUSHARE_API_URL` | 实时行情、财务数据、资金流向 | 最佳，数据最全 |
-| 3. tushare-data-bridge | `TUSHARE_BRIDGE_ENABLED=auto/always` | HTTP 代理缓存的数据 | Tushare 直连受限时自动回退 |
-| 4. 本地 SQLite | 已执行过 `python -m modules.data_sync sync` | `data/stock_data.db` | 离线 / 限额时的最后保障 |
-| 5. Websearch 模式 | `DATA_MODE=websearch` | 无需任何 Token | 纯框架与历史知识问答，无实时数据 |
+| 1. BaoStock + AkShare | 无需配置 | 免费数据源，安装即用 | **推荐**，K线/行情/资金流/涨跌停/龙虎榜 |
+| 2. Bridge（可选） | `TUSHARE_BRIDGE_ENABLED=auto/always` | HTTP 代理缓存的数据 | 自定义数据桥接 |
+| 3. 本地 SQLite | 已执行过同步 | `data/stock_data.db` | 离线 / 缓存 |
+| 4. Websearch 模式 | `DATA_MODE=websearch` | 无需任何配置 | 纯框架与历史知识问答 |
 
 > 即使处于降级路径，本工具也**不会编造价格或信号**，而是明确告知用户当前数据状态。
 
@@ -716,17 +720,17 @@ python -m modules.cli simulate 000001.SZ --days 250 --atr-sizing --json
 
 | 目标 | 命令 / 入口 | 所需数据 | 频率 |
 |------|------------|---------|------|
-| 每日市场扫描 | `zt daily` 或 `python -m modules.cli daily` | 本地 / bridge 即可 | 每日 |
-| 选股 + 战法过滤 | `zt screen --strategy B1 --limit 20` | 本地 / bridge / Tushare | 每日 |
-| 持仓检查 | `zt diagnose 600487.SH` | 本地 / bridge / Tushare | 持仓期间每日 |
-| 自选股监控 | `zt watchlist scan` | 本地 / bridge / Tushare | 每日 |
-| 主动预警 + 推送 | `zt-monitor` 或 `zt monitor` | 本地 / bridge / Tushare | 持仓期间 |
+| 每日市场扫描 | `zt daily` 或 `python -m modules.cli daily` | BaoStock + AkShare | 每日 |
+| 选股 + 战法过滤 | `zt screen --strategy B1 --limit 20` | BaoStock + AkShare | 每日 |
+| 持仓检查 | `zt diagnose 600487.SH` | BaoStock + AkShare | 持仓期间每日 |
+| 自选股监控 | `zt watchlist scan` | BaoStock + AkShare | 每日 |
+| 主动预警 + 推送 | `zt-monitor` 或 `zt monitor` | BaoStock + AkShare | 持仓期间 |
 | 记录交易 | `zt trade add "口语化描述"` | 无 | 每笔交易 |
 | 交易复盘 | `zt trade review` | 本地交易记录 | 每周 / 每月 |
-| 策略回测验证 | `zt backtest shaofu 600487.SH --days 250` | Tushare / bridge / SQLite | 按需 |
-| 端到端模拟 | `zt simulate 000001.SZ --days 250 --atr-sizing --json` | Tushare / bridge / SQLite | 按需 |
-| Walk-forward 寻优 | `zt simulate ... --walk-forward --wf-objective calmar` | Tushare / bridge / SQLite | 按需 |
-| 自我改进 | `zt self-optimize --target trading` | Tushare + LLM API Key | 每月 |
+| 策略回测验证 | `zt backtest shaofu 600487.SH --days 250` | BaoStock + AkShare | 按需 |
+| 端到端模拟 | `zt simulate 000001.SZ --days 250 --atr-sizing --json` | BaoStock + AkShare | 按需 |
+| Walk-forward 寻优 | `zt simulate ... --walk-forward --wf-objective calmar` | BaoStock + AkShare | 按需 |
+| 自我改进 | `zt self-optimize --target trading` | BaoStock + LLM API Key | 每月 |
 
 ---
 
@@ -845,11 +849,59 @@ zt monitor --json --no-push                       # 单次扫描
 ### 数据同步
 
 ```bash
-zt sync init                       # 初始化数据库
-zt sync status                     # 查看同步状态
+# CLI 命令
+zt sync init                                    # 初始化数据库
+zt sync status                                  # 查看同步状态
 zt sync sync --ts_code 600487.SH --days 120 --indicators   # 单股 + 指标缓存
-zt sync stk-factor --ts_code 600487.SH --days 365          # Tushare 官方指标 diff 验证
 ```
+
+### 高效同步（推荐）
+
+项目使用 BaoStock + AkShare 作为数据源，支持高效增量同步：
+
+```python
+from modules.data_sync.syncer import DataSyncer
+from modules.datasource import get_datasource
+
+# 初始化数据源（BaoStock + AkShare）
+ds = get_datasource('auto')
+syncer = DataSyncer(datasource=ds)
+
+# 日常增量同步（推荐，自动跳过已同步数据）
+# 首次运行：同步最近 90 天，约 8 分钟
+# 后续运行：仅同步缺失日期，约 1 秒
+syncer.sync_incremental(days=90)
+
+# 完整同步（首次部署或数据修复）
+syncer.sync_full(days=90)
+
+# 批量同步指定日期范围
+syncer.sync_daily_batch_range('20260714', '20260718')
+
+# 并行计算指标（15 并发）
+syncer.sync_all_indicators()
+```
+
+**同步性能**：
+
+| 场景 | 耗时 | 说明 |
+|------|------|------|
+| 增量同步（无新数据） | ~1 秒 | 自动跳过已同步内容 |
+| 增量同步（1天新数据） | ~10 秒 | 批量 API 获取全市场 |
+| 首次完整同步（90天） | ~8 分钟 | 交易日批量同步 |
+| 指标计算（全市场） | ~2 分钟 | 15 并发线程 |
+
+**数据源能力**：
+
+| 数据 | 来源 | 说明 |
+|------|------|------|
+| K 线 + PE/PB/PS | BaoStock | 含前复权、换手率、ST 标记 |
+| 实时行情 | AkShare | 盘中快照 |
+| 资金流向 | AkShare | 大单/超大单/主力净流入 |
+| 涨跌停列表 | AkShare | 涨停池/跌停池/炸板池 |
+| 龙虎榜 | AkShare | 机构买卖/营业部排行 |
+| 技术指标 | 项目自有 | 60+ 指标（KDJ/MACD/RSI/布林带等） |
+| 财务数据 | BaoStock + AkShare | 利润/运营/成长/估值 |
 
 ---
 
@@ -964,7 +1016,7 @@ print(format_report(report))
 ```python
 from modules.datasource import get_datasource
 
-# 自动按优先级选数据源（Tushare → bridge → SQLite）
+# 自动按优先级选数据源（BaoStock → AkShare → bridge → SQLite）
 ds = get_datasource(preferred="auto")
 df = ds.get_kline_dicts("600487.SH", start_date="20250101", end_date="20260601")
 ```
@@ -977,19 +1029,20 @@ df = ds.get_kline_dicts("600487.SH", start_date="20250101", end_date="20260601")
 
 | 模式 | 环境变量 | 说明 |
 |------|---------|------|
-| **JNB 模式** | `DATA_MODE=jnb` | 接入 Tushare 真实行情，具备实时数据查询、技术指标计算、战法识别能力 |
+| **JNB 模式** | `DATA_MODE=jnb` | 接入 BaoStock + AkShare 真实行情，具备实时数据查询、技术指标计算、战法识别能力 |
 | **普通小万** | `DATA_MODE=websearch` | 纯 LLM 对话，不走任何外部数据接口 |
 
 ### 四层数据路径降级
 
 ```
-Tushare Pro  ──┐
-                ├──► CompositeDataSource ──► DataSource Protocol
-tushare-data-   │   （实例级配置隔离、         ──► 选股 / 分析 / 模拟
-bridge (HTTP) ──┤    并行安全、pickle 预检）
-                │
-本地 SQLite ──┘
-                │
+BaoStock（主力）  ──┐
+                    │   日线 / 指数 / 股票列表 / 交易日历 / PE/PB/PS
+AkShare（补充）  ──┤   资金流向 / 实时行情 / 涨跌停 / 龙虎榜
+                    ├──► CompositeDataSource ──► DataSource Protocol
+bridge（可选）   ──┤   （实例级配置隔离、           ──► 选股 / 分析 / 模拟
+                    │    并行安全、pickle 预检）
+本地 SQLite     ──┘   离线兜底（已同步数据）
+                    │
 DATA_MODE=websearch 模式（纯框架与历史知识）
 ```
 
@@ -1040,10 +1093,10 @@ zettaranc-skill/
 │   ├── __init__.py               # 统一 .env 加载入口
 │   ├── cli.py / cli_commands.py  # CLI 主入口（15 个顶层子命令）
 │   ├── database.py               # SQLite 管理（15 张表 + 事务上下文，WAL）
-│   ├── datasource.py             # 统一数据源协议（Indevs / Bridge / SQLite / Composite）
-│   ├── tushare_client.py         # Tushare Pro API 封装（120 次/分钟限流）
-│   ├── bridge_client.py          # tushare-data-bridge HTTP 客户端（v3.2.0 新增）
-│   ├── indevs_client.py          # Indevs Tushare Replay API 客户端（v3.8.1 新增）
+│   ├── datasource.py             # 统一数据源协议（BaoStock / AkShare / Bridge / SQLite / Composite）
+│   ├── baostock_client.py        # BaoStock API 封装（主力：日线/指数/股票列表/PE/PB/PS，120 次/分钟限流）
+│   ├── akshare_client.py         # AkShare API 封装（补充：资金流向/实时行情/涨跌停/龙虎榜）
+│   ├── bridge_client.py          # tushare-data-bridge HTTP 客户端（v3.2.0 新增，可选缓存代理）
 │   ├── constants.py              # 28+ 命名常量（仓位档/止损档/环境权重/涨跌停等，v4.0.2）
 │   ├── data_sync.py              # 向后兼容 shim → 实际逻辑在 `modules/data_sync/`
 │   ├── core/                     # 公共模块（v3.8+，v3.9.0 大幅扩充，v4.0.x 加 Rust 桥接）
@@ -1119,7 +1172,7 @@ zettaranc-skill/
 │   ├── test_indicators*.py / test_strategies.py / test_kirin_detector.py / test_wave_theory.py
 │   ├── test_screener*.py / test_backtest*.py / test_loop_engine.py
 │   ├── test_portfolio_diagnosis.py / test_watchlist.py / test_tracking_system.py
-│   ├── test_bridge_client.py / test_rate_limiter.py / test_tushare_client.py
+│   ├── test_bridge_client.py / test_rate_limiter.py / test_m4_bridge_client.py
 │   ├── test_monitor.py / test_notifier.py
 │   ├── test_trade_manager.py / test_trade_parser.py
 │   ├── test_intent_router.py / test_quality_check.py / test_setup_wizard.py
@@ -1149,7 +1202,6 @@ zettaranc-skill/
 | `stock_basic` | 股票基本信息 | ts_code, name, industry, market, list_date |
 | `daily_kline` | 日线 K 线 | open, high, low, close, vol, amount, pct_chg |
 | `indicator_cache` | 技术指标缓存（每日快照） | KDJ, MACD, BBI, MA, RSI, WR, 布林带, 双线, 砖形图, DMI, 量比, 信号 |
-| `tushare_indicator_cache` | Tushare 官方指标（diff 验证） | macd_dif, rsi_6, kdj_k, boll_mid |
 | `moneyflow` | 资金流向 | 大小单买卖金额、净流入 |
 | `financial_data` | 财务报表 | revenue, net_profit, total_assets, pe, pb, ps |
 | `trade_signals` | 交易信号记录 | signal_type, signal_score, signal_price |
@@ -1207,7 +1259,7 @@ zettaranc-skill/
                                                 ↓
                                         宿主用 Z 哥口吻包装回复
 
-Tushare API → data_sync → SQLite → indicators/ → strategies/ → backtest/
+BaoStock + AkShare → data_sync → SQLite → indicators/ → strategies/ → backtest/
                                               ↓
                                     screener（蜈蚣图 / 沙漏 / 牛绳 / 共振）
                                               ↓

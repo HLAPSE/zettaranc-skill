@@ -133,6 +133,68 @@ class AkShareClient:
             logger.warning("[akshare] get_realtime_quote 失败: %s", e)
             return None
 
+    def get_all_stocks_spot(self) -> pd.DataFrame | None:
+        """批量获取全市场 A 股实时行情快照
+
+        使用 ``ak.stock_zh_a_spot_em()`` 一次性获取全市场（约 5000+ 只）的实时行情，
+        比 BaoStock 逐股查询快 100 倍以上。
+
+        **适用场景**：仅支持"当天"数据同步（实时快照，非历史）。
+        对于历史日期，应回退到 BaoStock 逐股并发查询。
+
+        Returns:
+            全市场快照 DataFrame，字段已映射为数据库字段名：
+            ts_code, trade_date, open, high, low, close, vol, amount, pct_chg,
+            pe_ttm, pb, total_mv, circ_mv, turnover_rate
+        """
+        if not self._available:
+            return None
+        try:
+            _rate_limit()
+            df = self._ak.stock_zh_a_spot_em()
+            if df is None or df.empty:
+                return None
+
+            # 字段映射（中文 → 数据库字段名）
+            # AkShare 字段：代码/名称/最新价/涨跌幅/涨跌额/成交量/成交额/振幅/最高/最低/
+            #               今开/昨收/量比/换手率/市盈率-动态/市净率/总市值/流通市值
+            result = pd.DataFrame({
+                "ts_code": df["代码"].apply(self._convert_ts_code_full),
+                "trade_date": datetime.now().strftime("%Y%m%d"),
+                "open": pd.to_numeric(df.get("今开"), errors="coerce"),
+                "high": pd.to_numeric(df.get("最高"), errors="coerce"),
+                "low": pd.to_numeric(df.get("最低"), errors="coerce"),
+                "close": pd.to_numeric(df.get("最新价"), errors="coerce"),
+                "vol": pd.to_numeric(df.get("成交量"), errors="coerce"),  # AkShare 返回手
+                "amount": pd.to_numeric(df.get("成交额"), errors="coerce") / 1000,  # 元 → 千元
+                "pct_chg": pd.to_numeric(df.get("涨跌幅"), errors="coerce"),
+                "pe_ttm": pd.to_numeric(df.get("市盈率-动态"), errors="coerce"),
+                "pb": pd.to_numeric(df.get("市净率"), errors="coerce"),
+                "total_mv": pd.to_numeric(df.get("总市值"), errors="coerce") / 1000,  # 元 → 千元
+                "circ_mv": pd.to_numeric(df.get("流通市值"), errors="coerce") / 1000,  # 元 → 千元
+                "turnover_rate": pd.to_numeric(df.get("换手率"), errors="coerce"),
+            })
+
+            # 过滤无效行（停牌/无最新价）
+            result = result.dropna(subset=["close"])
+            result = result[result["close"] > 0]
+
+            return result.reset_index(drop=True)
+
+        except (
+            requests.RequestException,
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            KeyError,
+            AttributeError,
+            TypeError,
+            RuntimeError,
+        ) as e:
+            logger.warning("[akshare] get_all_stocks_spot 失败: %s", e)
+            return None
+
     # ------------------------------------------------------------------
     # 资金流向
     # ------------------------------------------------------------------
