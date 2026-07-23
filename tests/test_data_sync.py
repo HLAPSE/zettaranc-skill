@@ -128,46 +128,35 @@ def test_data_syncer_accepts_datasource_parameter(monkeypatch):
     assert syncer._fetcher.datasource is fake
 
 
-def test_data_syncer_default_datasource_is_tushare(monkeypatch):
-    """DataSyncer 默认 datasource 为 tushare"""
+def test_data_syncer_default_datasource_is_a_stock_data(monkeypatch):
+    """DataSyncer 默认 datasource 为 a-stock-data（免费，无需 API Key）"""
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
     syncer = DataSyncer(token="dummy")
-    assert syncer._datasource.name == "tushare"
+    assert syncer._datasource.name == "a-stock-data"
 
 
-def test_data_syncer_default_datasource_uses_explicit_token(monkeypatch):
-    """datasource 为 None 时，显式传入的 token 应交给 TushareDataSource"""
+def test_data_syncer_default_datasource_ignores_token(monkeypatch):
+    """datasource 为 None 时，显式传入的 token 不影响默认数据源选择（a-stock-data）"""
     from modules.data_sync.syncer import DataSyncer
 
     monkeypatch.setenv("DATA_MODE", "websearch")
-    captured = {}
-
-    class MockTushareDataSource:
-        def __init__(self, token=None):
-            captured["token"] = token
-
-        @property
-        def name(self):
-            return "tushare"
-
-    monkeypatch.setattr("modules.data_sync.syncer.TushareDataSource", MockTushareDataSource)
     syncer = DataSyncer(token="explicit-token")
-    assert captured["token"] == "explicit-token"
-    assert syncer._datasource.name == "tushare"
+    assert syncer.token == "explicit-token"
+    assert syncer._datasource.name == "a-stock-data"
 
 
 def test_datasyncer_honors_token_argument(monkeypatch):
-    """TUSHARE_TOKEN 为空时，显式传入 token 仍应被用于构造 TushareDataSource"""
+    """TUSHARE_TOKEN 为空时，显式传入 token 仍被存储，但默认数据源为 a-stock-data"""
     from modules.data_sync.syncer import DataSyncer
-    from modules.datasource import TushareDataSource
+    from modules.datasource import AStockDataDataSource
 
     monkeypatch.setenv("DATA_MODE", "websearch")
     monkeypatch.setenv("TUSHARE_TOKEN", "")
     ds = DataSyncer(token="explicit-token")
-    assert isinstance(ds._datasource, TushareDataSource)
-    assert ds._datasource._client.token == "explicit-token"
+    assert ds.token == "explicit-token"
+    assert isinstance(ds._datasource, AStockDataDataSource)
 
 
 def test_data_syncer_with_datasource_skips_jnb_validation(monkeypatch):

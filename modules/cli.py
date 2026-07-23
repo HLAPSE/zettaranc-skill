@@ -475,7 +475,8 @@ def cmd_sync(args) -> None:
         print("数据库初始化完成")
 
     elif action == "sync":
-        syncer = DataSyncer(datasource=get_datasource("tushare"))
+        source = getattr(args, "source", "auto")
+        syncer = DataSyncer(datasource=get_datasource(source))
         if args.ts_code:
             # 同步单只股票
             syncer.sync_daily_kline(args.ts_code)
@@ -493,7 +494,8 @@ def cmd_sync(args) -> None:
         print(syncer.get_sync_status())
 
     elif action == "stk-factor":
-        syncer = DataSyncer(datasource=get_datasource("tushare"))
+        source = getattr(args, "source", "auto")
+        syncer = DataSyncer(datasource=get_datasource(source))
         if args.ts_code:
             print(f"正在同步 Tushare 官方指标: {args.ts_code} ...")
             start_date = (datetime.now() - timedelta(days=args.days)).strftime("%Y%m%d")
@@ -507,7 +509,8 @@ def cmd_sync(args) -> None:
             print(f"批量同步完成，成功 {success}/{len(results)}")
 
     elif action == "status":
-        syncer = DataSyncer(datasource=get_datasource("tushare"))
+        source = getattr(args, "source", "auto")
+        syncer = DataSyncer(datasource=get_datasource(source))
         status = syncer.get_sync_status()
         print("=" * 50)
         print(f"  数据库: {status.get('db_path', 'N/A')}")
@@ -728,10 +731,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync_run.add_argument(
         "--skip-indicators", action="store_true", help="跳过指标缓存（单只默认同步，批量需 --indicators）"
     )
+    p_sync_run.add_argument(
+        "--source",
+        default="a-stock-data",
+        choices=["auto", "tushare", "a-stock-data", "indevs", "bridge", "sqlite"],
+        help="数据源（默认 a-stock-data 免费源）",
+    )
     p_sync_sub.add_parser("status", help="查看同步状态")
     p_sync_factor = p_sync_sub.add_parser("stk-factor", help="同步 Tushare 官方指标（diff 验证用）")
     p_sync_factor.add_argument("ts_code", nargs="?", help="股票代码（不传 = 全市场）")
     p_sync_factor.add_argument("--days", type=int, default=365, help="同步天数")
+    p_sync_factor.add_argument(
+        "--source",
+        default="a-stock-data",
+        choices=["auto", "tushare", "a-stock-data", "indevs", "bridge", "sqlite"],
+        help="数据源（默认 a-stock-data 免费源）",
+    )
 
     # ── track（自我改进系统 - 跟踪池管理）──
     p_track = subparsers.add_parser("track", help="自我改进系统 - 跟踪池管理")

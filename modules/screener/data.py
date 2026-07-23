@@ -19,8 +19,9 @@ def get_all_stocks(datasource: DataSource | None = None) -> list[dict]:
 
     stocks = datasource.get_stock_list()
     if stocks:
-        # 过滤主板/创业板/科创板
-        return [s for s in stocks if s.get("market") in ("主板", "创业板", "科创板", None)]
+        # 过滤主板/创业板/科创板（兼容不同数据源的 market 格式）
+        _VALID_MARKETS = ("主板", "创业板", "科创板", "深圳", "上海", None)
+        return [s for s in stocks if s.get("market") in _VALID_MARKETS]
 
     # 回退到本地
     conn = get_db_connection()

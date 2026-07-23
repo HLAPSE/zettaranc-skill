@@ -22,7 +22,7 @@ from .bridge_client import (
 from .database import get_connection, save_klines
 from .indevs_client import IndevsClient
 from .tushare_client import TushareClient
-from .a_stock_data_client import AStockDataClient
+from .a_stock_data_client import AStockDataClient, get_full_stock_list
 from modules.core.errors import ErrorCode, ZettarancError
 
 logger = logging.getLogger(__name__)
@@ -295,7 +295,15 @@ class AStockDataDataSource:
         return None
 
     def get_stock_basic(self, ts_code: str | None = None, name: str | None = None) -> pd.DataFrame | None:
-        """获取股票基础信息"""
+        """获取股票基础信息。
+
+        未指定 ts_code 时，通过东财数据中心返回 A 股全量列表（无需 API Key），
+        使全市场批量同步在免费源下也可行。
+        """
+        if ts_code is None:
+            df = get_full_stock_list()
+            if df is not None and not df.empty:
+                return df
         return self._client.get_stock_basic(ts_code, name)
 
     def get_trade_cal(self, exchange: str, start_date: str, end_date: str) -> pd.DataFrame | None:
@@ -303,8 +311,23 @@ class AStockDataDataSource:
         return None
 
     def get_stock_list(self, exchange: str | None = None) -> list[dict]:
-        """获取股票列表（a-stock-data 不提供全量列表）"""
-        return []
+        """获取股票列表（通过东财数据中心，无需 API Key）"""
+        df = get_full_stock_list()
+        if df is None or df.empty:
+            return []
+        # 标准化 market 字段，与 screener/data.py 过滤条件对齐
+        _MARKET_MAP = {
+            "深圳证券交易所": "深圳",
+            "上海证券交易所": "上海",
+            "北京证券交易所": "北交所",
+        }
+        records = df.to_dict("records")
+        for r in records:
+            r["market"] = _MARKET_MAP.get(r.get("market", ""), r.get("market", ""))
+        if exchange:
+            ex_map = {"SH": "上海", "SZ": "深圳", "BJ": "北交所"}
+            return [s for s in records if s.get("exchange") == exchange or s.get("market") == ex_map.get(exchange, "")]
+        return records
 
     def get_kline_dicts(
         self,
@@ -863,28 +886,38 @@ def dict_to_daily(klines: list[dict] | list) -> list:
     if isinstance(klines[0], DailyData):
         return list(klines)
 
+    def _f(v, default=0.0):
+        # 安全 float 转换：None / 空串 → default（免费数据源字段可能缺失）
+        if v is None or v == "":
+            return default
+        return float(v)
+
     result = []
     for i, row in enumerate(klines):
-        prev_close = float(klines[i - 1]["close"]) if i > 0 else float(row["close"])
-        close = float(row["close"])
-        vol = float(row["vol"])
-        prev_vol = float(klines[i - 1]["vol"]) if i > 0 else vol
+        prev_close = _f(klines[i - 1].get("close")) if i > 0 else _f(row.get("close"))
+        close = _f(row.get("close"))
+        vol = _f(row.get("vol"))
+        prev_vol = _f(klines[i - 1].get("vol")) if i > 0 else vol
+        open_ = _f(row.get("open"))
         result.append(
             DailyData(
                 ts_code=str(row["ts_code"]),
                 trade_date=str(row["trade_date"]),
-                open=float(row["open"]),
-                high=float(row["high"]),
-                low=float(row["low"]),
+                open=open_,
+                high=_f(row.get("high")),
+                low=_f(row.get("low")),
                 close=close,
                 vol=vol,
-                amount=float(row.get("amount", close * vol)),
-                pct_chg=float(row.get("pct_chg", 0.0)),
+                amount=_f(row.get("amount"), close * vol),
+                pct_chg=_f(
+                    row.get("pct_chg"),
+                    (close - prev_close) / prev_close * 100 if prev_close else 0.0,
+                ),
                 prev_close=prev_close,
                 is_rise=row.get("is_rise", close > prev_close),
                 is_beidou=row.get("is_beidou", vol >= prev_vol * 2 if prev_vol > 0 else False),
                 is_suoliang=row.get("is_suoliang", vol <= prev_vol * 0.5 if prev_vol > 0 else False),
-                is_jiayin=row.get("is_jiayin", close < float(row["open"]) and close > prev_close),
+                is_jiayin=row.get("is_jiayin", close < open_ and close > prev_close),
                 is_yinxian=row.get("is_yinxian", close < prev_close),
                 is_fangliang_yinxian=row.get(
                     "is_fangliang_yinxian",

@@ -112,11 +112,12 @@ def _em_get(url: str, params: dict | None = None, headers: dict | None = None,
 
 def _eastmoney_datacenter(report_name: str, columns: str = "ALL",
                           filter_str: str = "", page_size: int = 50,
+                          page_number: int = 1,
                           sort_columns: str = "", sort_types: str = "-1") -> list[dict]:
     """东财数据中心统一查询"""
     params = {
         "reportName": report_name, "columns": columns,
-        "filter": filter_str, "pageNumber": "1", "pageSize": str(page_size),
+        "filter": filter_str, "pageNumber": str(page_number), "pageSize": str(page_size),
         "sortColumns": sort_columns, "sortTypes": sort_types,
         "source": "WEB", "client": "WEB",
     }
@@ -125,6 +126,100 @@ def _eastmoney_datacenter(report_name: str, columns: str = "ALL",
     if d.get("result") and d["result"].get("data"):
         return d["result"]["data"]
     return []
+
+
+def _eastmoney_datacenter_paged(report_name: str, page_size: int = 5000,
+                                max_retries: int = 4) -> list[dict]:
+    """东财数据中心分页全量查询（带连接重置重试）。
+
+    自动翻页直到拿完全部数据，返回合并后的所有行。
+    """
+    all_rows = []
+    page = 1
+    while True:
+        rows = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                rows = _eastmoney_datacenter(
+                    report_name, columns="ALL", page_size=page_size,
+                    page_number=page,
+                    sort_columns="SECURITY_CODE", sort_types="1",
+                )
+                if rows is not None:
+                    break
+            except Exception as e:
+                logger.debug("[a-stock-data] 数据中心 p=%d 第%d次失败: %s", page, attempt, e)
+            if attempt < max_retries:
+                time.sleep(1.5 * attempt)
+
+        if not rows:
+            logger.warning("[a-stock-data] 数据中心第 %d 页获取失败，停止翻页", page)
+            break
+
+        all_rows.extend(rows)
+        logger.info("[a-stock-data] 数据中心第 %d 页获取 %d 条，累计 %d 条", page, len(rows), len(all_rows))
+
+        # 如果返回数 < pageSize，说明已是最后一页
+        if len(rows) < page_size:
+            break
+        page += 1
+        time.sleep(0.5)  # 翻页间隔
+    return all_rows
+
+
+# A股类型关键词（用于过滤 B 股/基金等非 A 股）
+_A_STOCK_TYPE_KEYWORDS = ("A股", "主板A股", "创业板", "科创板", "风险警示板", "北交所")
+
+# 标准A股代码正则：6位数字.SH/SZ/BJ
+import re as _re
+_A_STOCK_CODE_RE = _re.compile(r'^\d{6}\.(SH|SZ|BJ)$')
+
+# 退市/老三板名称关键词（需排除）
+_DEAD_STOCK_KEYWORDS = ("退", "PT", "两网", "老三板")
+
+
+def get_full_stock_list() -> pd.DataFrame | None:
+    """通过东财数据中心获取 A 股全量股票列表（分页 + 严格过滤）。
+
+    返回 DataFrame 列对齐 stock_basic 表：ts_code / name / industry / market / list_date。
+    仅保留在市 A 股（排除 B 股/基金/退市股/老三板），总数约 5300-5500。
+    """
+    all_rows = _eastmoney_datacenter_paged("RPT_F10_BASIC_ORGINFO", page_size=5000)
+    if not all_rows:
+        return None
+
+    records = []
+    for r in all_rows:
+        ts = r.get("SECUCODE", "")
+        # 1) 必须是标准 6 位代码格式
+        if not _A_STOCK_CODE_RE.match(ts):
+            continue
+        # 2) 仅保留 A 股类型
+        sec_type = r.get("SECURITY_TYPE", "") or ""
+        if not any(kw in sec_type for kw in _A_STOCK_TYPE_KEYWORDS):
+            continue
+        # 3) 排除已退市/老三板
+        name = r.get("SECURITY_NAME_ABBR", "") or ""
+        if any(kw in name for kw in _DEAD_STOCK_KEYWORDS):
+            continue
+        market_raw = r.get("TRADE_MARKET", "") or ""
+        records.append({
+            "ts_code": ts,
+            "name": name,
+            "industry": r.get("INDUSTRYCSRC1", ""),
+            "market": market_raw,
+            "list_date": (r.get("LISTING_DATE") or "").split(" ")[0] if r.get("LISTING_DATE") else "",
+        })
+
+    if not records:
+        return None
+    df = pd.DataFrame(records)
+    logger.info("[a-stock-data] get_full_stock_list: 东财返回 %d 条，严格过滤后 %d 只在市 A 股",
+                len(all_rows), len(df))
+    return df
+    logger.info("[a-stock-data] get_full_stock_list: 东财返回 %d 条，过滤后 A 股 %d 条",
+                len(all_rows), len(df))
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +360,7 @@ def baidu_kline_to_dataframe(code: str, days: int = 60) -> pd.DataFrame | None:
     # 计算涨跌幅
     if "close" in df.columns:
         df["pct_chg"] = df["close"].pct_change() * 100
-        df["pct_chg"].iloc[0] = 0.0
+        df.loc[df.index[0], "pct_chg"] = 0.0
 
     # 日期格式化
     if "trade_date" in df.columns:
@@ -443,7 +538,7 @@ def _mootdx_kline(code: str, days: int = 60, frequency: int = 9) -> pd.DataFrame
         # 计算涨跌幅
         if "close" in df.columns and "pct_chg" not in df.columns:
             df["pct_chg"] = df["close"].pct_change() * 100
-            df["pct_chg"].iloc[0] = 0.0
+            df.loc[df.index[0], "pct_chg"] = 0.0
 
         return df
     except Exception as e:

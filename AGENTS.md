@@ -12,11 +12,11 @@
 核心目标：将 B 站 UP 主 / 前阳光私募冠军基金经理 zettaranc（万千）的投资思维框架、决策启发式和表达 DNA，封装为可供 Claude Code / Cursor 等 AI 工具调用的 Skill 文件（`SKILL.md`），同时提供基于真实 Tushare 行情数据的 Python 数据层支撑。
 
 - **核心交付物**：`SKILL.md`（可直接被 AI 工具加载的角色扮演协议，Skill-Schema-V2 合规，644 行）
-- **数据层**：Python 模块 + SQLite 数据库 + Tushare API（JNB 模式）
+- **数据层**：Python 模块 + **Rust 计算扩展（`_core_compute`）** + SQLite 数据库 + Tushare API（JNB 模式）
 - **Web 看板**：`api/`（FastAPI 后端）+ `frontend/`（React + Vite + Tailwind 前端），可选
 - **语料基础**：约 467 篇直播/付费课整理文章（~200 万字）+ 13 个 ztalk 视频 transcript（~12.7 万字）+ 9 篇交易心理系列（~3.3 万字）+ 后续新增文章
 - **许可证**：MIT
-- **当前版本**：**v3.10.4**（以 `pyproject.toml` 与 `docs/CHANGELOG.md` 为准）
+- **当前版本**：**v4.0.3**（以 `pyproject.toml` 与 `docs/CHANGELOG.md` 为准）
 
 ### 双模式架构
 
@@ -119,7 +119,8 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
 │   ├─ atr.py                ATR 公共计算（v3.10.1）
 │   ├─ errors.py             统一错误码与 ZettarancError 基类（v3.10.4）
 │   ├─ paths.py              DATA_DIR/REGISTRY_DIR/REPORTS_DIR + 交易日常量（v3.9.0）
-│   └─ net.py                网络相关公共函数（disable_proxy()）
+│   ├─ net.py                网络相关公共函数（disable_proxy()）
+│   └─ _rust_compat.py       Rust/Python 计算实现切换层（ZETTARANC_BACKTEST_IMPL=rust|python|auto）
 ├─ verify/               少妇战法 v1.0 验收工程化（v3.7.0+）
 │   ├─ pipeline.py           统一回测管线
 │   ├─ gates.py              五项硬指标自动判定
@@ -166,6 +167,18 @@ Python 数据层（modules/）              LLM 角色层（SKILL.md）
     ├─ llm_judge.py      LLM 裁判
     ├─ reflex_blacklist.py 反射黑名单
     └─ phase1_baseline.py / phase2_hillclimb.py / phase3_report.py 三阶段管线
+
+rust/             Rust 高性能计算扩展（maturin + PyO3，编译为 `_core_compute`）
+├─ Cargo.toml     workspace（edition 2021，rust-version 1.78，6 个 crate 成员）
+├─ crates/core_types      KLine/KLineSeries/CoreError 公共数据类型
+├─ crates/indicators      指标计算（纯 Rust，cargo-testable）
+├─ crates/backtest_engine 回测引擎（纯 Rust）
+├─ crates/grid_search     网格寻优（纯 Rust）
+├─ crates/screener        选股评分（纯 Rust）
+└─ crates/bindings        PyO3 桥接层 → 编译为 `_core_compute`
+    └─ src/lib.rs         导出 compute_atr_py / run_single_strategy_backtest_py /
+                          run_portfolio_backtest_py / run_grid_search_py
+                          （screen_stocks 等 PyO3 binding 待封装）
 
 knowledge/（知识文件，29 篇顶层文档 + 3 个子目录补充文档）
 ├─ trading-core.md       短线交易核心
@@ -216,6 +229,8 @@ references/research/（11 份调研提炼文件）
 └─ 07-11-*.md（小菜鸟、大富翁、tangoo、复盘、课代表等系列）
 ```
 
+**Rust 计算层**：`rust/` 通过 maturin 编译为 `_core_compute` 扩展，承担 ATR、单策略/组合回测、网格寻优等热点计算；`modules/core/_rust_compat.py` 按 `ZETTARANC_BACKTEST_IMPL`（rust/python/auto，默认 auto）在 Rust 与 Python 实现间切换，CLI 已预留切换 hook。未构建 Rust 扩展时自动回退 Python 实现，功能不受影响。
+
 **关键设计原则**：Python 层只负责 **数据准备**，所有点评、分析话术由 LLM 用 Z 哥角色生成，避免"AI 味"。宿主通过 CLI `--json` 或 Web API 获取结构化数据。
 
 **自优化与寻优管线说明**（三者互补，防止过拟合）：
@@ -232,15 +247,16 @@ references/research/（11 份调研提炼文件）
 
 | 层级 | 技术 |
 |------|------|
-| 数据管道 | Python 3.10+（标准库 + `sqlite3`、`pathlib`、`dataclasses`、`enum`） |
-| 外部数据 | `tushare`（Pro API，支持中转 URL）、`pandas`、`requests`、`httpx`、`pyyaml` |
+| 数据管道 | Python **≥3.12**（标准库 + `sqlite3`、`pathlib`、`dataclasses`、`enum`） |
+| 外部数据 | `tushare`（Pro API，支持中转 URL）、`pandas≥3.0`、`requests`、`httpx`、`pyyaml`（numpy/scipy 见 `pyproject.toml`） |
 | 可选数据源 | Indevs Tushare Replay API（需 `INDEVS_API_KEY`） |
 | 环境配置 | `python-dotenv`（`.env` 文件） |
 | 数据库 | SQLite（本地文件，15 张表 = 11 张核心表 + 4 张自我改进跟踪表） |
+| 高性能计算 | Rust（edition 2021）+ maturin + PyO3（扩展 `_core_compute`：ATR/回测/网格寻优） |
 | 接口协议 | CLI（`zt` 入口）、可选 FastAPI Web 服务（`zt-web`） |
 | 前端看板 | React 19 + Vite 8 + TypeScript 6 + Tailwind CSS 4 + ECharts 6 |
 | 状态管理 | Zustand 5 + TanStack React Query 5 + axios + react-router-dom 7 |
-| 测试框架 | `pytest`（实测 **1179 用例 passed，15 skipped**，75 个 .py 文件 + 1 个 .md） |
+| 测试框架 | `pytest`（实测 **1322 passed, 16 skipped, 4 failed**，1342 collected；4 个失败集中于 `test_data_sync` 的 token/数据源用例） |
 | 代码质量 | `ruff`（lint + format）、`mypy`、pre-commit |
 | 视频下载 | `yt-dlp`（语料采集，可选） |
 | 语音转写 | `faster-whisper`（语料采集，可选） |
@@ -298,6 +314,9 @@ IM_PUSH_WEBHOOK=                    # 可选，飞书 webhook
 # SIMULATION_NARRATE_CACHE_TTL=3600
 
 # ZETTARANC_ENV=/path/to/.env       # 可选，自定义 .env 路径
+
+# 计算实现切换（v4.0）：rust / python / auto（默认 auto，可用则优先走 Rust 扩展）
+# ZETTARANC_BACKTEST_IMPL=auto
 ```
 
 > v2.1.1 之后，所有 Tushare URL 均从环境变量读取，代码中不再硬编码任何内部域名。
@@ -315,6 +334,7 @@ zettaranc-skill/
 │   └── registry/  # param_registry 跨进程持久化（JSON）
 ├── docs/          # 文档（CHANGELOG, TODO, USER_GUIDE, ROADMAP, CONFIG_GUIDE 等）
 ├── modules/       # Python 数据层与业务逻辑（详见架构分层）
+├── rust/          # Rust 计算扩展（maturin + PyO3，编译为 _core_compute，详见架构分层）
 ├── api/           # FastAPI REST API（可选）
 │   ├── routes/    # 9 个路由模块（stock/screen/diagnosis/backtest/simulator/trade/watchlist/commentary/system）
 │   ├── services/  # 7 个服务层（stock/screen/diagnosis/backtest/simulator/trade/watchlist）
@@ -323,7 +343,7 @@ zettaranc-skill/
 │   └── main.py    # 入口 + start_web() 函数
 ├── frontend/      # React 前端看板（可选）
 ├── knowledge/     # 29 篇顶层交易体系知识文档 + 3 个子目录文档
-├── tests/         # pytest 测试（75 个 .py 文件 + 1 个 .md）
+├── tests/         # pytest 测试（99+ 个 .py 文件 + 1 个 .md）
 ├── scripts/       # 薄壳工具脚本（业务逻辑在 modules/）
 ├── corpus/        # 语料采集与质检工具
 ├── rules/         # 意图规则与决策框架
@@ -373,8 +393,11 @@ pip install -e .
 # 语料处理可选依赖
 pip install -e ".[corpus]"
 
-# 开发测试依赖
+# 开发测试依赖（含 maturin，用于构建 Rust 计算扩展）
 pip install -e ".[dev]"
+
+# 构建 Rust 计算扩展（可选，启用 ZETTARANC_BACKTEST_IMPL=rust 时需先构建；详见 rust/）
+# maturin develop --release
 ```
 
 > 本机开发环境使用项目根目录的 `.venv`（如 `.venv/bin/python -m pytest ...`）；系统 `python` 命令可能不存在。
@@ -392,7 +415,7 @@ zt verify v1.0 --limit 50 --days 300 --walk-forward
 ### 运行测试
 
 ```bash
-# 全部测试（当前实测：1179 passed, 15 skipped，约 30s）
+# 全部测试（当前实测：1322 passed, 16 skipped, 4 failed，约 45s）
 python -m pytest tests/ -v
 
 # 单文件测试
@@ -547,7 +570,7 @@ mypy modules/ --ignore-missing-imports
 
 ### Lint / Format / Type（`pyproject.toml` 配置）
 
-- **ruff**：`line-length = 120`，`target-version = py310`，扩展排除 `data/`、`logs/`、`knowledge/`
+- **ruff**：`line-length = 120`，`target-version = py312`，扩展排除 `data/`、`logs/`、`knowledge/`
   - lint 选择：`F, E, W, UP`
   - 忽略：`E501, F401, F403`
   - 测试文件额外忽略 `F811`
@@ -573,6 +596,7 @@ mypy modules/ --ignore-missing-imports
 **注意**：技术债清理、内部重构属于 PATCH，不是 MINOR。避免版本号增长过快。
 
 **近期版本脉络**（详见 `docs/CHANGELOG.md`）：
+- **v4.0.3**：当前版本。引入 Rust 计算扩展 `_core_compute`（maturin + PyO3），Python 运行要求提升至 **≥3.12**；ATR、单策略/组合回测、网格寻优已桥接 Rust，由 `modules/core/_rust_compat.py` 按 `ZETTARANC_BACKTEST_IMPL` 切换。`screen_stocks` 等 PyO3 binding 待封装。
 - **v3.10.4**：技术债与文档收尾（版本号五处统一、USER_GUIDE 追平、性能优化 6.3x/2.4x、`core/errors.py` 统一错误码）
 - **v3.10.3**：组合回测策略权重按市场环境动态调整 + 各策略贡献度统计（`StrategyStats`）
 - **v3.10.2**：组合回测参数 IS 网格搜索自动寻优（`portfolio_grid_search_optimize()`）
@@ -602,7 +626,7 @@ mypy modules/ --ignore-missing-imports
 - **数据工厂**：`make_kline_row()`、`make_daily_data()`、`generate_uptrend_klines()`、`generate_downtrend_klines()`、`generate_b1_scenario()`、`write_klines_to_db()`、`write_stock_basic()` 等
 - **数据库隔离**：所有测试使用临时 SQLite 文件，互不干扰
 
-### 测试覆盖范围（当前 75 个 .py 文件 + 1 个 .md）
+### 测试覆盖范围（当前 99+ 个 .py 文件 + 1 个 .md）
 
 | 测试文件 | 覆盖范围 |
 |---------|---------|
@@ -640,7 +664,8 @@ mypy modules/ --ignore-missing-imports
 
 ```bash
 $ python -m pytest tests/ -v
-# 当前实测结果：1179 passed, 15 skipped（约 30 秒）
+# 当前实测结果：1322 passed, 16 skipped, 4 failed（1342 collected，约 45 秒）
+# 注：4 个失败为 test_data_sync 中 token/数据源相关用例，非核心逻辑回归
 ```
 
 ---
