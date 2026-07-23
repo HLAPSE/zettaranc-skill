@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from ..database import get_connection, get_db_path
+from ..database import get_connection, get_db_path, get_table_columns
 from ..datasource import DataSource, get_datasource
 from .rate_limiter import _rate_limit_global, _MAX_SYNC_WORKERS
 from .indicator_cache import (
@@ -939,8 +939,7 @@ class DataSyncer:
         """确保 daily_kline 表包含 PE/PB/PS/总市值/流通市值 列"""
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(daily_kline)")
-            existing = {row[1] for row in cursor.fetchall()}
+            existing = get_table_columns("daily_kline")
 
             for col_name, col_type in [
                 ("pe", "REAL"),

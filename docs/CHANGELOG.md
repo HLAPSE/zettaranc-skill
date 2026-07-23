@@ -2,6 +2,44 @@
 
 所有值得记录的变更都会写在这里。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## v4.0.4 (2026-07-23) — 数据库双后端迁移（PATCH）
+
+> **「`modules/database.py` 从单一 SQLite 演进为 SQLite / CockroachDB 双后端兼容层」**
+>
+> 通过统一数据访问入口屏蔽后端差异，调用方代码几乎零改动即可同时兼容两种后端。
+
+### 新增
+
+- **数据库双后端兼容层**（`modules/database.py`）：
+  - 未设置 `CRDB_URL` → SQLite（本地文件，默认 / 测试 / 离线回退）
+  - 设置 `CRDB_URL` → CockroachDB（生产，psycopg2 驱动）
+  - 占位符统一：调用方统一写 `?`，CockroachDB 侧自动转 `%s`
+  - DDL 双兼容：维护一套 CockroachDB 原版 DDL，SQLite 经 `_to_sqlite_ddl()` 自动转换（`unique_rowid()`→`INTEGER`、`NOW()::STRING`→`(datetime('now'))`、`DOUBLE PRECISION`→`REAL` 等）
+  - 异常统一：CockroachDB 异常包装为 `DBAPIError`（继承 `sqlite3.Error`），现有 `except sqlite3.Error` 双后端均生效
+  - 行访问统一：`_Row` 包装支持 `row['col']` / `row[i]` / `dict(zip(...))` / `keys()`
+- `psycopg2-binary>=2.9.0` 依赖（`requirements.txt` + `pyproject.toml`；未设置 `CRDB_URL` 时不加载）
+- `get_table_columns()` 双后端通用列探测（替代 SQLite 专属 `PRAGMA table_info`）
+
+### 变更
+
+- `modules/report.py`：`assess_watchlist` 由自连 `sqlite3.connect` 改为走统一 `get_connection()` 连接层
+- `modules/data_sync/syncer.py`：`PRAGMA table_info(daily_kline)` 改为 `get_table_columns("daily_kline")`
+- `modules/datasource.py`：`SqliteDataSource` 取 K 线兼容「CockroachDB 返回 dict / SQLite 返回 tuple」
+- 文档同步：`README.md`、`docs/CONFIG_GUIDE.md`、`AGENTS.md` 数据库章节更新为双后端说明
+
+### Bug 修复
+
+- `watchlist` 表 DDL 补 `updated_at` 列（原改动遗漏，导致 `add_watchlist_item`/`update_watchlist_item` 的 UPSERT 报错）
+- 恢复 `llm_response_log` 表 `request_date`/`error_message` 列与 3 个索引、索引名（`idx_daily_kline_date` 等）、`record_llm_response` 签名、`get_llm_response_stats` 返回字段——以 `tests/test_database.py` 既有契约为准
+- `init_database()` 恢复「创建全部表（核心 + 跟踪）」契约，`_create_tracking_tables` 补 `commit`（修复拆分后 tracking 表缺失导致的 5 个测试失败）
+
+### 验证
+
+- 全量 pytest：**1276 passed, 13 skipped, 0 failed**（零回归）
+- SQLite 回退路径综合冒烟：建表 / UPSERT / RETURNING id / 列探测 / 观察池 全部通过
+
+---
+
 ## v4.0.3 (2026-07-18) — 收尾技术债（PATCH）
 
 > **「v4.0.3：剩余 7 项技术债 + 2 项 bug 一次性清偿」**

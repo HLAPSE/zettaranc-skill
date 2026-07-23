@@ -18,7 +18,8 @@ class TestHarnessUpdaterFallback:
             raise sqlite3.OperationalError("db locked")
             yield  # pragma: no cover
 
-        monkeypatch.setattr("modules.database.get_connection", boom_conn)
+        # Patch where get_connection is used, not where it's defined
+        monkeypatch.setattr("modules.harness_updater.get_connection", boom_conn)
         updater = hu.HarnessUpdater()
         result = updater.analyze_strategy_performance("2025-01")
         assert result["success"] is False

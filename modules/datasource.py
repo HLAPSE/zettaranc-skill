@@ -522,7 +522,8 @@ class SqliteDataSource:
                 params.append(days)
             cursor.execute(sql, params)
             rows = cursor.fetchall()
-        return [dict(zip(_KLINE_COLUMNS, row)) for row in reversed(rows)]
+        # CursorWrapper 已将 CockroachDB 结果转为字典，SQLite 返回元组
+        return [row if isinstance(row, dict) else dict(zip(_KLINE_COLUMNS, row)) for row in reversed(rows)]
 
     def get_kline_dicts_batch(
         self,
@@ -813,7 +814,8 @@ class CompositeDataSource:
             rows = cursor.fetchall()
 
         if rows:
-            records = [dict(zip(_KLINE_COLUMNS, row)) for row in rows]
+            # CursorWrapper 已将 CockroachDB 结果转为字典，SQLite 返回元组
+            records = [row if isinstance(row, dict) else dict(zip(_KLINE_COLUMNS, row)) for row in rows]
             records.reverse()
             return records
 

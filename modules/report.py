@@ -19,6 +19,7 @@ from typing import Optional
 import os
 import sqlite3
 from collections import defaultdict
+from .database import get_connection
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -215,8 +216,7 @@ def assess_watchlist(
     本函数只读 DB 不计算。
     """
     db = db_path or _resolve_db_path()
-    with sqlite3.connect(db) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection(db_path=db) as conn:
         return _build_assessments_from_db(ts_codes, conn)
 
 

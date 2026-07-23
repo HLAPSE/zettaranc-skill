@@ -24,10 +24,11 @@ def mock_env_for_tests():
             "DATA_MODE": "websearch",
             "DB_PATH": db_path,
             "DATA_DIR": tmpdir,
+            "CRDB_URL": "",  # 强制使用 SQLite 进行测试
         }
         # 清除可能影响测试的已有变量
         for key in list(os.environ.keys()):
-            if key in ("DATA_MODE", "DB_PATH", "DATA_DIR"):
+            if key in ("DATA_MODE", "DB_PATH", "DATA_DIR", "CRDB_URL"):
                 del os.environ[key]
         os.environ.update(env_vars)
         yield db_path

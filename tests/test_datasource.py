@@ -117,10 +117,12 @@ def test_composite_falls_back_to_sqlite(monkeypatch, temp_db, db_conn):
     from tests.conftest import write_klines_to_db, write_stock_basic
 
     monkeypatch.setattr("modules.bridge_client.is_bridge_available", lambda: False)
-    write_stock_basic(db_conn, ts_code="600519.SH", name="贵州茅台", industry="白酒", market="主板")
+    # 使用唯一 ts_code 避免与已有数据冲突
+    test_ts_code = "TEST0001.SH"
+    write_stock_basic(db_conn, ts_code=test_ts_code, name="测试股票", industry="测试", market="主板")
     rows = [
         {
-            "ts_code": "600519.SH",
+            "ts_code": test_ts_code,
             "trade_date": "20260101",
             "open": 1500.0,
             "high": 1520.0,
@@ -131,7 +133,7 @@ def test_composite_falls_back_to_sqlite(monkeypatch, temp_db, db_conn):
             "pct_chg": 0.5,
         },
         {
-            "ts_code": "600519.SH",
+            "ts_code": test_ts_code,
             "trade_date": "20260102",
             "open": 1510.0,
             "high": 1530.0,
@@ -145,7 +147,7 @@ def test_composite_falls_back_to_sqlite(monkeypatch, temp_db, db_conn):
     write_klines_to_db(db_conn, rows)
 
     ds = CompositeDataSource()
-    data = ds.get_kline_dicts("600519.SH", days=60)
+    data = ds.get_kline_dicts(test_ts_code, days=60)
     assert len(data) == 2
     assert data[0]["trade_date"] == "20260101"
     assert data[1]["trade_date"] == "20260102"
@@ -209,10 +211,12 @@ def test_composite_auto_falls_back_to_sqlite(monkeypatch, temp_db, db_conn):
     # bridge 不可用
     monkeypatch.setattr("modules.bridge_client.is_bridge_available", lambda config=None: False)
 
-    write_stock_basic(db_conn, ts_code="600519.SH", name="贵州茅台", industry="白酒", market="主板")
+    # 使用唯一 ts_code 避免与已有数据冲突
+    test_ts_code = "TEST0002.SH"
+    write_stock_basic(db_conn, ts_code=test_ts_code, name="测试股票", industry="测试", market="主板")
     rows = [
         {
-            "ts_code": "600519.SH",
+            "ts_code": test_ts_code,
             "trade_date": "20260101",
             "open": 1500.0,
             "high": 1520.0,
@@ -226,6 +230,6 @@ def test_composite_auto_falls_back_to_sqlite(monkeypatch, temp_db, db_conn):
     write_klines_to_db(db_conn, rows)
 
     ds = CompositeDataSource(preferred="auto")
-    data = ds.get_kline_dicts("600519.SH", days=60)
+    data = ds.get_kline_dicts(test_ts_code, days=60)
     assert len(data) == 1
     assert data[0]["trade_date"] == "20260101"

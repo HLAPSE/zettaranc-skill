@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zettaranc-skill"
-version = "4.0.3"
+version = "4.0.4"
 description = "zettaranc（万千）的思维框架与量化工具"
 readme = "README.md"
 license = {text = "MIT"}
@@ -30,6 +30,7 @@ dependencies = [
     "requests>=2.28.0",
     "pyyaml>=6.0.0",
     "httpx>=0.24.0",
+    "psycopg2-binary>=2.9.0",  # CockroachDB 生产后端（设置 CRDB_URL 启用；未设置时走 SQLite，无需此依赖）
 ]
 
 [project.optional-dependencies]

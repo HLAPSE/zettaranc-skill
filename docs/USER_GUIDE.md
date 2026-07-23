@@ -49,13 +49,13 @@ zettaranc-skill 是一个**AI 思维框架蒸馏包 + 真实数据量化工具**
 ### 1.2 架构分层
 
 ```
-Indevs（可选，配置 INDEVS_API_KEY 时优先）
+BaoStock（主力：日线/指数/股票列表/交易日历/PE/PB/PS，无需 Token）
     ↓
-Tushare Pro API（TUSHARE_TOKEN + TUSHARE_API_URL）
+AkShare（补充：资金流向/实时行情/涨跌停/龙虎榜，无需 Token）
     ↓
 tushare-data-bridge（HTTP 缓存代理，可选降级）
     ↓
-SQLite（本地缓存：15 张表 = 11 张核心表 + 4 张自我改进跟踪表）
+本地数据库（SQLite 默认 / CockroachDB 生产，CRDB_URL 切换；15 张表 = 11 核心 + 4 自我改进）
     ↓
 indicators/（60+ 技术指标计算：KDJ/MACD/BBI/RSI/WR/布林带/DMI/双线/砖形图...）
     ↓
@@ -79,7 +79,7 @@ SKILL.md（LLM 角色层：Z 哥视角点评、多轮问诊、表达 DNA）
 | 数据管道 | Python 3.10+（标准库 + sqlite3 + pathlib + dataclasses + enum） |
 | 外部数据 | tushare Pro API（中转地址从 `TUSHARE_API_URL` 环境变量读取，不硬编码） |
 | 可选数据源 | Indevs Tushare Replay API（需 `INDEVS_API_KEY`） |
-| 数据库 | SQLite（本地文件，15 张表 + 索引） |
+| 数据库 | 双后端：SQLite（本地文件，默认/回退）+ CockroachDB（生产，CRDB_URL 启用），15 张表 + 索引 |
 | 数据处理 | pandas（Tushare 依赖） |
 | 环境配置 | python-dotenv（.env 文件） |
 | 测试框架 | pytest（实测 1167 passed, 15 skipped） |
@@ -208,10 +208,10 @@ ZETTARANC_BACKTEST_IMPL=auto zt verify v1.0 --limit 50 --days 250
 `modules/datasource.py` 的 `CompositeDataSource` 在 `auto` 模式下按以下优先级选源：
 
 ```
-Indevs（配置 INDEVS_API_KEY 时优先，v3.8.1 新增）
-  → Tushare Pro（TUSHARE_TOKEN + TUSHARE_API_URL）
-  → tushare-data-bridge（HTTP 缓存代理）
-  → 本地 SQLite（data/stock_data.db，离线兜底）
+BaoStock（主力，无需 Token）
+  → AkShare（补充，无需 Token）
+  → tushare-data-bridge（HTTP 缓存代理，可选）
+  → 本地数据库（SQLite 默认 / CockroachDB 生产，CRDB_URL 切换）
 ```
 
 自 v3.8.2 起，K 线读取统一走 **DB 优先** 策略：先查 `daily_kline` 表，DB 没有时才调 API 并把结果写回 DB 缓存。即使处于降级路径，工具也不会编造价格或信号，而是明确告知当前数据状态。

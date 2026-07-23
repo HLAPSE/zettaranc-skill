@@ -1,7 +1,7 @@
 # zettaranc-skill · Agent 指南
 
 > 本文件面向 AI 编程 Agent。阅读前请确认你已通读本文件，再操作代码或文档。
-> 本文所有事实（版本号、测试数、命令、文件清单）均已对照仓库实际内容核实（v4.0.3，2026-07-19）。
+> 本文所有事实（版本号、测试数、命令、文件清单）均已对照仓库实际内容核实（v4.0.4，2026-07-23）。
 
 ---
 
@@ -17,7 +17,7 @@
 - **Web 看板**：`api/`（FastAPI 后端）+ `frontend/`（React + Vite + Tailwind 前端），可选
 - **语料基础**：约 467 篇直播/付费课整理文章（~200 万字）+ 13 个 ztalk 视频 transcript（~12.7 万字）+ 9 篇交易心理系列（~3.3 万字）+ 后续新增文章
 - **许可证**：MIT
-- **当前版本**：**v4.0.3**（以 `pyproject.toml` 与 `docs/CHANGELOG.md` 为准）
+- **当前版本**：**v4.0.4**（以 `pyproject.toml` 与 `docs/CHANGELOG.md` 为准）
 
 ### 双模式架构
 
@@ -44,7 +44,7 @@
 BaoStock（主力：日线/指数/股票列表/交易日历/基础指标，无需注册）
   -> AkShare（补充：资金流向/实时行情/涨跌停/龙虎榜，无需 token）
   -> bridge（HTTP 缓存代理，TUSHARE_BRIDGE_ENABLED=auto/always）
-  -> 本地 SQLite（data/stock_data.db，离线兜底）
+  -> 本地 SQLite（data/stock_data.db，离线兜底 / 生产可切换 CockroachDB）
 ```
 
 > **重要**：项目默认使用 BaoStock + AkShare 双免费数据源，无需配置任何 Token，安装即可使用。
@@ -67,7 +67,7 @@ Python 桥接（modules/）                       │  ├─ atr.py          AT
 ├─ datasource.py   统一数据源协议             ├─ baostock_client.py BaoStock API（主力数据源）
 │                  （BaoStock/AkShare/Bridge） ├─ akshare_client.py  AkShare API（补充数据源）
 ├─ data_sync/      数据同步子包               ├─ bridge_client.py   Bridge HTTP 客户端
-├─ indicators/     60+ 技术指标               ├─ database.py        SQLite（15 张表）
+├─ indicators/     60+ 技术指标               ├─ database.py        双后端（SQLite 默认/回退 + CockroachDB 生产，CRDB_URL 启用）
 ├─ strategies/     30+ 战法识别               ├─ constants.py       28+ 命名常量（v4.0.2）
 ├─ screener/       选股评分子包               ├─ simulator/         交易模拟器
 ├─ simulator/      少女/少妇模拟器             ├─ verify/            v1.0 验收工程化
@@ -98,7 +98,7 @@ Python 桥接（modules/）                       │  ├─ atr.py          AT
 | 外部数据 | `baostock`（主力数据源，免费）、`akshare`（补充数据源，免费）、`pandas` ≥3.0,<4、`requests`、`httpx`、`pyyaml` |
 | 可选数据源 | bridge（HTTP 缓存代理，需配置 `TUSHARE_BRIDGE_HOST`） |
 | 环境配置 | `python-dotenv`（`.env` 文件） |
-| 数据库 | SQLite（本地文件，15 张表 = 11 张核心表 + 4 张自我改进跟踪表） |
+| 数据库 | SQLite（本地文件，15 张表 = 11 张核心表 + 4 张自我改进跟踪表；生产可切换 CockroachDB，见 modules/database.py 双后端兼容层） |
 | 接口协议 | CLI（`zt` 入口）、可选 FastAPI Web 服务（`zt-web`） |
 | 前端看板 | React 19 + Vite 8 + TypeScript 6 + Tailwind CSS 4 + ECharts 6 |
 | 状态管理 | Zustand 5 + TanStack React Query 5 + axios + react-router-dom 7 |
@@ -653,6 +653,7 @@ cargo clippy --workspace --all-targets --no-deps --exclude zt_bindings -- -D war
 **注意**：技术债清理、内部重构属于 PATCH，不是 MINOR。避免版本号增长过快。
 
 **近期版本脉络**（详见 `docs/CHANGELOG.md`）：
+- **v4.0.4**：数据库双后端迁移（`modules/database.py` 从单一 SQLite 演进为 SQLite / CockroachDB 双后端兼容层；占位符/DDL/异常/行访问统一屏蔽后端差异；加 `psycopg2-binary` 依赖；修复 `watchlist.updated_at` 缺列、`llm_response_log` 契约、tracking 表缺失等 bug）
 - **v4.0.3**：收尾技术债（版本号五处统一、USER_GUIDE 追平、性能优化 6.3x/2.4x、`core/errors.py` 统一错误码扩充至 50 个、`except Exception` 全部收窄、返回类型注解 100%、pandas 3.x spec 锁齐、PyO3 0.23 升级）
 - **v4.0.2**：CLI ↔ Rust PyO3 桥（`_rust_bridge.py`、`_rust_compat.py::compute_func`、silent fallback）+ H2/H3/M1/M2/L5/L6 技术债清偿
 - **v4.0.1**：PyO3 运行时打通（macOS LINKEDIT 修复、3 个 backtest binding、35 个 proptest）
